@@ -16,6 +16,16 @@ use uuid::Uuid;
 
 const THROTTLE_MS: u64 = 350;
 
+fn ensure_static_layout(config: &Config) -> anyhow::Result<()> {
+    let static_dir = config.static_dir.trim();
+    if !static_dir.is_empty() {
+        std::fs::create_dir_all(Path::new(static_dir))?;
+        std::fs::create_dir_all(Path::new(static_dir).join("models"))?;
+        std::fs::create_dir_all(Path::new(static_dir).join("ffmpeg"))?;
+    }
+    Ok(())
+}
+
 fn ggml_file_nonempty(path: &Path) -> bool {
     path.is_file()
         && path
@@ -172,6 +182,10 @@ async fn run_inner(
     detail: &mut JobDetail,
     model_lock: Arc<Mutex<()>>,
 ) -> anyhow::Result<()> {
+    // Keep workspace layout stable for new clones.
+    // `static/models` stores downloaded whisper ggml files; `static/ffmpeg` stores optional ffmpeg distro.
+    ensure_static_layout(config)?;
+
     // --- Model（whisper.cpp GGML，经 whisper-rs 加载） ---
     throttle
         .maybe_update(
@@ -779,6 +793,30 @@ async fn ensure_ffmpeg_bin(
             );
         }
 
+        let base = config
+            .ffmpeg_extract_dir
+            .clone()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| format!("{}/ffmpeg", config.static_dir.trim()));
+        let extract_root = PathBuf::from(base);
+        tokio::fs::create_dir_all(&extract_root).await?;
+
+        // Prefer reusing existing extracted ffmpeg to avoid re-downloading every run.
+        // New layout: `<extract_root>/dist/**/ffmpeg.exe`
+        // Legacy layout: `<extract_root>/unpacked/**/ffmpeg.exe`
+        let dist_dir = extract_root.join("dist");
+        if let Some(exe) = find_ffmpeg_executable(&dist_dir) {
+            if ffmpeg_version_ok(&exe).await {
+                return Ok(exe);
+            }
+        }
+        let legacy_unpack_dir = extract_root.join("unpacked");
+        if let Some(exe) = find_ffmpeg_executable(&legacy_unpack_dir) {
+            if ffmpeg_version_ok(&exe).await {
+                return Ok(exe);
+            }
+        }
+
         throttle
             .maybe_update(
                 pool,
@@ -791,16 +829,7 @@ async fn ensure_ffmpeg_bin(
             )
             .await?;
 
-        let base = config
-            .ffmpeg_extract_dir
-            .clone()
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| "tools/ffmpeg-dist".to_string());
-        let extract_root = PathBuf::from(base);
-        tokio::fs::create_dir_all(&extract_root).await?;
-
         let zip_path = extract_root.join("ffmpeg-release-essentials.download.zip");
-        let unpack_dir = extract_root.join("unpacked");
 
         let url = config
             .ffmpeg_download_url
@@ -821,17 +850,18 @@ async fn ensure_ffmpeg_bin(
         )
         .await?;
 
-        if unpack_dir.exists() {
-            let _ = tokio::fs::remove_dir_all(&unpack_dir).await;
+        // Extracted result should live under `static/ffmpeg/dist` (or `${FFMPEG_EXTRACT_DIR}/dist`).
+        if dist_dir.exists() {
+            let _ = tokio::fs::remove_dir_all(&dist_dir).await;
         }
-        tokio::fs::create_dir_all(&unpack_dir).await?;
+        tokio::fs::create_dir_all(&dist_dir).await?;
 
         let zip_clone = zip_path.clone();
-        let unpack_clone = unpack_dir.clone();
+        let unpack_clone = dist_dir.clone();
         tokio::task::spawn_blocking(move || extract_zip_sync(&zip_clone, &unpack_clone))
             .await??;
 
-        let exe = find_ffmpeg_executable(&unpack_dir)
+        let exe = find_ffmpeg_executable(&dist_dir)
             .ok_or_else(|| anyhow::anyhow!("解压后未找到 ffmpeg.exe"))?;
 
         throttle
@@ -982,9 +1012,20 @@ async fn extract_audio_ffmpeg(
 ) -> anyhow::Result<()> {
     let mut cmd = tokio::process::Command::new(ffmpeg_exe);
     cmd.arg("-nostdin")
+        .arg("-hide_banner")
         .arg("-y")
         .arg("-i")
         .arg(video)
+        .arg("-vn")
+        .arg("-sn")
+        .arg("-dn")
+        .args(
+            config
+                .ffmpeg_audio_stream
+                .map(|i| format!("0:a:{i}"))
+                .into_iter()
+                .flat_map(|m| ["-map".to_string(), m]),
+        )
         .arg("-ar")
         .arg("16000")
         .arg("-ac")
@@ -1004,6 +1045,9 @@ async fn extract_audio_ffmpeg(
     let out = cmd.output().await?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
+        if let Some(i) = config.ffmpeg_audio_stream {
+            anyhow::bail!("ffmpeg 失败（FFMPEG_AUDIO_STREAM={i}）: {stderr}");
+        }
         anyhow::bail!("ffmpeg 失败: {stderr}");
     }
     Ok(())

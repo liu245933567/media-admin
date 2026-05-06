@@ -6,6 +6,11 @@ pub struct Config {
     pub database_url: String,
     pub xunlei_subtitle_base: String,
     pub cors_origins: Vec<String>,
+    /// Static assets root directory (default `static` under cwd).
+    /// This project stores downloaded resources under:
+    /// - models: `${SUBTITLE_ADMIN_STATIC_DIR}/models`
+    /// - ffmpeg: `${SUBTITLE_ADMIN_STATIC_DIR}/ffmpeg`
+    pub static_dir: String,
     /// `whisper-rs` 使用的 GGML 权重路径：可为单个 `.bin` / `.gguf` 文件，或存放该文件的目录。
     /// 不完整时会从 Hugging Face 拉取 `whisper_ggml_filename` 到该目录（目录不存在则创建）。
     pub whisper_model_path: String,
@@ -28,6 +33,9 @@ pub struct Config {
     pub ffmpeg_download_url: Option<String>,
     /// Directory to extract downloaded ffmpeg under (default `tools/ffmpeg-dist` under cwd).
     pub ffmpeg_extract_dir: Option<String>,
+    /// Select specific audio stream index when extracting audio from video.
+    /// Maps to `ffmpeg -map 0:a:<index>`. Useful when the default selected track is silent.
+    pub ffmpeg_audio_stream: Option<u8>,
     pub deepseek_api_key: String,
     pub deepseek_api_base: String,
     pub deepseek_model: String,
@@ -73,9 +81,19 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let whisper_model_path = std::env::var("WHISPER_MODEL_PATH").unwrap_or_else(|_| {
-            "models/whisper-large-v3-turbo".to_string()
-        });
+        let static_dir =
+            std::env::var("SUBTITLE_ADMIN_STATIC_DIR").unwrap_or_else(|_| "static".into());
+        let static_dir = static_dir.trim().to_string();
+        let static_dir = if static_dir.is_empty() {
+            "static".to_string()
+        } else {
+            static_dir
+        };
+
+        let whisper_model_path =
+            std::env::var("WHISPER_MODEL_PATH")
+                .or_else(|_| std::env::var("SUBTITLE_ADMIN_MODELS_DIR"))
+                .unwrap_or_else(|_| format!("{}/models/whisper-large-v3-turbo", static_dir));
 
         let whisper_hf_repo = std::env::var("WHISPER_HF_REPO").unwrap_or_else(|_| {
             std::env::var("WHISPER_MODEL_URL")
@@ -104,6 +122,7 @@ impl Config {
             .filter(|s| !s.is_empty());
 
         let ffmpeg_path = std::env::var("FFMPEG_PATH")
+            .or_else(|_| std::env::var("SUBTITLE_ADMIN_FFMPEG_PATH"))
             .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
@@ -116,9 +135,15 @@ impl Config {
             .filter(|s| !s.is_empty());
 
         let ffmpeg_extract_dir = std::env::var("FFMPEG_EXTRACT_DIR")
+            .or_else(|_| std::env::var("SUBTITLE_ADMIN_FFMPEG_DIR"))
             .ok()
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
+
+        let ffmpeg_audio_stream: Option<u8> = std::env::var("FFMPEG_AUDIO_STREAM")
+            .or_else(|_| std::env::var("SUBTITLE_ADMIN_FFMPEG_AUDIO_STREAM"))
+            .ok()
+            .and_then(|s| s.trim().parse().ok());
 
         let deepseek_api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
         let deepseek_api_base = std::env::var("DEEPSEEK_API_BASE").unwrap_or_else(|_| {
@@ -157,6 +182,7 @@ impl Config {
             database_url,
             xunlei_subtitle_base,
             cors_origins,
+            static_dir,
             whisper_model_path,
             whisper_hf_repo,
             whisper_ggml_filename,
@@ -168,6 +194,7 @@ impl Config {
             ffmpeg_auto_download,
             ffmpeg_download_url,
             ffmpeg_extract_dir,
+            ffmpeg_audio_stream,
             deepseek_api_key,
             deepseek_api_base,
             deepseek_model,

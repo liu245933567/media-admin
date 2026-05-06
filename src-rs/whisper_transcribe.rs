@@ -470,6 +470,26 @@ pub fn transcribe_wav_with_logs(
     } else {
         let mut pcm_f32 = vec![0f32; pcm_i16.len()];
         whisper_rs::convert_integer_to_float_audio(&pcm_i16, &mut pcm_f32).context("i16 → f32")?;
+
+        // If the whole-audio peak is very low, apply a conservative auto-gain to avoid decoding
+        // returning 0 segments just because the source track is quiet.
+        let mut peak = 0.0f64;
+        for &x in &pcm_f32 {
+            let ax = (x as f64).abs();
+            if ax > peak {
+                peak = ax;
+            }
+        }
+        if peak > 0.0 && peak < 0.02 {
+            let gain = (0.8 / peak).min(20.0);
+            for v in &mut pcm_f32 {
+                *v = (*v as f64 * gain).clamp(-1.0, 1.0) as f32;
+            }
+            append_line(
+                &log_lines,
+                format!("[Whisper] 自动增益 x{gain:.2}（peak={peak:.6}, target_peak=0.8, cap=20x）"),
+            );
+        }
         out = decode_one(&ctx, &pcm_f32, &decode, &log_lines, 0)?;
     }
 
