@@ -6,12 +6,15 @@ pub struct Config {
     pub database_url: String,
     pub xunlei_subtitle_base: String,
     pub cors_origins: Vec<String>,
-    /// 目录须最终能解析到同时含有 `config.json` 与 `model.bin` 的 CT2 快照根目录（可与权重同级，或在下一级/下两级子目录）。
-    /// 不完整时会从 Hugging Face 拉取；`WHISPER_MODEL_PATH` 请指向你实际放模型的文件夹（例如 `dist/faster-whisper-large-v3`）。
+    /// `whisper-rs` 使用的 GGML 权重路径：可为单个 `.bin` / `.gguf` 文件，或存放该文件的目录。
+    /// 不完整时会从 Hugging Face 拉取 `whisper_ggml_filename` 到该目录（目录不存在则创建）。
     pub whisper_model_path: String,
-    /// Hugging Face model repo id (CTranslate2 `faster-whisper` layout), e.g. `Systran/faster-whisper-large-v3`.
+    /// Hugging Face 仓库 id（须包含 `whisper_ggml_filename`），默认 `ggerganov/whisper.cpp`。
     pub whisper_hf_repo: String,
+    /// 仓库内 GGML 文件名，例如 `ggml-large-v3-turbo-q5_0.bin`（量化）或 `ggml-large-v3-turbo.bin`（全精度）。
+    pub whisper_ggml_filename: String,
     pub whisper_device: String,
+    /// 提示 whisper.cpp 行为：`flash` / `flash_attn` 子串会在启用 GPU 时尝试打开 flash attention。
     pub whisper_compute_type: String,
     /// Optional token for gated Hugging Face models (`HF_TOKEN`).
     pub hf_token: Option<String>,
@@ -28,6 +31,22 @@ pub struct Config {
     pub deepseek_api_key: String,
     pub deepseek_api_base: String,
     pub deepseek_model: String,
+
+    /// Enable VAD-based trimming of silence before whisper decoding.
+    pub whisper_vad_enable: bool,
+    /// webrtcvad aggressiveness: 0 (least) ..= 3 (most). Higher trims more but risks cutting speech.
+    pub whisper_vad_mode: u8,
+    /// VAD frame size in ms. Must be 10/20/30 for webrtcvad.
+    pub whisper_vad_frame_ms: u16,
+    /// Merge adjacent speech segments with padding on both sides (ms).
+    pub whisper_vad_padding_ms: u32,
+    /// Drop speech segments shorter than this (ms).
+    pub whisper_vad_min_speech_ms: u32,
+
+    /// Enable ffmpeg denoise filter during audio extraction.
+    pub ffmpeg_denoise_enable: bool,
+    /// ffmpeg audio filter string (e.g. "afftdn=nf=-25" or "anlmdn=s=0.002:p=0.02").
+    pub ffmpeg_denoise_filter: String,
 }
 
 impl Config {
@@ -55,19 +74,24 @@ impl Config {
             .collect();
 
         let whisper_model_path = std::env::var("WHISPER_MODEL_PATH").unwrap_or_else(|_| {
-            "models/faster-whisper-large-v3".to_string()
+            "models/whisper-large-v3-turbo".to_string()
         });
 
         let whisper_hf_repo = std::env::var("WHISPER_HF_REPO").unwrap_or_else(|_| {
             std::env::var("WHISPER_MODEL_URL")
                 .ok()
                 .filter(|s| !s.contains("://") && s.contains('/'))
-                .unwrap_or_else(|| "Systran/faster-whisper-large-v3".to_string())
+                .unwrap_or_else(|| "ggerganov/whisper.cpp".to_string())
         });
+
+        let whisper_ggml_filename =
+            std::env::var("WHISPER_GGML_FILE").unwrap_or_else(|_| {
+                "ggml-large-v3-turbo.bin".to_string()
+            });
 
         let whisper_device = std::env::var("WHISPER_DEVICE").unwrap_or_else(|_| "cpu".to_string());
         let whisper_compute_type =
-            std::env::var("WHISPER_COMPUTE_TYPE").unwrap_or_else(|_| "int8".to_string());
+            std::env::var("WHISPER_COMPUTE_TYPE").unwrap_or_else(|_| "default".to_string());
 
         let hf_token = std::env::var("HF_TOKEN")
             .ok()
@@ -103,6 +127,31 @@ impl Config {
         let deepseek_model = std::env::var("DEEPSEEK_MODEL")
             .unwrap_or_else(|_| "deepseek-v4-flash".to_string());
 
+        let whisper_vad_enable = parse_bool_env("WHISPER_VAD_ENABLE").unwrap_or(false);
+        let whisper_vad_mode: u8 = std::env::var("WHISPER_VAD_MODE")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(2)
+            .min(3);
+        let whisper_vad_frame_ms: u16 = std::env::var("WHISPER_VAD_FRAME_MS")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(30);
+        let whisper_vad_padding_ms: u32 = std::env::var("WHISPER_VAD_PADDING_MS")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(200);
+        let whisper_vad_min_speech_ms: u32 = std::env::var("WHISPER_VAD_MIN_SPEECH_MS")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(300);
+
+        let ffmpeg_denoise_enable = parse_bool_env("FFMPEG_DENOISE_ENABLE").unwrap_or(false);
+        let ffmpeg_denoise_filter = std::env::var("FFMPEG_DENOISE_FILTER").unwrap_or_else(|_| {
+            // a conservative default that helps with steady noise
+            "afftdn=nf=-25".to_string()
+        });
+
         Ok(Config {
             listen,
             database_url,
@@ -110,6 +159,7 @@ impl Config {
             cors_origins,
             whisper_model_path,
             whisper_hf_repo,
+            whisper_ggml_filename,
             whisper_device,
             whisper_compute_type,
             hf_token,
@@ -121,6 +171,15 @@ impl Config {
             deepseek_api_key,
             deepseek_api_base,
             deepseek_model,
+
+            whisper_vad_enable,
+            whisper_vad_mode,
+            whisper_vad_frame_ms,
+            whisper_vad_padding_ms,
+            whisper_vad_min_speech_ms,
+
+            ffmpeg_denoise_enable,
+            ffmpeg_denoise_filter,
         })
     }
 }

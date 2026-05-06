@@ -56,3 +56,7 @@ npm run dev
 | `XUNLEI_SUBTITLE_BASE` | 迅雷 oracle 基础 URL | `https://api-shoulei-ssl.xunlei.com/oracle/subtitle` |
 | `SUBTITLE_ADMIN_CORS_ORIGINS` | 浏览器 Origin，逗号分隔 | `http://localhost:5173,http://127.0.0.1:5173` |
 | `VITE_API_URL`（前端构建或直连 API 时） | 请求前缀；开发留空即可走 Vite 代理 | 空 |
+
+## 开发插件
+CUDA Toolkit
+https://developer.nvidia.com/cuda-downloads

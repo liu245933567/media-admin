@@ -92,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
         database_url = %redact_credentials(&config.database_url),
         whisper_model_path = %config.whisper_model_path,
         whisper_hf_repo = %config.whisper_hf_repo,
+        whisper_ggml_filename = %config.whisper_ggml_filename,
         "subtitle-admin backend starting"
     );
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

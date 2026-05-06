@@ -1,10 +1,9 @@
 use crate::config::Config;
 use crate::generation_job::{self, JobDetail, ProgressThrottle};
-use crate::whisper_transcribe;
+use crate::whisper_transcribe::{self, WhisperTranscribeParams};
 use futures_util::StreamExt;
 use hf_hub::Cache;
 use hf_hub::Repo;
-use hf_hub::api::tokio::ApiError;
 use serde::{Deserialize, Serialize};
 use sha1::Digest;
 use sqlx::SqlitePool;
@@ -15,75 +14,80 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use faster_whisper_rs::config::WhisperConfig;
-
 const THROTTLE_MS: u64 = 350;
 
-/// CTranslate2 权重：`model.bin` 或分片索引（仅有 config.json 不完整时会无法加载）。
-fn ct2_weights_present(dir: &Path) -> bool {
-    let bin = dir.join("model.bin");
-    if bin.is_file() {
-        // Git LFS 未拉取时可能是百余字节的指针文件，CTRanslate2 无法打开
-        if let Ok(meta) = bin.metadata() {
-            if meta.len() < 4096 {
-                if let Ok(head) = std::fs::read_to_string(&bin) {
-                    if head.starts_with("version https://git-lfs.github.com") {
-                        tracing::warn!(
-                            path = %bin.display(),
-                            "model.bin 为 Git LFS 指针，请执行 git lfs pull 或下载真实权重"
-                        );
-                        return false;
-                    }
-                }
+fn ggml_file_nonempty(path: &Path) -> bool {
+    path.is_file()
+        && path
+            .metadata()
+            .map(|m| m.len() > 4096)
+            .unwrap_or(false)
+}
+
+fn looks_like_git_lfs_pointer(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+    if let Ok(meta) = path.metadata() {
+        if meta.len() < 4096 {
+            if let Ok(head) = std::fs::read_to_string(path) {
+                return head.starts_with("version https://git-lfs.github.com");
             }
         }
-        return true;
     }
-    dir.join("model.bin.index.json").is_file()
+    false
 }
 
-fn ct2_local_model_ready(dir: &Path) -> bool {
-    dir.join("config.json").is_file() && ct2_weights_present(dir)
+fn ggml_file_ready(path: &Path) -> bool {
+    ggml_file_nonempty(path) && !looks_like_git_lfs_pointer(path)
 }
 
-/// 在 `base` 或其一级、二级子目录中查找同时含 config.json 与权重的 CT2 快照根目录。
-fn resolve_ct2_model_dir(base: &Path) -> Option<PathBuf> {
-    if ct2_local_model_ready(base) {
-        return Some(base.to_path_buf());
+/// `base` 直接指向 `.bin` / `.gguf` 时使用该路径；否则视为目录并在其下（或一级、二级子目录）查找 `hf_filename`。
+fn ggml_target_path(base: &Path, hf_filename: &str) -> PathBuf {
+    match base.extension().and_then(|e| e.to_str()) {
+        Some(ext)
+            if ext.eq_ignore_ascii_case("bin") || ext.eq_ignore_ascii_case("gguf") =>
+        {
+            base.to_path_buf()
+        }
+        _ => base.join(hf_filename),
     }
-    let rd = std::fs::read_dir(base).ok()?;
-    for e in rd.flatten() {
-        let p = e.path();
-        if !p.is_dir() {
-            continue;
+}
+
+fn resolve_ggml_model_file(base: &Path, hf_filename: &str) -> Option<PathBuf> {
+    let direct = ggml_target_path(base, hf_filename);
+    if ggml_file_ready(&direct) {
+        return Some(direct);
+    }
+    if base.is_dir() {
+        let cand = base.join(hf_filename);
+        if ggml_file_ready(&cand) {
+            return Some(cand);
         }
-        if ct2_local_model_ready(&p) {
-            return Some(p);
-        }
-        let rd2 = std::fs::read_dir(&p).ok()?;
-        for e2 in rd2.flatten() {
-            let p2 = e2.path();
-            if p2.is_dir() && ct2_local_model_ready(&p2) {
-                return Some(p2);
+        let rd = std::fs::read_dir(base).ok()?;
+        for e in rd.flatten() {
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let c = p.join(hf_filename);
+            if ggml_file_ready(&c) {
+                return Some(c);
+            }
+            let rd2 = std::fs::read_dir(&p).ok()?;
+            for e2 in rd2.flatten() {
+                let p2 = e2.path();
+                if !p2.is_dir() {
+                    continue;
+                }
+                let c2 = p2.join(hf_filename);
+                if ggml_file_ready(&c2) {
+                    return Some(c2);
+                }
             }
         }
     }
     None
-}
-
-/// Python / CTranslate2 在部分环境下对 `\\?\` 规范化路径兼容性差，传给 Whisper 时用普通绝对路径更稳。
-fn whisper_model_path_for_python(model_dir: &Path) -> String {
-    let p = model_dir.canonicalize().unwrap_or_else(|_| model_dir.to_path_buf());
-    let s = p.to_string_lossy().to_string();
-    #[cfg(windows)]
-    {
-        return s
-            .strip_prefix(r"\\?\")
-            .map(str::to_owned)
-            .unwrap_or(s);
-    }
-    #[cfg(not(windows))]
-    s
 }
 
 #[cfg(windows)]
@@ -168,36 +172,28 @@ async fn run_inner(
     detail: &mut JobDetail,
     model_lock: Arc<Mutex<()>>,
 ) -> anyhow::Result<()> {
-    // --- Model (CTranslate2 snapshot via HF) ---
+    // --- Model（whisper.cpp GGML，经 whisper-rs 加载） ---
     throttle
         .maybe_update(
             pool,
             job_id,
             "ensure_model",
             5.0,
-            "检查 faster-whisper 模型",
+            "检查 whisper GGML 模型",
             Some(detail),
             true,
         )
         .await?;
 
-    let user_model_dir = PathBuf::from(config.whisper_model_path.trim());
-    let resolved_local = resolve_ct2_model_dir(&user_model_dir);
-    if resolved_local.is_none()
-        && user_model_dir.join("config.json").is_file()
-        && !ct2_weights_present(&user_model_dir)
-    {
-        tracing::warn!(
-            path = %user_model_dir.display(),
-            "配置指向的目录含 config.json 但缺少可用 model.bin（或在子目录）；未找到子目录快照时将改为从 Hugging Face 下载"
-        );
-    }
+    let user_model_base = PathBuf::from(config.whisper_model_path.trim());
+    let hf_filename = config.whisper_ggml_filename.trim();
+    let resolved_local = resolve_ggml_model_file(&user_model_base, hf_filename);
 
-    let model_dir = if let Some(dir) = resolved_local {
+    let model_file = if let Some(path) = resolved_local {
         tracing::info!(
-            configured = %user_model_dir.display(),
-            resolved = %dir.display(),
-            "使用本地 CTranslate2 模型目录"
+            configured = %user_model_base.display(),
+            resolved = %path.display(),
+            "使用本地 GGML 模型文件"
         );
         throttle
             .maybe_update(
@@ -205,20 +201,20 @@ async fn run_inner(
                 job_id,
                 "ensure_model",
                 20.0,
-                "使用本地模型目录",
+                "使用本地模型文件",
                 Some(detail),
                 true,
             )
             .await?;
-        dir.canonicalize().unwrap_or(dir)
+        path.canonicalize().unwrap_or(path)
     } else {
         let _guard = model_lock.lock().await;
-        let retry_dir = PathBuf::from(config.whisper_model_path.trim());
-        if let Some(dir) = resolve_ct2_model_dir(&retry_dir) {
+        let retry_base = PathBuf::from(config.whisper_model_path.trim());
+        if let Some(path) = resolve_ggml_model_file(&retry_base, hf_filename) {
             tracing::info!(
-                configured = %retry_dir.display(),
-                resolved = %dir.display(),
-                "使用本地 CTranslate2 模型目录（获取锁后解析）"
+                configured = %retry_base.display(),
+                resolved = %path.display(),
+                "使用本地 GGML 模型文件（获取锁后解析）"
             );
             throttle
                 .maybe_update(
@@ -226,18 +222,20 @@ async fn run_inner(
                     job_id,
                     "ensure_model",
                     20.0,
-                    "使用本地模型目录",
+                    "使用本地模型文件",
                     Some(detail),
                     true,
                 )
                 .await?;
-            dir.canonicalize().unwrap_or(dir)
+            path.canonicalize().unwrap_or(path)
         } else {
-            download_ct2_model_from_hf(pool, config, job_id, throttle, detail).await?
+            let dest = ggml_target_path(&retry_base, hf_filename);
+            download_ggml_model_from_hf(pool, config, job_id, throttle, detail, &dest).await?;
+            dest.canonicalize().unwrap_or(dest)
         }
     };
 
-    let model_dir_str = whisper_model_path_for_python(&model_dir);
+    let model_file_str = model_file.display().to_string();
 
     // --- FFmpeg ---
     throttle
@@ -268,7 +266,7 @@ async fn run_inner(
         .await?;
 
     let audio_tmp = std::env::temp_dir().join(format!("sa_audio_{job_id}.wav"));
-    extract_audio_ffmpeg(&ffmpeg_exe, video, &audio_tmp).await?;
+    extract_audio_ffmpeg(config, &ffmpeg_exe, video, &audio_tmp).await?;
 
     throttle
         .maybe_update(
@@ -292,7 +290,7 @@ async fn run_inner(
             job_id,
             "transcribe",
             34.0,
-            "faster-whisper 转写中（见下方实时日志）",
+            "Whisper（whisper-rs）转写中（见下方实时日志）",
             Some(detail),
             true,
         )
@@ -300,31 +298,29 @@ async fn run_inner(
 
     let device = config.whisper_device.clone();
     let compute = config.whisper_compute_type.clone();
-    let model_dir_for = model_dir_str.clone();
+    let model_for_task = model_file_str.clone();
     let wav_for_task = wav_str.clone();
-    let whisper_cfg = WhisperConfig::default();
+    let whisper_cfg = WhisperTranscribeParams {
+        vad_enable: config.whisper_vad_enable,
+        vad_mode: config.whisper_vad_mode,
+        vad_frame_ms: config.whisper_vad_frame_ms,
+        vad_padding_ms: config.whisper_vad_padding_ms,
+        vad_min_speech_ms: config.whisper_vad_min_speech_ms,
+        ..WhisperTranscribeParams::default()
+    };
 
     let shared_logs: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let shared_logs_worker = shared_logs.clone();
 
     let mut transcribe_jh = tokio::task::spawn_blocking(move || {
-        let cap: usize = 500;
-        let mut push = |line: String| {
-            let mut g = shared_logs_worker.lock().unwrap();
-            g.push(line);
-            if g.len() > cap {
-                let n = g.len() - cap;
-                g.drain(0..n);
-            }
-        };
         whisper_transcribe::transcribe_wav_with_logs(
-            model_dir_for,
+            model_for_task,
             wav_for_task,
             device,
             compute,
             whisper_cfg,
-            &mut push,
+            shared_logs_worker,
         )
     });
 
@@ -374,7 +370,20 @@ async fn run_inner(
     let _ = tokio::fs::remove_file(&audio_tmp).await;
 
     if segments.is_empty() {
-        anyhow::bail!("未识别到语音内容");
+        let snap = shared_logs.lock().unwrap().clone();
+        let tail = snap
+            .into_iter()
+            .rev()
+            .take(40)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        anyhow::bail!(
+            "未识别到语音内容（Whisper 输出为空）。常见原因：视频无音轨/抽取音频失败/音量接近静音/选错音轨。\n\n最近 Whisper 日志：\n{}",
+            tail
+        );
     }
 
     detail.total_segments = Some(segments.len() as u32);
@@ -436,7 +445,7 @@ async fn run_inner(
     let video_str = video.display().to_string();
     sqlx::query(
         r#"INSERT INTO subtitle_records (video_path, subtitle_path, source, language, format)
-           VALUES (?, ?, 'local_faster_whisper', 'zh', 'srt')"#,
+           VALUES (?, ?, 'local_whisper_rs', 'zh', 'srt')"#,
     )
     .bind(&video_str)
     .bind(&subtitle_str)
@@ -454,8 +463,8 @@ async fn run_inner(
     Ok(())
 }
 
-/// hf-hub 的 `metadata()` 要求响应含 `Content-Range`；部分 HF 镜像未返回该头（会报 Header content-range is missing）。
-/// 依次尝试：官方 metadata → HEAD 的 Content-Length → 占位 1 字节（仅用于进度占比，避免 total 为 0）。
+/// 预先估算文件大小（用于进度分母）；未知时返回占位值，实际下载中可用 GET 的 Content-Length 覆盖。
+/// 依次尝试：官方 metadata → HEAD 的 Content-Length → 占位 1（走未知大小启发式进度）。
 async fn hub_file_byte_size(api: &hf_hub::api::tokio::Api, url: &str) -> u64 {
     if let Ok(m) = api.metadata(url).await {
         return m.size() as u64;
@@ -468,7 +477,7 @@ async fn hub_file_byte_size(api: &hf_hub::api::tokio::Api, url: &str) -> u64 {
         }
     }
     tracing::debug!(
-        "无法预先获取文件大小（多为镜像缺 Content-Range），进度按文件数估算: {}",
+        "无法预先获取文件大小（多为镜像缺 Content-Range），进度按启发式估算: {}",
         url
     );
     1
@@ -481,11 +490,29 @@ fn hub_cache_from_config(config: &Config) -> Cache {
     }
 }
 
-/// `hf-hub` 的 `download()` 会先调 `metadata()`（依赖 Content-Range）；镜像失败时走整文件 GET，按 hub 布局写入 blobs/snapshots。
-fn is_hf_range_metadata_error(e: &ApiError) -> bool {
-    e.to_string().to_ascii_lowercase().contains("content-range")
+fn download_frac(downloaded: u64, total_bytes: Option<u64>) -> f64 {
+    match total_bytes {
+        Some(t) if t > 4096 => (downloaded as f64 / t as f64).min(0.99),
+        _ => {
+            let assumed = 250_u64 * 1024 * 1024;
+            (downloaded as f64 / assumed as f64).min(0.99)
+        }
+    }
 }
 
+/// 流式下载上下文：`progress_base`～`progress_base + progress_span` 映射下载阶段占比。
+struct HfHubStreamProgress<'a> {
+    pool: &'a SqlitePool,
+    job_id: &'a str,
+    throttle: &'a mut ProgressThrottle,
+    detail: &'a mut JobDetail,
+    phase: &'static str,
+    progress_base: f64,
+    progress_span: f64,
+    fname: &'a str,
+}
+
+/// 整文件 GET 写入 HF Hub 缓存布局（与 hf-hub 缓存兼容）；可选地在下载过程中节流更新任务进度。
 async fn hf_stream_download_to_hub_cache(
     api: &hf_hub::api::tokio::Api,
     cache: &Cache,
@@ -493,10 +520,20 @@ async fn hf_stream_download_to_hub_cache(
     repo_api: &hf_hub::api::tokio::ApiRepo,
     commit_sha: &str,
     rfilename: &str,
+    mut progress: Option<HfHubStreamProgress<'_>>,
 ) -> anyhow::Result<PathBuf> {
     let url = repo_api.url(rfilename);
     let resp = api.client().get(&url).send().await?;
     let resp = resp.error_for_status()?;
+
+    if let Some(ref mut p) = progress {
+        if let Some(cl) = resp.content_length() {
+            if cl > 4096 {
+                p.detail.total_bytes = Some(cl);
+            }
+        }
+    }
+
     let mut stream = resp.bytes_stream();
 
     let cache_repo = cache.repo(repo.clone());
@@ -507,10 +544,35 @@ async fn hf_stream_download_to_hub_cache(
     let tmp_path = blobs_dir.join(format!("_tmp_{}", Uuid::new_v4()));
     let mut file = tokio::fs::File::create(&tmp_path).await?;
     let mut hasher = sha1::Sha1::new();
+    let mut downloaded: u64 = 0;
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         hasher.update(&chunk);
         file.write_all(&chunk).await?;
+        downloaded += chunk.len() as u64;
+
+        if let Some(ref mut p) = progress {
+            p.detail.bytes_downloaded = Some(downloaded);
+            let frac = download_frac(downloaded, p.detail.total_bytes);
+            let prog_val = p.progress_base + frac * p.progress_span;
+            let msg = match p.detail.total_bytes.filter(|&t| t > 4096) {
+                Some(t) => format!(
+                    "下载 {:.1}% ({:.1} / {:.1} MB) {}",
+                    frac * 100.0,
+                    downloaded as f64 / 1_048_576.0,
+                    t as f64 / 1_048_576.0,
+                    p.fname
+                ),
+                None => format!(
+                    "已下载 {:.1} MB · {}",
+                    downloaded as f64 / 1_048_576.0,
+                    p.fname
+                ),
+            };
+            p.throttle
+                .maybe_update(p.pool, p.job_id, p.phase, prog_val, &msg, Some(p.detail), false)
+                .await?;
+        }
     }
     file.flush().await?;
     drop(file);
@@ -537,15 +599,33 @@ async fn hf_stream_download_to_hub_cache(
 
     cache_repo.create_ref(commit_sha)?;
 
+    if let Some(ref mut p) = progress {
+        let final_bytes = std::fs::metadata(&blob_path).map(|m| m.len()).unwrap_or(downloaded);
+        p.detail.total_bytes = Some(final_bytes);
+        p.detail.bytes_downloaded = Some(final_bytes);
+        p.throttle
+            .maybe_update(
+                p.pool,
+                p.job_id,
+                p.phase,
+                p.progress_base + p.progress_span,
+                &format!("已写入 Hugging Face 缓存: {}", p.fname),
+                Some(p.detail),
+                true,
+            )
+            .await?;
+    }
+
     Ok(pointer_path)
 }
 
-async fn download_ct2_model_from_hf(
+async fn download_ggml_model_from_hf(
     pool: &SqlitePool,
     config: &Config,
     job_id: &str,
     throttle: &mut ProgressThrottle,
     detail: &mut JobDetail,
+    dest_file: &Path,
 ) -> anyhow::Result<PathBuf> {
     // 使用 from_env() 以读取 HF_ENDPOINT（镜像，例如 https://hf-mirror.com），
     // ApiBuilder::new() 固定 huggingface.co，在国内网络常导致请求失败。
@@ -563,6 +643,12 @@ async fn download_ct2_model_from_hf(
     let hub_cache = hub_cache_from_config(config);
 
     let repo_id = config.whisper_hf_repo.trim().to_string();
+    let fname = config.whisper_ggml_filename.trim().to_string();
+    anyhow::ensure!(
+        !fname.is_empty(),
+        "WHISPER_GGML_FILE / whisper_ggml_filename 不能为空"
+    );
+
     let repo = Repo::model(repo_id.clone());
     let repo_api = api.repo(repo.clone());
     let info = repo_api.info().await.map_err(|e| {
@@ -572,20 +658,23 @@ async fn download_ct2_model_from_hf(
         )
     })?;
 
-    if info.siblings.is_empty() {
-        anyhow::bail!("Hugging Face 仓库没有可下载的文件: {}", repo_id);
+    if info
+        .siblings
+        .iter()
+        .find(|s| s.rfilename == fname)
+        .is_none()
+    {
+        anyhow::bail!(
+            "仓库 {} 中未找到文件 `{}`（请检查 WHISPER_HF_REPO 与 WHISPER_GGML_FILE）",
+            repo_id,
+            fname
+        );
     }
 
-    let mut total_bytes: u64 = 0;
-    let mut sizes: Vec<(String, u64)> = Vec::with_capacity(info.siblings.len());
-    for s in &info.siblings {
-        let url = repo_api.url(&s.rfilename);
-        let sz = hub_file_byte_size(&api, &url).await;
-        total_bytes += sz;
-        sizes.push((s.rfilename.clone(), sz));
-    }
+    let url = repo_api.url(&fname);
+    let total_hint = hub_file_byte_size(&api, &url).await;
 
-    detail.total_bytes = Some(total_bytes);
+    detail.total_bytes = Some(total_hint.max(1));
     detail.bytes_downloaded = Some(0);
 
     throttle
@@ -594,95 +683,56 @@ async fn download_ct2_model_from_hf(
             job_id,
             "download_model",
             8.0,
-            "正在从 Hugging Face 下载 CTranslate2 模型",
+            &format!("正在从 Hugging Face 流式下载 GGML 模型 {fname}"),
             Some(detail),
             true,
         )
         .await?;
 
-    let mut done: u64 = 0;
-    let n = info.siblings.len().max(1);
-    for (i, s) in info.siblings.iter().enumerate() {
-        let frac_start = done as f64 / total_bytes.max(1) as f64;
-        let progress = 8.0 + frac_start * 12.0;
-        throttle
-            .maybe_update(
-                pool,
-                job_id,
-                "download_model",
-                progress,
-                &format!(
-                    "下载模型文件 {}/{}: {}",
-                    i + 1,
-                    n,
-                    s.rfilename
-                ),
-                Some(detail),
-                false,
-            )
-            .await?;
+    hf_stream_download_to_hub_cache(
+        &api,
+        &hub_cache,
+        &repo,
+        &repo_api,
+        &info.sha,
+        &fname,
+        Some(HfHubStreamProgress {
+            pool,
+            job_id,
+            throttle,
+            detail,
+            phase: "download_model",
+            progress_base: 8.0,
+            progress_span: 12.0,
+            fname: fname.as_str(),
+        }),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("下载 {} 失败: {}", fname, e))?;
 
-        match repo_api.download(&s.rfilename).await {
-            Ok(_) => {}
-            Err(e) if is_hf_range_metadata_error(&e) => {
-                tracing::debug!(
-                    "hf-hub 分片下载依赖 Content-Range，改用整文件流式写入缓存: {}",
-                    s.rfilename
-                );
-                hf_stream_download_to_hub_cache(
-                    &api,
-                    &hub_cache,
-                    &repo,
-                    &repo_api,
-                    &info.sha,
-                    &s.rfilename,
-                )
-                .await
-                .map_err(|e2| {
-                    anyhow::anyhow!(
-                        "下载 {} 失败（镜像缺少 Content-Range，整文件回退仍失败）: {}",
-                        s.rfilename,
-                        e2
-                    )
-                })?;
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!("下载 {} 失败: {}", s.rfilename, e));
-            }
-        }
-
-        if let Some((_, sz)) = sizes.iter().find(|(n, _)| n == &s.rfilename) {
-            done += sz;
-        }
-        detail.bytes_downloaded = Some(done);
-        let frac = done as f64 / total_bytes.max(1) as f64;
-        let progress = 8.0 + frac * 12.0;
-        throttle
-            .maybe_update(
-                pool,
-                job_id,
-                "download_model",
-                progress,
-                &format!(
-                    "已下载 {:.1}% ({:.1} / {:.1} MB)",
-                    frac * 100.0,
-                    done as f64 / 1_048_576.0,
-                    total_bytes as f64 / 1_048_576.0
-                ),
-                Some(detail),
-                false,
-            )
-            .await?;
-    }
-
-    let cfg_path = repo_api
-        .get("config.json")
+    let cached_path = repo_api
+        .get(&fname)
         .await
-        .map_err(|e| anyhow::anyhow!("定位 config.json 失败: {}", e))?;
-    let model_dir = cfg_path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("无效模型路径"))?
-        .to_path_buf();
+        .map_err(|e| anyhow::anyhow!("定位已下载文件 {} 失败: {}", fname, e))?;
+
+    if let Some(parent) = dest_file.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::copy(&cached_path, dest_file)
+        .await
+        .map_err(|e| anyhow::anyhow!("复制模型到 {} 失败: {}", dest_file.display(), e))?;
+
+    throttle
+        .maybe_update(
+            pool,
+            job_id,
+            "download_model",
+            20.0,
+            &format!("模型已下载至 {}", dest_file.display()),
+            Some(detail),
+            true,
+        )
+        .await?;
 
     throttle
         .maybe_update(
@@ -696,7 +746,7 @@ async fn download_ct2_model_from_hf(
         )
         .await?;
 
-    Ok(model_dir)
+    Ok(dest_file.to_path_buf())
 }
 
 async fn ensure_ffmpeg_bin(
@@ -925,6 +975,7 @@ fn ffmpeg_bin(config: &Config) -> String {
 }
 
 async fn extract_audio_ffmpeg(
+    config: &Config,
     ffmpeg_exe: &Path,
     video: &Path,
     out_wav: &Path,
@@ -938,6 +989,13 @@ async fn extract_audio_ffmpeg(
         .arg("16000")
         .arg("-ac")
         .arg("1")
+        .args(
+            config
+                .ffmpeg_denoise_enable
+                .then_some(("-af", config.ffmpeg_denoise_filter.trim()))
+                .into_iter()
+                .flat_map(|(k, v)| [k, v]),
+        )
         .arg("-c:a")
         .arg("pcm_s16le")
         .arg(out_wav)

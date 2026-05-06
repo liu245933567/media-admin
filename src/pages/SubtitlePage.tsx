@@ -29,7 +29,7 @@ function phaseLabel(phase: string): string {
 export function SubtitlePage() {
   const { message } = App.useApp()
   const { token } = theme.useToken()
-  const [videoPath, setVideoPath] = useState('Y:/porn/A Husband Shares his Wife with a BULL - Pornhub.com.mp4')
+  const [videoPath, setVideoPath] = useState('C:/Users/24593/Downloads/-Stop taking pics of us! Come fuck us instead!- Ivi Rein & Lil Charmelle tell stepbro -S21-E3.mp4')
   const [rows, setRows] = useState<SubtitleItem[]>([])
   const [cid, setCid] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
