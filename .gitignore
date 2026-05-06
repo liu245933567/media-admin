@@ -1,0 +1,9 @@
+/target
+/*.db
+/*.db-journal
+/node_modules
+/dist
+.DS_Store
+/models
+/tools
+.env
