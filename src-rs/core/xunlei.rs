@@ -47,18 +47,18 @@ pub struct OracleSubtitleRoot {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct OracleSubtitleItem {
-    pub gcid: Option<String>,
+    // pub gcid: Option<String>,
     pub cid: Option<String>,
     pub url: Option<String>,
     pub ext: Option<String>,
     pub name: Option<String>,
-    pub duration: Option<i32>,
+    // pub duration: Option<i32>,
     pub languages: Option<Vec<String>>,
-    pub source: Option<i32>,
-    pub score: Option<i32>,
-    #[serde(default)]
-    pub fingerprintf_score: Option<i32>,
-    pub extra_name: Option<String>,
+    // pub source: Option<i32>,
+    // pub score: Option<i32>,
+    // #[serde(default)]
+    // pub fingerprintf_score: Option<i32>,
+    // pub extra_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

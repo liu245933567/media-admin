@@ -204,3 +204,10 @@ fn parse_bool_env(key: &str) -> Option<bool> {
         )
     })
 }
+
+/// 模型目录
+pub const MODELS_DIR: &'static str = "static/models";
+/// ffmpeg 目录
+pub const FFMPEG_DIR: &'static str = "static/tools/ffmpeg";
+/// 临时 WAV 目录
+pub const TEMP_WAV_DIR: &'static str = "static/temp/wav";
