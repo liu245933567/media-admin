@@ -1,11 +1,11 @@
+use crate::core::xunlei::{
+    decode_subtitle_id, encode_subtitle_id, thunder_cid_from_file, DownloadPayload,
+    ThunderSubtitleClient,
+};
 use crate::error::AppError;
-use crate::state::AppState;
-use crate::xunlei::{self, decode_subtitle_id, encode_subtitle_id, DownloadPayload};
-use axum::extract::State;
-use axum::Json;
+use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tracing::instrument;
 
 #[derive(Debug, Deserialize)]
 pub struct SearchBody {
@@ -40,56 +40,40 @@ pub struct DownloadResponse {
     pub record_id: i64,
 }
 
-#[instrument(skip(state), fields(video_path = body.video_path.as_str()))]
-pub async fn search_subtitles(
-    State(state): State<AppState>,
-    Json(body): Json<SearchBody>,
-) -> Result<Json<SearchResponse>, AppError> {
-    let path = PathBuf::from(body.video_path.trim());
+/// 从网络接口查询字幕
+pub async fn search_subtitles(params: SearchBody) -> Result<SearchResponse> {
+    let path = PathBuf::from(&params.video_path.trim());
     if path.as_os_str().is_empty() {
-        return Err(AppError::BadRequest("video_path 不能为空".into()));
+        bail!("video_path 不能为空");
     }
     if !path.is_absolute() {
-        return Err(AppError::BadRequest(
-            "video_path 必须为后端可访问的绝对路径".into(),
-        ));
+        bail!("video_path 必须为后端可访问的绝对路径");
     }
-    if !tokio::fs::try_exists(&path)
-        .await
-        .map_err(|e| AppError::Internal(e.into()))?
-    {
-        return Err(AppError::NotFound(format!(
-            "找不到文件: {}",
-            path.display()
-        )));
+    if !tokio::fs::try_exists(&path).await? {
+        bail!("找不到文件: {}", path.display());
     }
-    let meta = tokio::fs::metadata(&path)
-        .await
-        .map_err(|e| AppError::Internal(e.into()))?;
+    let meta = tokio::fs::metadata(&path).await?;
     if !meta.is_file() {
-        return Err(AppError::BadRequest("路径必须是视频文件".into()));
+        bail!("路径必须是视频文件");
     }
 
-    let cid = xunlei::thunder_cid_from_file(&path)
-        .await
-        .map_err(AppError::Internal)?;
+    let cid = thunder_cid_from_file(&path).await?;
+
     let filename = path
         .file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| AppError::BadRequest("无法解析文件名".into()))?;
+        .context("无法解析文件名")?;
 
-    let root = state
-        .xunlei
+    let xunlei_client = ThunderSubtitleClient::new().unwrap();
+
+    let root = xunlei_client
         .search_by_filename(filename)
         .await
-        .map_err(|e| AppError::Upstream(format!("迅雷字幕接口失败: {e}")))?;
+        .map_err(|e| anyhow!("迅雷字幕接口失败: {e}"))?;
 
     if root.code != 0 {
         let detail = root.result.unwrap_or_default();
-        return Err(AppError::Upstream(format!(
-            "迅雷返回 code={} {}",
-            root.code, detail
-        )));
+        bail!("迅雷返回 code={} {}", root.code, detail);
     }
 
     let mut items = Vec::new();
@@ -130,46 +114,38 @@ pub async fn search_subtitles(
         });
     }
 
-    Ok(Json(SearchResponse {
+    Ok(SearchResponse {
         video_path: path.display().to_string(),
         cid,
         items,
-    }))
+    })
 }
 
-#[instrument(skip(state), fields(video_path = body.video_path.as_str()))]
-pub async fn download_subtitle(
-    State(state): State<AppState>,
-    Json(body): Json<DownloadBody>,
-) -> Result<Json<DownloadResponse>, AppError> {
-    let video = PathBuf::from(body.video_path.trim());
+/// 下载字幕
+pub async fn download_subtitle(params: DownloadBody) -> Result<DownloadResponse> {
+    let video = PathBuf::from(params.video_path.trim());
     if video.as_os_str().is_empty() {
-        return Err(AppError::BadRequest("video_path 不能为空".into()));
+        bail!("video_path 不能为空");
     }
     if !video.is_absolute() {
-        return Err(AppError::BadRequest(
-            "video_path 必须为后端可访问的绝对路径".into(),
-        ));
+        bail!("video_path 必须为后端可访问的绝对路径");
     }
     if !tokio::fs::try_exists(&video)
         .await
-        .map_err(|e| AppError::Internal(e.into()))?
+        .map_err(|e| anyhow!("找不到视频文件: {}", video.display()))?
     {
-        return Err(AppError::NotFound(format!(
-            "找不到视频文件: {}",
-            video.display()
-        )));
+        bail!("找不到视频文件: {}", video.display());
     }
 
-    let payload = decode_subtitle_id(&body.subtitle_id).map_err(|_| {
-        AppError::BadRequest("subtitle_id 无效".into())
-    })?;
+    let payload =
+        decode_subtitle_id(&params.subtitle_id).map_err(|_| anyhow!("subtitle_id 无效"))?;
 
-    let bytes = state
-        .xunlei
+    let xunlei_client = ThunderSubtitleClient::new().unwrap();
+
+    let bytes = xunlei_client
         .download_bytes(&payload.url)
         .await
-        .map_err(|e| AppError::Upstream(format!("下载字幕失败: {e}")))?;
+        .map_err(|e| anyhow!("下载字幕失败: {e}"))?;
 
     let stem = video
         .file_stem()
@@ -186,27 +162,12 @@ pub async fn download_subtitle(
         .await
         .map_err(|e| AppError::Internal(e.into()))?;
 
-    let video_path_str = video.display().to_string();
     let subtitle_path_str = subtitle_path.display().to_string();
-    let language = payload.language.clone();
-    let format = Some(ext.clone());
 
-    let record = sqlx::query(
-        r#"INSERT INTO subtitle_records (video_path, subtitle_path, source, language, format)
-           VALUES (?, ?, 'xunlei', ?, ?)"#,
-    )
-    .bind(&video_path_str)
-    .bind(&subtitle_path_str)
-    .bind(&language)
-    .bind(&format)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| AppError::Internal(e.into()))?;
-
-    Ok(Json(DownloadResponse {
+    Ok(DownloadResponse {
         subtitle_path: subtitle_path_str,
-        record_id: record.last_insert_rowid(),
-    }))
+        record_id: 0,
+    })
 }
 
 fn normalize_ext(format: &str) -> String {

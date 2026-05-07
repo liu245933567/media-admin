@@ -1,4 +1,5 @@
 use axum::{
+    extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -16,6 +17,12 @@ fn log_app_error(err: &AppError) {
         AppError::Upstream(m) => {
             tracing::warn!(target: "http_error", kind = "upstream", msg = %m);
         }
+        AppError::Validation(m) => {
+            tracing::error!(target: "http_error", kind = "validation", msg = %m);
+        }
+        AppError::InvalidQuery(m) => {
+            tracing::error!(target: "http_error", kind = "invalid_query", msg = %m);
+        }
         AppError::Internal(e) => {
             tracing::error!(
                 target: "http_error",
@@ -29,6 +36,10 @@ fn log_app_error(err: &AppError) {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    #[error("验证失败: {0}")]
+    Validation(String),
+    #[error("查询参数错误: {0}")]
+    InvalidQuery(String),
     #[error("{0}")]
     BadRequest(String),
     #[error("{0}")]
@@ -46,9 +57,23 @@ impl IntoResponse for AppError {
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Upstream(m) => (StatusCode::BAD_GATEWAY, m.clone()),
+            AppError::Validation(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            AppError::InvalidQuery(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::Internal(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         };
         let body = Json(json!({ "error": msg }));
         (status, body).into_response()
+    }
+}
+
+impl From<JsonRejection> for AppError {
+    fn from(value: JsonRejection) -> Self {
+        Self::Validation(value.body_text())
+    }
+}
+
+impl From<QueryRejection> for AppError {
+    fn from(value: QueryRejection) -> Self {
+        Self::InvalidQuery(value.body_text())
     }
 }

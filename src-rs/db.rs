@@ -3,7 +3,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::str::FromStr;
 
-pub async fn connect(database_url: &str) -> anyhow::Result<SqlitePool> {
+pub async fn connect_db(database_url: &str) -> anyhow::Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(database_url)
         .context("解析 DATABASE_URL")?
         .create_if_missing(true);

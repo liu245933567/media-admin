@@ -2,15 +2,11 @@ use std::net::SocketAddr;
 
 #[derive(Clone, Debug)]
 pub struct Config {
+    /// 服务监听地址
     pub listen: SocketAddr,
+    /// 数据库连接 URL
     pub database_url: String,
-    pub xunlei_subtitle_base: String,
     pub cors_origins: Vec<String>,
-    /// Static assets root directory (default `static` under cwd).
-    /// This project stores downloaded resources under:
-    /// - models: `${SUBTITLE_ADMIN_STATIC_DIR}/models`
-    /// - ffmpeg: `${SUBTITLE_ADMIN_STATIC_DIR}/ffmpeg`
-    pub static_dir: String,
     /// `whisper-rs` 使用的 GGML 权重路径：可为单个 `.bin` / `.gguf` 文件，或存放该文件的目录。
     /// 不完整时会从 Hugging Face 拉取 `whisper_ggml_filename` 到该目录（目录不存在则创建）。
     pub whisper_model_path: String,
@@ -58,23 +54,18 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let host = std::env::var("SUBTITLE_ADMIN_HOST").unwrap_or_else(|_| "127.0.0.1".into());
-        let port: u16 = std::env::var("SUBTITLE_ADMIN_PORT")
+    pub fn init() -> anyhow::Result<Self> {
+        let host = std::env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+        let port: u16 = std::env::var("SERVER_PORT")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(3000);
         let listen: SocketAddr = format!("{host}:{port}").parse()?;
 
-        let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-            "sqlite://./subtitle_admin.db".to_string()
-        });
+        let database_url = std::env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "sqlite://./subtitle_admin.db".to_string());
 
-        let xunlei_subtitle_base = std::env::var("XUNLEI_SUBTITLE_BASE").unwrap_or_else(|_| {
-            "https://api-shoulei-ssl.xunlei.com/oracle/subtitle".into()
-        });
-
-        let cors_origins = std::env::var("SUBTITLE_ADMIN_CORS_ORIGINS")
+        let cors_origins = std::env::var("CORS_ORIGINS")
             .unwrap_or_else(|_| "http://localhost:5173,http://127.0.0.1:5173".into())
             .split(',')
             .map(|s| s.trim().to_string())
@@ -90,10 +81,9 @@ impl Config {
             static_dir
         };
 
-        let whisper_model_path =
-            std::env::var("WHISPER_MODEL_PATH")
-                .or_else(|_| std::env::var("SUBTITLE_ADMIN_MODELS_DIR"))
-                .unwrap_or_else(|_| format!("{}/models/whisper-large-v3-turbo", static_dir));
+        let whisper_model_path = std::env::var("WHISPER_MODEL_PATH")
+            .or_else(|_| std::env::var("SUBTITLE_ADMIN_MODELS_DIR"))
+            .unwrap_or_else(|_| format!("{}/models/whisper-large-v3-turbo", static_dir));
 
         let whisper_hf_repo = std::env::var("WHISPER_HF_REPO").unwrap_or_else(|_| {
             std::env::var("WHISPER_MODEL_URL")
@@ -102,10 +92,8 @@ impl Config {
                 .unwrap_or_else(|| "ggerganov/whisper.cpp".to_string())
         });
 
-        let whisper_ggml_filename =
-            std::env::var("WHISPER_GGML_FILE").unwrap_or_else(|_| {
-                "ggml-large-v3-turbo.bin".to_string()
-            });
+        let whisper_ggml_filename = std::env::var("WHISPER_GGML_FILE")
+            .unwrap_or_else(|_| "ggml-large-v3-turbo.bin".to_string());
 
         let whisper_device = std::env::var("WHISPER_DEVICE").unwrap_or_else(|_| "cpu".to_string());
         let whisper_compute_type =
@@ -146,11 +134,10 @@ impl Config {
             .and_then(|s| s.trim().parse().ok());
 
         let deepseek_api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
-        let deepseek_api_base = std::env::var("DEEPSEEK_API_BASE").unwrap_or_else(|_| {
-            "https://api.deepseek.com".to_string()
-        });
-        let deepseek_model = std::env::var("DEEPSEEK_MODEL")
-            .unwrap_or_else(|_| "deepseek-v4-flash".to_string());
+        let deepseek_api_base = std::env::var("DEEPSEEK_API_BASE")
+            .unwrap_or_else(|_| "https://api.deepseek.com".to_string());
+        let deepseek_model =
+            std::env::var("DEEPSEEK_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".to_string());
 
         let whisper_vad_enable = parse_bool_env("WHISPER_VAD_ENABLE").unwrap_or(false);
         let whisper_vad_mode: u8 = std::env::var("WHISPER_VAD_MODE")
@@ -180,9 +167,7 @@ impl Config {
         Ok(Config {
             listen,
             database_url,
-            xunlei_subtitle_base,
             cors_origins,
-            static_dir,
             whisper_model_path,
             whisper_hf_repo,
             whisper_ggml_filename,

@@ -667,7 +667,7 @@ async fn download_ggml_model_from_hf(
     let repo_api = api.repo(repo.clone());
     let info = repo_api.info().await.map_err(|e| {
         anyhow::anyhow!(
-            "读取 Hugging Face 模型信息失败: {}（若无法直连 huggingface.co，可设置环境变量 HF_ENDPOINT，例如国内镜像 https://hf-mirror.com）",
+            "读取 Hugging Face 模型信息失败: {}（若无法直连 huggingface.co, 可设置环境变量 HF_ENDPOINT, 例如国内镜像 https://hf-mirror.com）",
             e
         )
     })?;
