@@ -29,7 +29,5 @@ pub async fn generate_subtitle(video_path: &Path, vad_config: Option<VadConfig>)
         None => {}
     }
 
-    let mut audio = vec![0.0f32; samples_i16.len()];
-
     Ok(wav_path.display().to_string())
 }

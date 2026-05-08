@@ -21,7 +21,7 @@ pub async fn start() {
 
     let config = Arc::new(Config::init().unwrap());
 
-    let db = connect_db(&config.database_url).await.unwrap();
+    let db = connect_db().await.unwrap();
 
     let app_state = AppState { db, config };
 

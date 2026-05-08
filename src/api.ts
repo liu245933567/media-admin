@@ -5,7 +5,7 @@ export function apiUrl(path: string): string {
   return `${API_PREFIX}${p}`
 }
 
-export type SearchResponse = {
+export type SubtitleWebSearchRes = {
   video_path: string
   cid: string
   items: SubtitleItem[]
@@ -24,17 +24,17 @@ export type DownloadResponse = {
   record_id: number
 }
 
-export async function searchSubtitles(videoPath: string): Promise<SearchResponse> {
+export async function searchSubtitles(videoPath: string): Promise<SubtitleWebSearchRes> {
   const res = await fetch(apiUrl('/api/subtitles/search'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ video_path: videoPath }),
   })
-  const data = (await res.json()) as { error?: string } & Partial<SearchResponse>
+  const data = (await res.json()) as { error?: string } & Partial<SubtitleWebSearchRes>
   if (!res.ok) {
     throw new Error(data.error ?? `HTTP ${res.status}`)
   }
-  return data as SearchResponse
+  return data as SubtitleWebSearchRes
 }
 
 export type LocalJobDetail = {

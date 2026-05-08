@@ -6,21 +6,28 @@ use crate::error::AppError;
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
+use typeshare::typeshare;
 #[derive(Debug, Deserialize)]
 pub struct SearchBody {
     pub video_path: String,
 }
 
+/// 搜索字幕结果
+#[typeshare]
 #[derive(Serialize)]
-pub struct SearchResponse {
+pub struct SubtitleWebSearchRes {
+    /// 视频的绝对路径
     pub video_path: String,
+    /// 视频的 cid
     pub cid: String,
-    pub items: Vec<SubtitleRow>,
+    /// 字幕列表
+    pub items: Vec<SubtitleWebRow>,
 }
 
+/// 搜索字幕结果 - 列表单项
+#[typeshare]
 #[derive(Serialize)]
-pub struct SubtitleRow {
+pub struct SubtitleWebRow {
     pub id: String,
     pub name: String,
     pub langs: String,
@@ -41,7 +48,7 @@ pub struct DownloadResponse {
 }
 
 /// 从网络接口查询字幕
-pub async fn search_subtitles(params: SearchBody) -> Result<SearchResponse> {
+pub async fn search_subtitles(params: SearchBody) -> Result<SubtitleWebSearchRes> {
     let path = PathBuf::from(&params.video_path.trim());
     if path.as_os_str().is_empty() {
         bail!("video_path 不能为空");
@@ -105,7 +112,7 @@ pub async fn search_subtitles(params: SearchBody) -> Result<SearchResponse> {
         };
         let id = encode_subtitle_id(&payload).map_err(AppError::Internal)?;
 
-        items.push(SubtitleRow {
+        items.push(SubtitleWebRow {
             id,
             name,
             langs,
@@ -114,7 +121,7 @@ pub async fn search_subtitles(params: SearchBody) -> Result<SearchResponse> {
         });
     }
 
-    Ok(SearchResponse {
+    Ok(SubtitleWebSearchRes {
         video_path: path.display().to_string(),
         cid,
         items,
@@ -132,7 +139,7 @@ pub async fn download_subtitle(params: DownloadBody) -> Result<DownloadResponse>
     }
     if !tokio::fs::try_exists(&video)
         .await
-        .map_err(|e| anyhow!("找不到视频文件: {}", video.display()))?
+        .map_err(|_e| anyhow!("找不到视频文件: {}", video.display()))?
     {
         bail!("找不到视频文件: {}", video.display());
     }

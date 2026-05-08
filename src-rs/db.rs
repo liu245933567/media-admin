@@ -3,8 +3,10 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::str::FromStr;
 
-pub async fn connect_db(database_url: &str) -> anyhow::Result<SqlitePool> {
-    let options = SqliteConnectOptions::from_str(database_url)
+use crate::config::SQLITE_DB_FILE;
+
+pub async fn connect_db() -> anyhow::Result<SqlitePool> {
+    let options = SqliteConnectOptions::from_str(SQLITE_DB_FILE)
         .context("解析 DATABASE_URL")?
         .create_if_missing(true);
     let pool = SqlitePoolOptions::new()

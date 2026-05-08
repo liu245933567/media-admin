@@ -65,3 +65,7 @@ npm run dev
 ## 开发插件
 CUDA Toolkit
 https://developer.nvidia.com/cuda-downloads
+
+## 类型生成
+`cargo install typeshare-cli`
+`typeshare . --lang=typescript --output-file=./src/types/api.ts`

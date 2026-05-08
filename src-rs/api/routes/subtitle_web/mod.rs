@@ -6,7 +6,7 @@ use crate::{
 use axum::{routing::post, Json, Router};
 use axum_extra::extract::WithRejection;
 
-use crate::core::subtitles_web::{search_subtitles, SearchBody, SearchResponse};
+use crate::core::subtitles_web::{search_subtitles, SearchBody, SubtitleWebSearchRes};
 
 pub fn routes() -> StateRouter {
     Router::new()
@@ -16,7 +16,7 @@ pub fn routes() -> StateRouter {
 
 async fn search_handler(
     WithRejection(Json(body), _): WithRejection<Json<SearchBody>, AppError>,
-) -> Result<Json<SearchResponse>, AppError> {
+) -> Result<Json<SubtitleWebSearchRes>, AppError> {
     let resp = search_subtitles(body).await?;
     Ok(Json(resp))
 }
