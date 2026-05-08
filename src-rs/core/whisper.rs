@@ -6,8 +6,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use whisper_rs::{
-    convert_integer_to_float_audio, install_logging_hooks, FullParams, SamplingStrategy,
-    SegmentCallbackData, WhisperContext, WhisperContextParameters,
+    convert_integer_to_float_audio, get_lang_str, install_logging_hooks, FullParams,
+    SamplingStrategy, SegmentCallbackData, WhisperContext, WhisperContextParameters,
 };
 
 use crate::{config::MODELS_DIR, core::subtitle_file::fmt_srt_ts_centiseconds};
@@ -21,6 +21,16 @@ pub struct WhisperTranscribeItem {
     pub end_cs: i64,
     /// 语音识别文本（已 trim）
     pub text: String,
+}
+
+/// whisper 单次转写的整体输出（一段音频 → 多个文本段 + 整体语种）
+#[derive(Clone, Debug, Default)]
+pub struct WhisperTranscribeOutput {
+    /// 文本段列表
+    pub items: Vec<WhisperTranscribeItem>,
+    /// 本次转写实际使用 / 自动检测到的语言短代码（如 `"zh"`、`"en"`）；
+    /// 无法识别或无段输出时为 `None`。
+    pub lang: Option<String>,
 }
 
 /// whisper 引擎运行时配置（影响模型加载，启动期决定）
@@ -158,9 +168,9 @@ impl WhisperEngine {
         samples_i16: &[i16],
         offset_cs: i64,
         options: &WhisperOptions,
-    ) -> Result<Vec<WhisperTranscribeItem>> {
+    ) -> Result<WhisperTranscribeOutput> {
         if samples_i16.is_empty() {
-            return Ok(Vec::new());
+            return Ok(WhisperTranscribeOutput::default());
         }
 
         let mut audio = vec![0.0f32; samples_i16.len()];
@@ -263,7 +273,7 @@ impl WhisperEngine {
 
             let t0 = fmt_srt_ts_centiseconds(abs_start);
             let t1 = fmt_srt_ts_centiseconds(abs_end);
-            tracing::info!("{t0} ~ {t1}  {trimmed}");
+            tracing::info!("{t0} --> {t1}  {trimmed}");
 
             if let Ok(mut guard) = segments_for_cb.lock() {
                 guard.push(WhisperTranscribeItem {
@@ -293,6 +303,12 @@ impl WhisperEngine {
         let elapsed_ms = started.elapsed().as_millis();
         let n_segments = state.full_n_segments();
 
+        // 取识别 / 锁定使用的语言短代码（"zh"/"en"/...）。
+        // 不论 options.language 是显式指定还是 "auto" 检测，whisper.cpp 都会把
+        // 实际生效的语言写入 state，由 full_lang_id_from_state 读出。
+        let lang_id = state.full_lang_id_from_state();
+        let lang = get_lang_str(lang_id).map(|s| s.to_string());
+
         let segs_guard = segments
             .lock()
             .map_err(|_| anyhow!("SRT segments lock poisoned"))?;
@@ -302,6 +318,8 @@ impl WhisperEngine {
             elapsed_ms,
             n_segments,
             collected = segs_guard.len(),
+            lang_id,
+            lang = ?lang,
             "[whisper] 片段解码完成"
         );
 
@@ -316,7 +334,11 @@ impl WhisperEngine {
             );
         }
 
-        Ok(segs_guard.clone())
+        Ok(WhisperTranscribeOutput {
+            items: segs_guard.clone(),
+            // 无段输出时不报告语言（多半是 0 段失败或纯静音，结果不可信）
+            lang: if segs_guard.is_empty() { None } else { lang },
+        })
     }
 }
 
@@ -337,11 +359,14 @@ fn audio_peak_rms(audio: &[f32]) -> (f32, f64) {
     (peak, rms)
 }
 
-/// 兼容旧调用：默认 engine + 默认 options
+/// 兼容旧调用：默认 engine + 默认 options，仅返回文本段。
+/// 如需获取检测到的语种，请直接使用 [`WhisperEngine::transcribe`]。
 pub fn whisper_transcribe(
     samples_i16: &[i16],
     offset_cs: i64,
 ) -> Result<Vec<WhisperTranscribeItem>> {
     let engine = WhisperEngine::new()?;
-    engine.transcribe(samples_i16, offset_cs, &WhisperOptions::default())
+    Ok(engine
+        .transcribe(samples_i16, offset_cs, &WhisperOptions::default())?
+        .items)
 }

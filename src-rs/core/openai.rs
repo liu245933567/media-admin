@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -278,7 +279,6 @@ async fn translate_one(
                     .and_then(|c| c.message.content)
                     .ok_or_else(|| anyhow!("模型未返回翻译内容"))?;
                 let cleaned = strip_translation_prefix(content.trim());
-                tracing::debug!("translate ok: {} -> {}", text, cleaned);
                 return Ok(cleaned);
             }
             Err(e) => {
@@ -487,6 +487,9 @@ pub async fn translate_srt_file(
 }
 
 /// 批量并发翻译；批级失败时自动回退该批为逐条翻译。
+///
+/// 每条字幕完成解析（包含批量与回退路径）后立刻通过 `tracing::info!` 打印
+/// `[N/total] #idx  原文 → 译文`，方便长任务下实时观察进度。
 async fn run_batched(
     client: &Arc<Client<OpenAIConfig>>,
     model: &str,
@@ -495,6 +498,9 @@ async fn run_batched(
     batch_size: usize,
     concurrency: usize,
 ) -> Vec<(usize, Result<String>)> {
+    let total = items.len();
+    let done = Arc::new(AtomicUsize::new(0));
+
     let batches: Vec<Vec<(usize, String)>> = items
         .chunks(batch_size)
         .map(|c| c.to_vec())
@@ -505,14 +511,19 @@ async fn run_batched(
         let client = client.clone();
         let model = model.to_string();
         let lang = target_language.to_string();
+        let done = done.clone();
         async move {
             let segments: Vec<&str> = batch.iter().map(|(_, t)| t.as_str()).collect();
             match translate_batch(&client, &model, &lang, &segments).await {
-                Ok(translations) => batch
-                    .into_iter()
-                    .zip(translations)
-                    .map(|((i, _), t)| (i, Ok(t)))
-                    .collect::<Vec<_>>(),
+                Ok(translations) => {
+                    let mut results = Vec::with_capacity(batch.len());
+                    for ((i, src), t) in batch.into_iter().zip(translations) {
+                        let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                        log_translate_pair(n, total, i, &src, Ok(&t));
+                        results.push((i, Ok(t)));
+                    }
+                    results
+                }
                 Err(e) => {
                     tracing::warn!(
                         "第 {}/{} 批翻译失败，回退到逐条翻译: {:#}",
@@ -523,6 +534,8 @@ async fn run_batched(
                     let mut results = Vec::with_capacity(batch.len());
                     for (i, text) in batch.into_iter() {
                         let res = translate_one(&client, &model, &lang, &text).await;
+                        let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                        log_translate_pair(n, total, i, &text, res.as_deref());
                         results.push((i, res));
                     }
                     results
@@ -536,7 +549,7 @@ async fn run_batched(
     .await
 }
 
-/// 逐条并发翻译
+/// 逐条并发翻译。每条完成后立即打印 `[N/total]` 进度。
 async fn run_one_by_one(
     client: &Arc<Client<OpenAIConfig>>,
     model: &str,
@@ -544,12 +557,18 @@ async fn run_one_by_one(
     items: Vec<(usize, String)>,
     concurrency: usize,
 ) -> Vec<(usize, Result<String>)> {
+    let total = items.len();
+    let done = Arc::new(AtomicUsize::new(0));
+
     stream::iter(items.into_iter().map(|(i, text)| {
         let client = client.clone();
         let model = model.to_string();
         let lang = target_language.to_string();
+        let done = done.clone();
         async move {
             let res = translate_one(&client, &model, &lang, &text).await;
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            log_translate_pair(n, total, i, &text, res.as_deref());
             (i, res)
         }
     }))
@@ -558,16 +577,81 @@ async fn run_one_by_one(
     .await
 }
 
+/// 打印一条字幕的翻译结果。`idx` 为 0-based 在原 SRT 中的下标，日志按 1-based 显示。
+///
+/// 为避免日志被超长字幕刷屏，单行截断到 [`LOG_TEXT_MAX_CHARS`] 字符并把内嵌换行替换为空格。
+fn log_translate_pair(
+    done: usize,
+    total: usize,
+    idx: usize,
+    src: &str,
+    res: Result<&str, &anyhow::Error>,
+) {
+    let src_clip = clip_for_log(src);
+    match res {
+        Ok(t) => {
+            let dst_clip = clip_for_log(t);
+            tracing::info!(
+                "[翻译 {done}/{total}] #{nth}  {src_clip}  →  {dst_clip}",
+                nth = idx + 1
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "[翻译 {done}/{total}] #{nth} 失败  原文={src_clip}  | {e:#}",
+                nth = idx + 1
+            );
+        }
+    }
+}
+
+/// 翻译日志中单条字幕原文/译文的最大显示字符数（按 char 计数）
+const LOG_TEXT_MAX_CHARS: usize = 80;
+
+/// 把字幕文本压成单行并截断，仅用于日志输出。
+fn clip_for_log(s: &str) -> String {
+    let one_line = s.replace('\n', " ").replace('\r', " ");
+    let trimmed = one_line.trim();
+    let n = trimmed.chars().count();
+    if n <= LOG_TEXT_MAX_CHARS {
+        trimmed.to_string()
+    } else {
+        let head: String = trimmed.chars().take(LOG_TEXT_MAX_CHARS).collect();
+        format!("{head}…")
+    }
+}
+
+/// 已知会作为字幕文件后缀出现的语言代码集合
+const KNOWN_LANG_CODES: &[&str] = &["zh", "en", "ja", "ko", "fr", "de", "es", "ru", "tr"];
+
 /// 在源文件旁生成默认的输出路径：`<stem>.<lang>.srt`
+///
+/// 若源文件名已经带有已知的语言代码后缀（如 `xxx.en.srt`），会先剥离该后缀，
+/// 避免叠加成 `xxx.en.zh.srt`。
 fn default_translated_path(src: &Path, target_language: &str) -> PathBuf {
     let code = language_short_code(target_language);
     let stem = src
         .file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "subtitle".to_string());
+    let base = strip_known_lang_suffix(&stem);
     let mut out = src.to_path_buf();
-    out.set_file_name(format!("{stem}.{code}.srt"));
+    out.set_file_name(format!("{base}.{code}.srt"));
     out
+}
+
+/// 如果 stem 以已知语言代码（以 `.` 分隔）结尾，则去掉该后缀。
+fn strip_known_lang_suffix(stem: &str) -> &str {
+    if let Some((head, tail)) = stem.rsplit_once('.') {
+        if !head.is_empty()
+            && KNOWN_LANG_CODES
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case(tail))
+        {
+            return head;
+        }
+    }
+    stem
 }
 
 /// 把目标语言名归一化为简短后缀
@@ -658,5 +742,38 @@ mod tests {
         assert!(prompt.contains("<<<1>>>\nHello"));
         assert!(prompt.contains("<<<2>>>\nWorld"));
         assert!(prompt.contains("Chinese"));
+    }
+
+    #[test]
+    fn strip_known_lang_suffix_strips_known() {
+        assert_eq!(
+            strip_known_lang_suffix("Anna & Collin - Carley Nubiles.en"),
+            "Anna & Collin - Carley Nubiles"
+        );
+        assert_eq!(strip_known_lang_suffix("foo.ZH"), "foo");
+    }
+
+    #[test]
+    fn strip_known_lang_suffix_keeps_unknown() {
+        assert_eq!(strip_known_lang_suffix("foo.bar"), "foo.bar");
+        assert_eq!(strip_known_lang_suffix("foo"), "foo");
+        assert_eq!(strip_known_lang_suffix(".en"), ".en");
+    }
+
+    #[test]
+    fn default_translated_path_replaces_lang_suffix() {
+        let src = Path::new("/tmp/Anna & Collin - Carley Nubiles.en.srt");
+        let out = default_translated_path(src, "Chinese");
+        assert_eq!(
+            out,
+            PathBuf::from("/tmp/Anna & Collin - Carley Nubiles.zh.srt")
+        );
+    }
+
+    #[test]
+    fn default_translated_path_appends_when_no_lang_suffix() {
+        let src = Path::new("/tmp/movie.srt");
+        let out = default_translated_path(src, "Chinese");
+        assert_eq!(out, PathBuf::from("/tmp/movie.zh.srt"));
     }
 }

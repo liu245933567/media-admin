@@ -79,13 +79,18 @@ pub fn fmt_srt_ts_centiseconds(cs: i64) -> String {
 
 /// 写入 SRT 文件
 ///
-/// `video_path` - 视频文件路径
-/// `srt_path` - SRT 文件路径，为空则自动生成,与视频同路径，同名
-/// `segments` - 语音识别结果
+/// - `video_path`：视频文件路径
+/// - `srt_path`：SRT 输出路径。为 `None` 时与视频同目录、同主名自动生成；
+///   若同时提供 `lang`，会按媒体播放器约定追加语言代码：`<basename>.<lang>.srt`
+///   （例如 `movie.zh.srt` / `movie.en.srt`）。
+/// - `segments`：语音识别结果
+/// - `lang`：识别到的语言短代码（如 `"zh"`、`"en"`）。
+///   仅在 `srt_path == None` 且非空时影响文件名；为 `None` 时退化为 `<basename>.srt`。
 pub fn write_srt_file(
     video_path: &Path,
     srt_path: Option<&Path>,
     segments: &[WhisperTranscribeItem],
+    lang: Option<&str>,
 ) -> Result<PathBuf> {
     let mut out = String::new();
     let mut idx = 1usize;
@@ -113,17 +118,46 @@ pub fn write_srt_file(
         idx += 1;
     }
 
-
     let srt_path: PathBuf = match srt_path {
         Some(p) => p.to_path_buf(),
-        None => {
-            let mut p = video_path.to_path_buf();
-            p.set_extension("srt");
-            p
-        }
+        None => default_srt_path(video_path, lang),
     };
 
     std::fs::write(&srt_path, out)?;
 
     Ok(srt_path)
+}
+
+/// 根据视频路径和（可选的）语言代码，按 Plex/Jellyfin/Kodi 等播放器
+/// 通用约定计算默认 SRT 输出路径：
+/// - `lang = Some("zh")` → `movie.zh.srt`
+/// - `lang = None` 或空串 → `movie.srt`
+fn default_srt_path(video_path: &Path, lang: Option<&str>) -> PathBuf {
+    let lang_tag = lang
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && is_safe_lang_tag(s));
+
+    let mut p = video_path.to_path_buf();
+    match lang_tag {
+        Some(l) => {
+            // 用 file_stem 而不是 set_extension，避免视频本身没有扩展名时丢主名
+            let stem = video_path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            p.set_file_name(format!("{stem}.{l}.srt"));
+        }
+        None => {
+            p.set_extension("srt");
+        }
+    }
+    p
+}
+
+/// 仅允许 ASCII 字母 / 数字 / `-` / `_`，避免奇怪的 lang 字符串污染文件名
+fn is_safe_lang_tag(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 16
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
