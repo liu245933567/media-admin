@@ -87,6 +87,8 @@ async fn translate_text(
         .and_then(|c| c.message.content)
         .ok_or_else(|| anyhow!("模型未返回翻译内容"))?;
 
+    tracing::info!("{} -> {}", text, content);
+
     Ok(content.trim().to_string())
 }
 
