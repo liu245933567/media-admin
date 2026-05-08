@@ -4,3 +4,6 @@ pub mod whisper;
 pub mod ffmpeg;
 pub mod subtitle_gen;
 pub mod vad;
+pub mod subtitle_file;
+pub mod openai;
+pub mod fs;

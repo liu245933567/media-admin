@@ -7,8 +7,10 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use typeshare::typeshare;
+
+#[typeshare]
 #[derive(Debug, Deserialize)]
-pub struct SearchBody {
+pub struct SubtitleWebSearchReq {
     pub video_path: String,
 }
 
@@ -35,20 +37,22 @@ pub struct SubtitleWebRow {
     pub is_hash_match: bool,
 }
 
+#[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct DownloadBody {
     pub video_path: String,
     pub subtitle_id: String,
 }
 
+#[typeshare]
 #[derive(Serialize)]
 pub struct DownloadResponse {
     pub subtitle_path: String,
-    pub record_id: i64,
+    pub record_id: i32,
 }
 
 /// 从网络接口查询字幕
-pub async fn search_subtitles(params: SearchBody) -> Result<SubtitleWebSearchRes> {
+pub async fn search_subtitles(params: SubtitleWebSearchReq) -> Result<SubtitleWebSearchRes> {
     let path = PathBuf::from(&params.video_path.trim());
     if path.as_os_str().is_empty() {
         bail!("video_path 不能为空");

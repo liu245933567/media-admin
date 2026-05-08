@@ -2,11 +2,11 @@ use std::path::Path;
 
 use crate::core::{
     ffmpeg::extract_wav_16k_mono,
+    subtitle_file::write_srt_file,
     vad::{detect_vad_intervals_i16, VadConfig},
+    whisper::whisper_transcribe,
 };
 use anyhow::Result;
-
-// detect_vad_intervals_i16
 
 pub async fn generate_subtitle(video_path: &Path, vad_config: Option<VadConfig>) -> Result<String> {
     let wav_path = extract_wav_16k_mono(video_path).await?;
@@ -29,5 +29,9 @@ pub async fn generate_subtitle(video_path: &Path, vad_config: Option<VadConfig>)
         None => {}
     }
 
-    Ok(wav_path.display().to_string())
+    let res = whisper_transcribe(&samples_i16)?;
+
+    let srt_path = write_srt_file(video_path, None, &res)?;
+
+    Ok(srt_path.display().to_string())
 }

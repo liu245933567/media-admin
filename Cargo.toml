@@ -11,6 +11,10 @@ cuda = ["whisper-rs/cuda"]
 name = "media-admin"
 path = "src-rs/main.rs"
 
+[lib]
+name = "media_admin"
+path = "src-rs/lib.rs"
+
 [dependencies]
 anyhow = "1"
 dotenvy = "0.15"
@@ -48,6 +52,8 @@ tokio-stream = "0.1.18"
 
 tower-http = { version = "0.6.9", features = ["cors", "trace", "fs"] }
 tracing = "0.1"
+tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2"
 typeshare = "1.0.5"
+async-openai = { version = "0.38.0", default-features = false, features = ["rustls", "chat-completion"] }

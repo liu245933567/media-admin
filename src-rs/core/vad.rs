@@ -1,15 +1,18 @@
-use anyhow::{bail, Result, anyhow};
+use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
 use webrtc_vad::{SampleRate, Vad, VadMode};
 
+/// VAD 配置
+#[derive(Serialize, Deserialize)]
 pub struct VadConfig {
     /// 帧长 10/20/30（默认 30）
-    frame_ms: u16,
+    pub frame_ms: u16,
     /// 模式 0..=3（越大越激进，默认 2）
-    mode: u8,
+    pub mode: u8,
     /// 语音段两侧 padding（ms）（默认 300）
-    padding_ms: u32,
+    pub padding_ms: u32,
     /// 丢弃短于该值的语音段（ms）（默认 200）
-    min_speech_ms: u32,
+    pub min_speech_ms: u32,
 }
 
 impl Default for VadConfig {
@@ -32,10 +35,7 @@ fn vad_frame_samples(frame_ms: u16) -> Result<usize> {
     }
 }
 
-pub fn detect_vad_intervals_i16(
-    pcm: &[i16],
-    config: VadConfig,
-) -> Result<Vec<(usize, usize)>> {
+pub fn detect_vad_intervals_i16(pcm: &[i16], config: VadConfig) -> Result<Vec<(usize, usize)>> {
     let frame = vad_frame_samples(config.frame_ms)?;
     let mode = match config.mode.min(3) {
         0 => VadMode::Quality,

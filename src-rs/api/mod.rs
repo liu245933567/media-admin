@@ -3,15 +3,14 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{config::Config, db::connect_db, state::AppState};
+use crate::{config::Config, db::connect_db, log::init_tracing, state::AppState};
 
-mod log;
 mod middleware;
 mod routes;
 
 #[tokio::main]
 pub async fn start() {
-    log::init_tracing();
+    init_tracing();
 
     let config = Arc::new(Config::init().unwrap());
 

@@ -8,14 +8,18 @@ use whisper_rs::{
     convert_integer_to_float_audio, install_logging_hooks, FullParams, SamplingStrategy,
     SegmentCallbackData, WhisperContext, WhisperContextParameters,
 };
+use crate::{config::MODELS_DIR, core::subtitle_file::fmt_srt_ts_centiseconds};
+use anyhow::anyhow;
 
-use crate::config::MODELS_DIR;
-
+/// whisper 语音识别结果 - 列表单项
 #[derive(Clone, Debug)]
 pub struct WhisperTranscribeItem {
-    start_cs: i64,
-    end_cs: i64,
-    text: String,
+    /// 开始时间戳（毫秒）
+    pub start_cs: i64,
+    /// 结束时间戳（毫秒）
+    pub end_cs: i64,
+    /// 语音识别结果
+    pub text: String,
 }
 
 /// whisper 语音识别
@@ -54,7 +58,6 @@ pub fn whisper_transcribe(samples_i16: &Vec<i16>) -> Result<Vec<WhisperTranscrib
     // 实时输出 + 收集 segments，结束后写 SRT
     let segments: Arc<Mutex<Vec<WhisperTranscribeItem>>> = Arc::new(Mutex::new(Vec::new()));
     let segments_for_cb = Arc::clone(&segments);
-
     params.set_segment_callback_safe_lossy::<
         Option<Box<dyn FnMut(SegmentCallbackData)>>,
         Box<dyn FnMut(SegmentCallbackData)>,
@@ -64,11 +67,11 @@ pub fn whisper_transcribe(samples_i16: &Vec<i16>) -> Result<Vec<WhisperTranscrib
             return;
         }
 
-        // let t0 = fmt_ts_centiseconds(seg.start_timestamp);
-        // let t1 = fmt_ts_centiseconds(seg.end_timestamp);
-        // println!("{t0} ~ {t1}  {text_trim}");
+        let t0 = fmt_srt_ts_centiseconds(seg.start_timestamp);
+        let t1 = fmt_srt_ts_centiseconds(seg.end_timestamp);
+        tracing::info!("{t0} ~ {t1}  {text_trim}");
 
-        if let Ok(mut guard) = segments_for_cb.try_lock() {
+        if let Ok(mut guard) = segments_for_cb.lock() {
             guard.push(WhisperTranscribeItem {
                 start_cs: seg.start_timestamp,
                 end_cs: seg.end_timestamp,
@@ -79,11 +82,11 @@ pub fn whisper_transcribe(samples_i16: &Vec<i16>) -> Result<Vec<WhisperTranscrib
 
     state
         .full(params, &audio)
-        .map_err(|e| anyhow::anyhow!("识别失败: {e}"))?;
+        .map_err(|e| anyhow!("识别失败: {e}"))?;
 
     let segs = segments
         .lock()
-        .map_err(|_| anyhow::anyhow!("segments mutex poisoned"))?;
+        .map_err(|_| anyhow!("SRT segments lock poisoned"))?;
 
     Ok(segs.clone())
 }

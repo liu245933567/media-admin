@@ -1,9 +1,4 @@
-mod api;
-mod config;
-mod core;
-mod db;
-mod error;
-mod state;
+use media_admin::api;
 
 fn main() {
     let _ = dotenvy::dotenv();

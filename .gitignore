@@ -6,3 +6,4 @@
 .DS_Store
 /static
 .env
+/src/routeTree.gen.ts
