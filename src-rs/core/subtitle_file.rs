@@ -64,7 +64,11 @@ pub fn build_srt(entries: &[SrtEntry]) -> String {
 }
 
 /// 格式化 SRT 时间戳
+///
+/// 入参 `cs` 单位为百毫秒（1cs = 10ms）。负值会被 saturate 到 0，
+/// 但 debug 构建会触发断言提醒上游 BUG。
 pub fn fmt_srt_ts_centiseconds(cs: i64) -> String {
+    debug_assert!(cs >= 0, "fmt_srt_ts_centiseconds 收到负值: {cs}");
     let ms_total: u64 = cs.saturating_mul(10).max(0) as u64;
     let h = ms_total / 3_600_000;
     let m = (ms_total / 60_000) % 60;

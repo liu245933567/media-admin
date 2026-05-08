@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use webrtc_vad::{SampleRate, Vad, VadMode};
 
 /// VAD 配置
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct VadConfig {
     /// 帧长 10/20/30（默认 30）
     pub frame_ms: u16,
@@ -13,6 +14,9 @@ pub struct VadConfig {
     pub padding_ms: u32,
     /// 丢弃短于该值的语音段（ms）（默认 200）
     pub min_speech_ms: u32,
+    /// 单段最大长度（ms），超过会被硬切。`0` 表示不限制。
+    /// 默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。
+    pub max_segment_ms: u32,
 }
 
 impl Default for VadConfig {
@@ -22,8 +26,33 @@ impl Default for VadConfig {
             mode: 2,
             padding_ms: 300,
             min_speech_ms: 200,
+            max_segment_ms: 30_000,
         }
     }
+}
+
+/// 把过长的语音段硬切成多段（在 16kHz 采样率下计算）。
+fn split_long_intervals(
+    intervals: Vec<(usize, usize)>,
+    max_segment_ms: u32,
+) -> Vec<(usize, usize)> {
+    if max_segment_ms == 0 {
+        return intervals;
+    }
+    let max_samples = (max_segment_ms as usize) * 16; // 16 samples / ms @ 16kHz
+    let mut out = Vec::with_capacity(intervals.len());
+    for (s, e) in intervals {
+        if e <= s {
+            continue;
+        }
+        let mut cur = s;
+        while e - cur > max_samples {
+            out.push((cur, cur + max_samples));
+            cur += max_samples;
+        }
+        out.push((cur, e));
+    }
+    out
 }
 
 fn vad_frame_samples(frame_ms: u16) -> Result<usize> {
@@ -110,5 +139,7 @@ pub fn detect_vad_intervals_i16(pcm: &[i16], config: VadConfig) -> Result<Vec<(u
         let end_samp = ((e as usize) + 1) * frame; // exclusive
         out.push((start_samp, end_samp.min(pcm.len())));
     }
-    Ok(out)
+
+    // 硬切超长段，避免单段送给 whisper 后内部滑窗过慢、上下文飘移
+    Ok(split_long_intervals(out, config.max_segment_ms))
 }

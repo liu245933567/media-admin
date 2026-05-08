@@ -17,11 +17,22 @@ pub async fn extract_wav_16k_mono(input_video_path: &Path) -> Result<PathBuf> {
 
     tracing::info!("开始提取 wav 文件: {}", input_video_path.display());
 
+    // -af 链：
+    //   highpass=f=80   去除空调/风噪等低频隆隆声
+    //   dynaudnorm      逐帧响度归一化，让全片音量一致，避免低音量段被 whisper 当成静音
     let status = tokio::process::Command::new(&ffmpeg)
         .arg("-y")
         .arg("-i")
         .arg(input_video_path)
-        .args(["-vn", "-ac", "1", "-ar", "16000"])
+        .args([
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-af",
+            "highpass=f=80,dynaudnorm=f=150:g=15:p=0.95",
+        ])
         .arg("-f")
         .arg("wav")
         .arg(&output_wav)
