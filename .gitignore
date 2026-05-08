@@ -7,3 +7,4 @@
 /static
 .env
 /src/routeTree.gen.ts
+.tanstack

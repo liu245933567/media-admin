@@ -1,6 +1,7 @@
 import { ProLayout } from '@ant-design/pro-components'
 import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+import { menu } from '@/config'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -15,17 +16,9 @@ function RootLayout() {
         title="Media Admin"
         logo={false}
         location={{ pathname }}
-        menu={{
-          request: async () => [
-            {
-              name: '首页',
-              path: '/',
-            },
-            {
-              name: '文件选择',
-              path: '/file-select',
-            },
-          ],
+        route={{
+          name: 'root',
+          children: menu,
         }}
         menuItemRender={(item, dom) =>
           item.path
