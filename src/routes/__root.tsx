@@ -14,8 +14,9 @@ function RootLayout() {
     <>
       <ProLayout
         title="Media Admin"
-        logo={false}
+        logo="/favicon.svg"
         location={{ pathname }}
+        rootClassName="h-100dvh"
         route={{
           name: 'root',
           children: menu,
