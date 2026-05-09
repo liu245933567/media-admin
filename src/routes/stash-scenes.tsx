@@ -1,5 +1,5 @@
 import type { FetchStashScenesParams, StashSceneRow } from '@/types/stash-graphql'
-import { PageContainer, ProCard, ProTable } from '@ant-design/pro-components'
+import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { createFileRoute } from '@tanstack/react-router'
 import { fetchStashScenes } from '@/request'
 
@@ -11,7 +11,6 @@ function PageComponent() {
   return (
     <PageContainer pageHeaderRender={() => null}>
       <ProTable<StashSceneRow, FetchStashScenesParams>
-        // cardProps={false}
         request={fetchStashScenes}
         search={
           {

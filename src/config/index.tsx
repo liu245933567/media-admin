@@ -12,6 +12,11 @@ export const menu = [
     icon: <FileSearchOutlined />,
   },
   {
+    name: '字幕生成任务',
+    path: '/subtitle-job',
+    icon: <FileSearchOutlined />,
+  },
+  {
     name: '文件系统',
     path: '/file-system',
     icon: <FileOutlined />,
