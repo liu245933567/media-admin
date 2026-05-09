@@ -1,16 +1,18 @@
 import type {
-  CreateJobBody,
-  CreateJobResponse,
   DownloadBody,
   DownloadResponse,
   FsListItem,
   FsListReq,
-  JobResponse,
-  QueueStateResponse,
+  SubtitleTaskCreateReq,
+  SubtitleTaskCreateRes,
+  SubtitleTaskDeleteReq,
+  SubtitleTaskDeleteRes,
+  SubtitleTaskListReq,
+  SubtitleTaskListRes,
   SubtitleWebSearchReq,
   SubtitleWebSearchRes,
 } from '@/types'
-import { get, post } from './utils'
+import { post } from './utils'
 
 /** 查询设备文件树 */
 export function fetchFsList(params: FsListReq) {
@@ -19,7 +21,10 @@ export function fetchFsList(params: FsListReq) {
 
 /** 查询网络字幕 */
 export function searchSubtitles(params: SubtitleWebSearchReq) {
-  return post<SubtitleWebSearchRes, SubtitleWebSearchReq>('/subtitle-web/search', params)
+  return post<SubtitleWebSearchRes, SubtitleWebSearchReq>(
+    '/subtitle-web/search',
+    params,
+  )
 }
 
 /** 下载字幕到后端磁盘（写入视频同目录） */
@@ -27,39 +32,28 @@ export function downloadSubtitleToDisk(params: DownloadBody) {
   return post<DownloadResponse, DownloadBody>('/subtitle-web/download', params)
 }
 
-export interface ListSubtitleJobsParams {
-  status?: string
-  limit?: number
+/** 向 subtitle_task 表插入一条记录 */
+export function createSubtitleTask(params: SubtitleTaskCreateReq) {
+  return post<SubtitleTaskCreateRes, SubtitleTaskCreateReq>(
+    '/subtitle-task/tasks',
+    params,
+  )
 }
 
-/** 创建本地字幕生成任务 */
-export function createSubtitleJob(params: CreateJobBody) {
-  return post<CreateJobResponse, CreateJobBody>('/subtitle-local/jobs', params)
+/** 分页查询 subtitle_task 表 */
+export function fetchSubtitleTaskList(params: SubtitleTaskListReq) {
+  return post<SubtitleTaskListRes, SubtitleTaskListReq>(
+    '/subtitle-task/tasks/list',
+    params,
+  )
 }
 
-/** 查询字幕生成任务列表 */
-export function fetchSubtitleJobs(params?: ListSubtitleJobsParams) {
-  return get<JobResponse[], ListSubtitleJobsParams>('/subtitle-local/jobs', params)
-}
-
-/** 查询单个字幕生成任务 */
-export function fetchSubtitleJob(id: string) {
-  return get<JobResponse>(`/subtitle-local/jobs/${id}`)
-}
-
-/** 暂停队列：当前任务执行完后停止调度下一个 */
-export function pauseSubtitleQueue() {
-  return post<QueueStateResponse, Record<string, never>>('/subtitle-local/pause', {})
-}
-
-/** 恢复队列 */
-export function resumeSubtitleQueue() {
-  return post<QueueStateResponse, Record<string, never>>('/subtitle-local/resume', {})
-}
-
-/** 查询队列状态 */
-export function fetchSubtitleQueueState() {
-  return get<QueueStateResponse>('/subtitle-local/queue-state')
+/** 删除字幕任务（含关联记录） */
+export function deleteSubtitleTask(params: SubtitleTaskDeleteReq) {
+  return post<SubtitleTaskDeleteRes, SubtitleTaskDeleteReq>(
+    '/subtitle-task/tasks/delete',
+    params,
+  )
 }
 
 export * from './stash'

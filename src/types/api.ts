@@ -16,6 +16,46 @@ export interface FsListReq {
 	parent_path?: string;
 }
 
+export interface SubtitleTaskCreateReq {
+	video_path: string;
+}
+
+export interface SubtitleTaskCreateRes {
+	task_id: number;
+	task_status: string;
+	video_path: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface SubtitleTaskDeleteReq {
+	task_id: number;
+}
+
+export interface SubtitleTaskDeleteRes {
+	ok: boolean;
+}
+
+export interface SubtitleTaskListReq {
+	page: number;
+	page_size: number;
+	task_status?: string;
+	video_path_contains?: string;
+}
+
+export interface SubtitleTaskRow {
+	task_id: number;
+	task_status: string;
+	video_path: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface SubtitleTaskListRes {
+	items: SubtitleTaskRow[];
+	total: number;
+}
+
 /** 搜索字幕结果 - 列表单项 */
 export interface SubtitleWebRow {
 	id: string;

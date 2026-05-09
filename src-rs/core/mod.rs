@@ -2,6 +2,7 @@ pub mod ffmpeg;
 pub mod fs;
 pub mod openai;
 pub mod stash;
+pub mod subtitle_task;
 pub mod subtitle_file;
 pub mod subtitle_gen;
 pub mod subtitles_web;

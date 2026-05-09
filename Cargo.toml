@@ -57,3 +57,4 @@ urlencoding = "2"
 typeshare = "1.0.5"
 async-openai = { version = "0.38.0", default-features = false, features = ["rustls", "chat-completion"] }
 sea-orm = { version = "1.1.20", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = { version = "1.1.20", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls"] }

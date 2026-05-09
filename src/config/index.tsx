@@ -1,4 +1,4 @@
-import { FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined } from '@ant-design/icons'
 
 export const menu = [
   {
@@ -12,9 +12,9 @@ export const menu = [
     icon: <FileSearchOutlined />,
   },
   {
-    name: '字幕生成任务',
-    path: '/subtitle-job',
-    icon: <FileSearchOutlined />,
+    name: '字幕生成',
+    path: '/subtitle-task',
+    icon: <DatabaseOutlined />,
   },
   {
     name: '文件系统',
@@ -22,7 +22,7 @@ export const menu = [
     icon: <FileOutlined />,
   },
   {
-    name: 'Stash 场景',
+    name: 'Stash 库',
     path: '/stash-scenes',
     icon: <PlaySquareOutlined />,
   },
