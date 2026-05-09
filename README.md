@@ -49,12 +49,9 @@ npm run dev
 
 ### 常用环境变量（可选）
 
-| 变量                                          | 说明                 | 默认                                                 |
-| --------------------------------------------- | -------------------- | ---------------------------------------------------- |
-| `DATABASE_URL`                                | sqlx SQLite 连接串   | `sqlite://./subtitle_admin.db`                       |
-| `SUBTITLE_ADMIN_HOST` / `SUBTITLE_ADMIN_PORT` | 服务监听             | `127.0.0.1` / `3000`                                 |
-| `XUNLEI_SUBTITLE_BASE`                        | 迅雷 oracle 基础 URL | `https://api-shoulei-ssl.xunlei.com/oracle/subtitle` |
-| `AI_API_KEY`                                  | ai api key           |                                                      |
+| 变量            | 说明                | 默认 |
+| --------------- | ------------------- | ---- |
+| `STASH_API_KEY` | stash 应用的api key |      |
 
 ## 开发插件
 

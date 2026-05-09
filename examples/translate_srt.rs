@@ -25,7 +25,7 @@ async fn main() {
     let mut opts = TranslateOptions::default();
     opts.target_language = lang;
 
-    let dst = translate_srt_file(&src, None, opts, None)
+    let dst = translate_srt_file(&src, None, opts)
         .await
         .expect("翻译失败");
 
