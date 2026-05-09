@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"pnpm dev:client\" \"pnpm dev:server\"",
     "dev:client": "vite",
-    "dev:server": "cargo run dev",
+    "dev:server": "cargo run",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -17,7 +17,7 @@
     "@ant-design/pro-components": "^3.1.12-0",
     "@tanstack/react-query": "^5.100.8",
     "@tanstack/react-router": "^1.169.2",
-    "@tanstack/router-devtools": "^1.166.13",
+    "@tanstack/react-router-devtools": "^1.166.13",
     "antd": "^6.3.7",
     "axios": "^1.16.0",
     "chonky2": "^6.5.8",

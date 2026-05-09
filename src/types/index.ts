@@ -7,3 +7,4 @@ export interface FsListItem {
 }
 
 export * from './api'
+export * from './stash-graphql'

@@ -12,7 +12,7 @@ export interface DownloadResponse {
 	record_id: number;
 }
 
-export interface FsTreeReq {
+export interface FsListReq {
 	parent_path?: string;
 }
 

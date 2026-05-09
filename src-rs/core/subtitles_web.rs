@@ -131,7 +131,6 @@ pub async fn search_subtitles(params: SubtitleWebSearchReq) -> Result<SubtitleWe
         items,
     })
 }
-
 /// 下载字幕
 pub async fn download_subtitle(params: DownloadBody) -> Result<DownloadResponse> {
     let video = PathBuf::from(params.video_path.trim());
@@ -188,3 +187,4 @@ fn normalize_ext(format: &str) -> String {
     }
     s
 }
+

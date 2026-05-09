@@ -7,3 +7,4 @@ pub mod vad;
 pub mod subtitle_file;
 pub mod openai;
 pub mod fs;
+pub mod stash;

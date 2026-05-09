@@ -1,4 +1,4 @@
-import { FileOutlined, FileSearchOutlined, HomeOutlined, SettingOutlined } from '@ant-design/icons'
+import { FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined } from '@ant-design/icons'
 
 export const menu = [
   {
@@ -15,6 +15,11 @@ export const menu = [
     name: '文件系统',
     path: '/file-system',
     icon: <FileOutlined />,
+  },
+  {
+    name: 'Stash 场景',
+    path: '/stash-scenes',
+    icon: <PlaySquareOutlined />,
   },
   {
     name: '设置',
