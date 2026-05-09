@@ -71,15 +71,11 @@ impl Default for TranslateOptions {
 }
 
 /// 创建一个连接到硅基流动的 OpenAI 兼容客户端。
-///
-/// API key 优先使用入参，其次读取环境变量 `SILICONFLOW_API_KEY`。
-/// 内部 HTTP 客户端会带上 [`REQUEST_TIMEOUT`] 的请求级超时，避免单条请求挂死占用并发位。
-pub fn build_siliconflow_client(api_key: Option<&str>) -> Result<Client<OpenAIConfig>> {
-    let key = match api_key {
-        Some(k) if !k.trim().is_empty() => k.to_string(),
-        _ => std::env::var("SILICONFLOW_API_KEY")
-            .map_err(|_| anyhow!("缺少环境变量 SILICONFLOW_API_KEY"))?,
-    };
+pub fn build_siliconflow_client() -> Result<Client<OpenAIConfig>> {
+    let key = std::env::var("SILICONFLOW_API_KEY")
+        .map_err(|_| anyhow!("缺少环境变量 SILICONFLOW_API_KEY"))?
+        .trim()
+        .to_string();
     let config = OpenAIConfig::new()
         .with_api_base(SILICONFLOW_API_BASE)
         .with_api_key(key);
@@ -403,12 +399,10 @@ fn strip_translation_prefix(s: &str) -> String {
 /// `src_srt` - 源 SRT 文件路径
 /// `dst_srt` - 目标路径，为空则在源文件旁生成 `<stem>.<lang>.srt`
 /// `options` - 翻译选项
-/// `api_key` - 硅基流动 API key，为空则读取 `SILICONFLOW_API_KEY` 环境变量
 pub async fn translate_srt_file(
     src_srt: &Path,
     dst_srt: Option<&Path>,
     options: TranslateOptions,
-    api_key: Option<&str>,
 ) -> Result<PathBuf> {
     let content = tokio::fs::read_to_string(src_srt)
         .await
@@ -419,7 +413,7 @@ pub async fn translate_srt_file(
         anyhow::bail!("SRT 文件无有效条目: {}", src_srt.display());
     }
 
-    let client = Arc::new(build_siliconflow_client(api_key)?);
+    let client = Arc::new(build_siliconflow_client()?);
     let total = entries.len();
     let model = options.model.clone();
     let lang = options.target_language.clone();
@@ -501,10 +495,7 @@ async fn run_batched(
     let total = items.len();
     let done = Arc::new(AtomicUsize::new(0));
 
-    let batches: Vec<Vec<(usize, String)>> = items
-        .chunks(batch_size)
-        .map(|c| c.to_vec())
-        .collect();
+    let batches: Vec<Vec<(usize, String)>> = items.chunks(batch_size).map(|c| c.to_vec()).collect();
     let total_batches = batches.len();
 
     stream::iter(batches.into_iter().enumerate().map(|(bi, batch)| {

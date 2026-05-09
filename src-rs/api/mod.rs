@@ -1,9 +1,8 @@
 use axum::Router;
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{config::Config, db::connect_db, log::init_tracing, state::AppState};
+use crate::{db::connect_db, log::init_tracing, state::AppState};
 
 mod middleware;
 mod routes;
@@ -12,17 +11,13 @@ mod routes;
 pub async fn start() {
     init_tracing();
 
-    let config = Arc::new(Config::init().unwrap());
+    let listen = std::env::var("LISTEN").unwrap_or_else(|_| "0.0.0.0:3000".to_string());
 
-    let listener = TcpListener::bind(config.listen).await.unwrap();
-
-    tracing::info!("listening on {}", &config.listen);
-
-    let config = Arc::new(Config::init().unwrap());
+    let listener = TcpListener::bind(&listen).await.unwrap();
 
     let db = connect_db().await.unwrap();
 
-    let app_state = AppState { db, config };
+    let app_state = AppState { db };
 
     let app = Router::new()
         .nest("/api", routes::compose())
@@ -31,6 +26,8 @@ pub async fn start() {
             ServeDir::new("dist").not_found_service(ServeFile::new("dist/index.html")),
         )
         .with_state(app_state);
+
+    tracing::info!("listening on {}", &listen.to_string());
 
     axum::serve(listener, app).await.unwrap();
 }

@@ -15,14 +15,10 @@ use crate::core::{
 ///
 /// 在 [`generate_subtitle_with`] 中传入 `Some(...)` 即可在生成原文 SRT 后
 /// 自动调用 LLM 翻译，输出 `<stem>.<lang>.srt`。
-///
-/// `api_key` 为 `None` 时回退读取 `SILICONFLOW_API_KEY` 环境变量。
 #[derive(Clone, Debug, Default)]
 pub struct SubtitleTranslateConfig {
     /// 翻译参数（模型、目标语言、并发、批量大小）
-    pub options: TranslateOptions,
-    /// 可选 API key（明文）；为 `None` 时使用环境变量
-    pub api_key: Option<String>,
+    pub options: TranslateOptions, 
     /// 是否在翻译完成后删除原文 SRT。默认 `false`，两份文件并存便于核对。
     pub remove_source_srt: bool,
 }
@@ -207,7 +203,7 @@ pub async fn generate_subtitle_with(
             detected_lang.as_deref().unwrap_or("auto"),
             cfg.options.target_language
         );
-        match translate_srt_file(&srt_path, None, cfg.options.clone(), cfg.api_key.as_deref()).await
+        match translate_srt_file(&srt_path, None, cfg.options.clone()).await
         {
             Ok(translated) => {
                 tracing::info!("[subtitle] 翻译完成: {}", translated.display());

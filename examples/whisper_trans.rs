@@ -48,7 +48,6 @@ async fn main() -> Result<()> {
             target_language: "Chinese".into(),
             ..Default::default()
         },
-        api_key: None,            // None = 读取 SILICONFLOW_API_KEY
         remove_source_srt: false, // true 则翻译完成后删除原文 SRT
     });
     // let translate = None;
