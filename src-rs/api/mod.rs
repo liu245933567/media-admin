@@ -2,7 +2,7 @@ use axum::Router;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{db::connect_db, log::init_tracing, state::AppState};
+use crate::{log::init_tracing, state::AppState};
 
 mod middleware;
 mod routes;

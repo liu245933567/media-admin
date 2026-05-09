@@ -15,8 +15,7 @@ async fn graphql_proxy_handler(
     let text = forward_graphql(body)
         .await
         .map_err(|e| AppError::Upstream(e.to_string()))?;
-    let v: Value = serde_json::from_str(&text).map_err(|e| {
-        AppError::Upstream(format!("stash 返回非 JSON: {e}"))
-    })?;
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|e| AppError::Upstream(format!("stash 返回非 JSON: {e}")))?;
     Ok(Json(v))
 }

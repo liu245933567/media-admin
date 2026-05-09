@@ -187,4 +187,3 @@ fn normalize_ext(format: &str) -> String {
     }
     s
 }
-

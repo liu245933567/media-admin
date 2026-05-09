@@ -186,12 +186,7 @@ impl WhisperEngine {
             for v in &mut audio {
                 *v = (*v * gain).clamp(-1.0, 1.0);
             }
-            tracing::info!(
-                offset_cs,
-                gain,
-                peak,
-                "[whisper] 低音量自动增益"
-            );
+            tracing::info!(offset_cs, gain, peak, "[whisper] 低音量自动增益");
         }
 
         let strategy = if options.beam_size > 1 {

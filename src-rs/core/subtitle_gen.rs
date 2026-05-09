@@ -18,7 +18,7 @@ use crate::core::{
 #[derive(Clone, Debug, Default)]
 pub struct SubtitleTranslateConfig {
     /// 翻译参数（模型、目标语言、并发、批量大小）
-    pub options: TranslateOptions, 
+    pub options: TranslateOptions,
     /// 是否在翻译完成后删除原文 SRT。默认 `false`，两份文件并存便于核对。
     pub remove_source_srt: bool,
 }
@@ -203,8 +203,7 @@ pub async fn generate_subtitle_with(
             detected_lang.as_deref().unwrap_or("auto"),
             cfg.options.target_language
         );
-        match translate_srt_file(&srt_path, None, cfg.options.clone()).await
-        {
+        match translate_srt_file(&srt_path, None, cfg.options.clone()).await {
             Ok(translated) => {
                 tracing::info!("[subtitle] 翻译完成: {}", translated.display());
                 if cfg.remove_source_srt && translated != srt_path {

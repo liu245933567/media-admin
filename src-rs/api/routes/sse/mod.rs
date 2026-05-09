@@ -1,7 +1,7 @@
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::{Stream, StreamExt};
-use std::{convert::Infallible, time::Duration};
 use serde::Serialize;
+use std::{convert::Infallible, time::Duration};
 
 #[derive(Serialize)]
 struct SseMessage {
@@ -20,7 +20,9 @@ pub async fn sse_handler() -> Sse<impl Stream<Item = Result<Event, Infallible>>>
                     id: i.to_string(),
                     data: format!("hello {}", i),
                 })
-                .unwrap_or_else(|_| "{\"event\":\"tick\",\"id\":\"-1\",\"data\":\"serialize error\"}".to_string());
+                .unwrap_or_else(|_| {
+                    "{\"event\":\"tick\",\"id\":\"-1\",\"data\":\"serialize error\"}".to_string()
+                });
 
                 Ok(Event::default()
                     .event("tick")
