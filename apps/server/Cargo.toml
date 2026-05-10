@@ -1,0 +1,7 @@
+[package]
+name = "media-admin-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+media-admin-api = { path = "../../crates/api" }

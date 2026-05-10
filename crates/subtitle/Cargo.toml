@@ -1,0 +1,14 @@
+[package]
+name = "media-admin-subtitle"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ma_subtitle"
+
+[dependencies]
+serde.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+
+media-admin-whisper = { path = "../../crates/whisper" }

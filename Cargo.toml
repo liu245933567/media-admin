@@ -1,44 +1,18 @@
-[package]
-name = "media-admin"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+  "apps/server",
+  "apps/desktop",
+  "crates/api",
+  "crates/whisper",
+  "crates/utils",
+  "crates/subtitle",
+]
 
-[features]
-default = ["cuda"]
-cuda = ["whisper-rs/cuda"]
 
-[[bin]]
-name = "media-admin"
-path = "src-rs/main.rs"
-
-[lib]
-name = "media_admin"
-path = "src-rs/lib.rs"
-
-[dependencies]
-anyhow = { version = "1", features = ["backtrace"] }
-dotenvy = "0.15"
-
-axum = { version = "0.8.9", features = ["macros", "json"] }
-axum-extra = { version = "0.12.5", features = ["with-rejection"] }
-
-chrono = "0.4"
-base64 = "0.22"
-hex = "0.4"
-reqwest = { version = "0.13.3", features = ["json", "rustls", "stream"], default-features = false }
-futures-util = { version = "0.3", default-features = false, features = ["io"] }
+[workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-uuid = { version = "1", features = ["v4", "serde"] }
-hound = "3"
-whisper-rs = "0.16"
-webrtc-vad = "0.4"
-hf-hub = { version = "0.5", features = ["tokio"] }
-zip = "8.6.0"
-sha1 = "0.11.0"
-thiserror = "2.0.18"
-futures = "0.3.32"
-
+anyhow = { version = "1", features = ["backtrace"] }
+tracing = "0.1"
 tokio = { version = "1.5.2", features = [
   "fs",
   "macros",
@@ -47,14 +21,3 @@ tokio = { version = "1.5.2", features = [
   "process",
   "time",
 ] }
-tokio-stream = "0.1.18"
-
-tower-http = { version = "0.6.9", features = ["cors", "trace", "fs"] }
-tracing = "0.1"
-tracing-error = "0.2.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-urlencoding = "2"
-typeshare = "1.0.5"
-async-openai = { version = "0.38.0", default-features = false, features = ["rustls", "chat-completion"] }
-sea-orm = { version = "1.1.20", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
-sea-orm-migration = { version = "1.1.20", default-features = false, features = ["sqlx-sqlite", "runtime-tokio-rustls"] }

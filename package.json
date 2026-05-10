@@ -1,48 +1,17 @@
 {
-  "name": "frontend",
+  "name": "media-admin",
   "type": "module",
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"pnpm dev:client\" \"pnpm dev:server\"",
-    "dev:client": "vite",
-    "dev:server": "cargo run",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "typeshare": "typeshare . --lang=typescript --output-file=./src/types/api.ts"
-  },
-  "dependencies": {
-    "@ant-design/icons": "^6.2.2",
-    "@ant-design/pro-components": "^3.1.12-0",
-    "@tanstack/react-query": "^5.100.8",
-    "@tanstack/react-router": "^1.169.2",
-    "@tanstack/react-router-devtools": "^1.166.13",
-    "antd": "^6.3.7",
-    "axios": "^1.16.0",
-    "chonky2": "^6.5.8",
-    "dayjs": "^1.11.20",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5"
-  },
-  "devDependencies": {
-    "@antfu/eslint-config": "^8.2.0",
-    "@eslint-react/eslint-plugin": "^3.0.0",
-    "@eslint/js": "^10.0.1",
-    "@tailwindcss/vite": "^4.2.4",
-    "@tanstack/router-plugin": "^1.167.35",
-    "@types/node": "^24.12.2",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "concurrently": "^9.2.1",
-    "eslint": "^10.2.1",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.5.0",
-    "tailwindcss": "^4.2.4",
-    "typescript": "~6.0.2",
-    "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.10"
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "cargo run -p media-admin-server",
+    "dev:desktop": "pnpm --filter @media-admin/desktop dev",
+    "build": "pnpm --filter web build",
+    "build:server": "cargo build -p media-admin-server",
+    "build:desktop": "pnpm --filter @media-admin/desktop build",
+    "lint": "pnpm --filter web lint",
+    "preview": "pnpm --filter web preview",
+    "typeshare": "pnpm --filter web typeshare"
   }
 }
