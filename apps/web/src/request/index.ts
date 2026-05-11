@@ -9,6 +9,12 @@ import type {
   SubtitleTaskDeleteRes,
   SubtitleTaskListReq,
   SubtitleTaskListRes,
+  SubtitleTaskQueuePauseReq,
+  SubtitleTaskQueuePauseRes,
+  SubtitleTaskQueueResumeReq,
+  SubtitleTaskQueueResumeRes,
+  SubtitleTaskQueueStatusReq,
+  SubtitleTaskQueueStatusRes,
   SubtitleWebSearchReq,
   SubtitleWebSearchRes,
 } from '@/types'
@@ -52,6 +58,30 @@ export function fetchSubtitleTaskList(params: SubtitleTaskListReq) {
 export function deleteSubtitleTask(params: SubtitleTaskDeleteReq) {
   return post<SubtitleTaskDeleteRes, SubtitleTaskDeleteReq>(
     '/subtitle-task/tasks/delete',
+    params,
+  )
+}
+
+/** 暂停字幕任务队列（取消当前 RUNNING 并重新入队；worker 停止 claim 新任务） */
+export function pauseSubtitleTaskQueue(params: SubtitleTaskQueuePauseReq = {}) {
+  return post<SubtitleTaskQueuePauseRes, SubtitleTaskQueuePauseReq>(
+    '/subtitle-task/queue/pause',
+    params,
+  )
+}
+
+/** 开始/恢复字幕任务队列（允许 worker claim 新任务） */
+export function resumeSubtitleTaskQueue(params: SubtitleTaskQueueResumeReq = {}) {
+  return post<SubtitleTaskQueueResumeRes, SubtitleTaskQueueResumeReq>(
+    '/subtitle-task/queue/resume',
+    params,
+  )
+}
+
+/** 获取字幕任务队列状态 */
+export function fetchSubtitleTaskQueueStatus(params: SubtitleTaskQueueStatusReq = {}) {
+  return post<SubtitleTaskQueueStatusRes, SubtitleTaskQueueStatusReq>(
+    '/subtitle-task/queue/status',
     params,
   )
 }

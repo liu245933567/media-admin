@@ -1,7 +1,7 @@
 use crate::entity::{
     generated_subtitles::{Column as GenColumn, Entity as GenEntity},
     subtitle_task::{self, Column, Entity},
-    subtitle_task_record::{Column as RecColumn, Entity as RecEntity},
+    subtitle_task_record::{self, Column as RecColumn, Entity as RecEntity},
 };
 use anyhow::{bail, Result};
 use chrono::Utc;
@@ -13,10 +13,18 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use typeshare::typeshare;
 
+use ma_subtitle::types::SubtitleGenerateConfig;
+
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct SubtitleTaskCreateReq {
+    pub config: SubtitleGenerateConfig,
+}
+
+#[derive(Debug)]
+pub struct SubtitleTaskCreateDbReq {
     pub video_path: String,
+    pub config_json: String,
 }
 
 #[typeshare]
@@ -77,11 +85,17 @@ pub struct SubtitleTaskDeleteRes {
     pub ok: bool,
 }
 
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct SubtitleTaskQueueResumeReq {}
+
 enum SubtitleTaskStatus {
     // 待处理
     PENDING,
     // 处理中
     RUNNING,
+    // 暂停中（已请求暂停，等待 worker 尽快退出）
+    PAUSING,
     // 完成
     COMPLETED,
     // 失败
@@ -93,6 +107,7 @@ impl fmt::Display for SubtitleTaskStatus {
         f.write_str(match self {
             Self::PENDING => "PENDING",
             Self::RUNNING => "RUNNING",
+            Self::PAUSING => "PAUSING",
             Self::COMPLETED => "COMPLETED",
             Self::FAILED => "FAILED",
         })
@@ -101,11 +116,15 @@ impl fmt::Display for SubtitleTaskStatus {
 
 pub async fn create_subtitle_task(
     db: &DatabaseConnection,
-    req: SubtitleTaskCreateReq,
+    req: SubtitleTaskCreateDbReq,
 ) -> Result<SubtitleTaskCreateRes> {
     let video_path = req.video_path.trim().to_string();
     if video_path.is_empty() {
         bail!("video_path 不能为空");
+    }
+    let config_json = req.config_json.trim().to_string();
+    if config_json.is_empty() {
+        bail!("config_json 不能为空");
     }
 
     let now = Utc::now().to_rfc3339();
@@ -114,6 +133,7 @@ pub async fn create_subtitle_task(
         task_id: NotSet,
         task_status: Set(SubtitleTaskStatus::PENDING.to_string()),
         video_path: Set(video_path.clone()),
+        config_json: Set(config_json),
         created_at: Set(now.clone()),
         updated_at: Set(now.clone()),
     };
@@ -177,7 +197,10 @@ pub async fn list_subtitle_tasks(
     Ok(SubtitleTaskListRes { items, total })
 }
 
-pub async fn delete_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Result<SubtitleTaskDeleteRes> {
+pub async fn delete_subtitle_task(
+    db: &DatabaseConnection,
+    task_id: i32,
+) -> Result<SubtitleTaskDeleteRes> {
     let task = Entity::find_by_id(task_id).one(db).await?;
     let Some(task) = task else {
         bail!("任务不存在");
@@ -206,4 +229,94 @@ pub async fn delete_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Resu
 
     txn.commit().await?;
     Ok(SubtitleTaskDeleteRes { ok: true })
+}
+
+pub async fn get_subtitle_task(
+    db: &DatabaseConnection,
+    task_id: i32,
+) -> Result<subtitle_task::Model> {
+    let task = Entity::find_by_id(task_id).one(db).await?;
+    task.ok_or_else(|| anyhow::anyhow!("任务不存在"))
+}
+
+pub async fn set_subtitle_task_status(
+    db: &DatabaseConnection,
+    task_id: i32,
+    status: &str,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    let res = subtitle_task::Entity::update_many()
+        .col_expr(
+            Column::TaskStatus,
+            sea_orm::sea_query::Expr::value(status.to_string()),
+        )
+        .col_expr(Column::UpdatedAt, sea_orm::sea_query::Expr::value(now))
+        .filter(Column::TaskId.eq(task_id))
+        .exec(db)
+        .await?;
+    if res.rows_affected == 0 {
+        bail!("任务不存在");
+    }
+    Ok(())
+}
+
+pub async fn append_task_record(
+    db: &DatabaseConnection,
+    task_id: i32,
+    record_status: &str,
+    record_desc: &str,
+    record_detail: &str,
+) -> Result<()> {
+    let now = Utc::now().to_rfc3339();
+    let model = subtitle_task_record::ActiveModel {
+        record_id: NotSet,
+        task_id: Set(task_id),
+        record_status: Set(record_status.to_string()),
+        record_desc: Set(record_desc.to_string()),
+        record_detail: Set(record_detail.to_string()),
+        created_at: Set(now.clone()),
+        updated_at: Set(now),
+    };
+    model.insert(db).await?;
+    Ok(())
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct SubtitleTaskQueuePauseReq {}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskQueuePauseRes {
+    pub ok: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+pub struct SubtitleTaskQueueStatusReq {}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskQueueStatusRes {
+    /// RUNNING / PAUSING / PAUSED
+    pub status: String,
+}
+
+pub async fn pause_subtitle_task_queue(
+    _db: &DatabaseConnection,
+) -> Result<SubtitleTaskQueuePauseRes> {
+    // 仅用于队列暂停“意图”，不再中断当前 RUNNING 任务
+    Ok(SubtitleTaskQueuePauseRes { ok: true })
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskQueueResumeRes {
+    pub ok: bool,
+}
+
+pub async fn resume_subtitle_task_queue(
+    _db: &DatabaseConnection,
+) -> Result<SubtitleTaskQueueResumeRes> {
+    Ok(SubtitleTaskQueueResumeRes { ok: true })
 }

@@ -10,7 +10,8 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "chonky2": ["./node_modules/chonky2/dist/index.d.ts"]
     },
     "types": ["vite/client"],
     "allowImportingTsExtensions": true,

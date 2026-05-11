@@ -76,7 +76,7 @@ pub async fn generate_subtitle_by_video(
                     }
                 }
 
-                generate_items.push(SubtitleGenerateItem { 
+                generate_items.push(SubtitleGenerateItem {
                     srt_path: translated.display().to_string(),
                 });
                 return Ok(generate_items);

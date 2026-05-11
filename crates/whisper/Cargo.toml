@@ -17,3 +17,4 @@ serde.workspace = true
 tokio.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
+typeshare = "1.0.5"

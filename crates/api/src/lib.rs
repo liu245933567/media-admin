@@ -5,7 +5,12 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{log::init_tracing, migration::Migrator, state::AppState};
+use crate::{
+    core::subtitle_worker::{spawn_subtitle_task_worker, SubtitleTaskQueue},
+    log::init_tracing,
+    migration::Migrator,
+    state::AppState,
+};
 
 use ma_utils::config::{get_app_data_dir, get_sqlite_connect_url, get_sqlx_logging};
 
@@ -13,7 +18,7 @@ mod config;
 mod core;
 mod entity;
 mod error;
-mod log;
+pub mod log;
 mod middleware;
 mod migration;
 mod routes;
@@ -39,7 +44,13 @@ pub async fn serve() -> anyhow::Result<()> {
 
     let db = connect_db().await?;
 
-    let app_state = AppState { db };
+    let subtitle_task_queue = SubtitleTaskQueue::new();
+    spawn_subtitle_task_worker(db.clone(), subtitle_task_queue.clone());
+
+    let app_state = AppState {
+        db,
+        subtitle_task_queue,
+    };
 
     let app = build_router(app_state);
 
@@ -56,7 +67,13 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
     let addr = listener.local_addr()?;
 
     let db = connect_db().await?;
-    let app_state = AppState { db };
+    let subtitle_task_queue = SubtitleTaskQueue::new();
+    spawn_subtitle_task_worker(db.clone(), subtitle_task_queue.clone());
+
+    let app_state = AppState {
+        db,
+        subtitle_task_queue,
+    };
     let app = build_router(app_state);
 
     tokio::spawn(async move {

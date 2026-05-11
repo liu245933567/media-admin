@@ -20,6 +20,12 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(SubtitleTask::TaskStatus).string().not_null())
                     .col(ColumnDef::new(SubtitleTask::VideoPath).string().not_null())
+                    .col(
+                        ColumnDef::new(SubtitleTask::ConfigJson)
+                            .string()
+                            .not_null()
+                            .default("{}"),
+                    )
                     .col(ColumnDef::new(SubtitleTask::CreatedAt).string().not_null())
                     .col(ColumnDef::new(SubtitleTask::UpdatedAt).string().not_null())
                     .to_owned(),
@@ -136,6 +142,7 @@ enum SubtitleTask {
     TaskId,
     TaskStatus,
     VideoPath,
+    ConfigJson,
     CreatedAt,
     UpdatedAt,
 }

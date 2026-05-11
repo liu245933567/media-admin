@@ -2855,6 +2855,7 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "typeshare",
 ]
 
 [[package]]
@@ -2874,6 +2875,7 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "typeshare",
  "webrtc-vad",
  "whisper-rs",
 ]

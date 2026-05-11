@@ -387,8 +387,8 @@ pub async fn translate_srt_file(
     let total = entries.len();
     let model = options.model.clone();
     let lang = options.target_language.clone();
-    let concurrency = options.concurrency.max(1);
-    let batch_size = options.batch_size.max(1);
+    let concurrency = (options.concurrency.max(1)) as usize;
+    let batch_size = (options.batch_size.max(1)) as usize;
 
     // 跳过纯空白条目（无需送给模型）
     let work_items: Vec<(usize, String)> = entries
