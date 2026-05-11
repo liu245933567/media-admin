@@ -21,6 +21,34 @@ pub struct SubtitleTaskCreateReq {
     pub config: SubtitleGenerateConfig,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[typeshare]
+#[derive(Deserialize)]
+pub struct SubtitleTaskBulkCreateReq {
+    pub configs: Vec<SubtitleGenerateConfig>,
+    /// 若同 video_path 已存在 PENDING/RUNNING 任务则跳过（默认 true）
+    #[serde(default = "default_true")]
+    pub skip_if_exists: bool,
+}
+
+#[typeshare]
+#[derive(Clone, Serialize)]
+pub struct SubtitleTaskBulkCreateFailedItem {
+    pub video_path: String,
+    pub error: String,
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskBulkCreateRes {
+    pub created: Vec<SubtitleTaskCreateRes>,
+    pub skipped: Vec<String>,
+    pub failed: Vec<SubtitleTaskBulkCreateFailedItem>,
+}
+
 #[derive(Debug)]
 pub struct SubtitleTaskCreateDbReq {
     pub video_path: String,
@@ -138,6 +166,78 @@ pub async fn create_subtitle_task(
     let inserted = model.insert(db).await?;
 
     Ok(row_from_model(inserted))
+}
+
+pub async fn bulk_create_subtitle_tasks(
+    db: &DatabaseConnection,
+    req: SubtitleTaskBulkCreateReq,
+) -> Result<SubtitleTaskBulkCreateRes> {
+    if req.configs.is_empty() {
+        bail!("configs 不能为空");
+    }
+
+    let mut created: Vec<SubtitleTaskCreateRes> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    let mut failed: Vec<SubtitleTaskBulkCreateFailedItem> = Vec::new();
+
+    for cfg in req.configs.into_iter() {
+        let video_path = cfg.video_path.trim().to_string();
+        if video_path.is_empty() {
+            failed.push(SubtitleTaskBulkCreateFailedItem {
+                video_path,
+                error: "video_path 不能为空".to_string(),
+            });
+            continue;
+        }
+
+        if req.skip_if_exists {
+            let existing = Entity::find()
+                .filter(Column::VideoPath.eq(video_path.clone()))
+                .filter(Column::TaskStatus.is_in([
+                    SubtitleTaskStatus::PENDING.to_string(),
+                    SubtitleTaskStatus::RUNNING.to_string(),
+                ]))
+                .one(db)
+                .await?;
+            if existing.is_some() {
+                skipped.push(video_path);
+                continue;
+            }
+        }
+
+        let config_json = match serde_json::to_string(&cfg) {
+            Ok(v) => v,
+            Err(e) => {
+                failed.push(SubtitleTaskBulkCreateFailedItem {
+                    video_path,
+                    error: e.to_string(),
+                });
+                continue;
+            }
+        };
+
+        match create_subtitle_task(
+            db,
+            SubtitleTaskCreateDbReq {
+                video_path: video_path.clone(),
+                config_json,
+            },
+        )
+        .await
+        {
+            Ok(row) => created.push(row),
+            Err(e) => failed.push(SubtitleTaskBulkCreateFailedItem {
+                video_path,
+                error: e.to_string(),
+            }),
+        }
+    }
+
+    Ok(SubtitleTaskBulkCreateRes {
+        created,
+        skipped,
+        failed,
+    })
 }
 
 fn row_from_model(m: subtitle_task::Model) -> SubtitleTaskCreateRes {

@@ -12,7 +12,7 @@ use whisper_rs::{
 };
 
 use crate::types::{
-    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeOptions, WhisperTranscribeOutput
+    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeOptions, WhisperTranscribeOutput,
 };
 
 /// 确保 `install_logging_hooks` 只调用一次（whisper-rs 是全局副作用）
@@ -170,8 +170,8 @@ impl WhisperEngine {
                 return;
             }
             let abs_start = offset_cs.saturating_add(seg.start_timestamp);
-            let abs_end = offset_cs.saturating_add(seg.end_timestamp); 
-            
+            let abs_end = offset_cs.saturating_add(seg.end_timestamp);
+
             tracing::info!("{abs_start} ~ {abs_end}  {trimmed}");
 
             if let Ok(mut guard) = segments_for_cb.lock() {

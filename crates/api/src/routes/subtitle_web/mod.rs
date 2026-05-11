@@ -1,7 +1,7 @@
 use crate::{
-    StateRouter,
     core::subtitles_web::{download_subtitle, DownloadBody, DownloadResponse},
     error::AppError,
+    StateRouter,
 };
 use axum::{routing::post, Json, Router};
 use axum_extra::extract::WithRejection;

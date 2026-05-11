@@ -3,6 +3,8 @@ import type {
   DownloadResponse,
   FsListItem,
   FsListReq,
+  SubtitleTaskBulkCreateReq,
+  SubtitleTaskBulkCreateRes,
   SubtitleTaskCreateReq,
   SubtitleTaskCreateRes,
   SubtitleTaskDeleteReq,
@@ -17,12 +19,19 @@ import type {
   SubtitleTaskQueueStatusRes,
   SubtitleWebSearchReq,
   SubtitleWebSearchRes,
+  VideoFolderScanReq,
+  VideoFolderScanRes,
 } from '@/types'
 import { post } from './utils'
 
 /** 查询设备文件树 */
 export function fetchFsList(params: FsListReq) {
   return post<FsListItem[], FsListReq>('/fs/list', params)
+}
+
+/** 递归扫描文件夹下视频文件（同 stem 字幕列表） */
+export function scanVideoFolder(params: VideoFolderScanReq) {
+  return post<VideoFolderScanRes, VideoFolderScanReq>('/video-folder/scan', params)
 }
 
 /** 查询网络字幕 */
@@ -42,6 +51,14 @@ export function downloadSubtitleToDisk(params: DownloadBody) {
 export function createSubtitleTask(params: SubtitleTaskCreateReq) {
   return post<SubtitleTaskCreateRes, SubtitleTaskCreateReq>(
     '/subtitle-task/tasks',
+    params,
+  )
+}
+
+/** 批量向 subtitle_task 表插入记录（服务端可做去重/跳过） */
+export function createSubtitleTasksBulk(params: SubtitleTaskBulkCreateReq) {
+  return post<SubtitleTaskBulkCreateRes, SubtitleTaskBulkCreateReq>(
+    '/subtitle-task/tasks/bulk',
     params,
   )
 }

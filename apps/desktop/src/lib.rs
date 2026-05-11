@@ -7,7 +7,9 @@ use tauri::{WebviewUrl, WebviewWindowBuilder};
 fn tcp_addr_from_http_url(web_url: &str) -> Option<String> {
     let s = web_url.trim().trim_end_matches('/');
     let https = s.starts_with("https://");
-    let rest = s.strip_prefix("http://").or_else(|| s.strip_prefix("https://"))?;
+    let rest = s
+        .strip_prefix("http://")
+        .or_else(|| s.strip_prefix("https://"))?;
     if let Some((host, port_str)) = rest.rsplit_once(':') {
         let port: u16 = port_str.parse().ok()?;
         return Some(format!("{host}:{port}"));
@@ -70,8 +72,7 @@ pub fn run() {
 
             ma_api::log::init_tracing();
 
-            let listen =
-                std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+            let listen = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
 
             let addr = tauri::async_runtime::block_on(ma_api::spawn_server(&listen))
                 .map_err(|e| format!("failed to start API server: {e:#}"))?;

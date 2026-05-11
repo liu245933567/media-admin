@@ -1,7 +1,8 @@
 use crate::{
     core::subtitle_task::{
-        create_subtitle_task, delete_subtitle_task, list_subtitle_tasks, pause_subtitle_task_queue,
-        resume_subtitle_task_queue, SubtitleTaskCreateDbReq, SubtitleTaskCreateReq,
+        bulk_create_subtitle_tasks, create_subtitle_task, delete_subtitle_task, list_subtitle_tasks,
+        pause_subtitle_task_queue, resume_subtitle_task_queue, SubtitleTaskBulkCreateReq,
+        SubtitleTaskBulkCreateRes, SubtitleTaskCreateDbReq, SubtitleTaskCreateReq,
         SubtitleTaskCreateRes, SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskListReq,
         SubtitleTaskListRes, SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes,
         SubtitleTaskQueueResumeReq, SubtitleTaskQueueResumeRes, SubtitleTaskQueueStatusReq,
@@ -17,6 +18,7 @@ pub fn routes() -> StateRouter {
     Router::new()
         .route("/tasks/list", post(list_handler))
         .route("/tasks", post(create_handler))
+        .route("/tasks/bulk", post(bulk_create_handler))
         .route("/tasks/delete", post(delete_handler))
         .route("/queue/pause", post(queue_pause_handler))
         .route("/queue/resume", post(queue_resume_handler))
@@ -40,6 +42,22 @@ async fn create_handler(
     .map_err(AppError::Internal)?;
     state.subtitle_task_queue.enqueue();
     Ok(Json(row))
+}
+
+async fn bulk_create_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleTaskBulkCreateReq>, AppError>,
+) -> Result<Json<SubtitleTaskBulkCreateRes>, AppError> {
+    let res = bulk_create_subtitle_tasks(&state.db, body)
+        .await
+        .map_err(AppError::Internal)?;
+
+    if !res.created.is_empty() {
+        // 只需要唤醒一次 worker
+        state.subtitle_task_queue.enqueue();
+    }
+
+    Ok(Json(res))
 }
 
 async fn list_handler(

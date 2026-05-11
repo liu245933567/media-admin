@@ -161,5 +161,3 @@ pub async fn recognize_video_voice(
         lang: detected_lang,
     })
 }
-
-

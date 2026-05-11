@@ -117,8 +117,15 @@ export interface SubtitleGenerateConfig {
 	translate_cfg?: SubtitleTranslateConfig;
 }
 
-export interface SubtitleTaskCreateReq {
-	config: SubtitleGenerateConfig;
+export interface SubtitleTaskBulkCreateFailedItem {
+	video_path: string;
+	error: string;
+}
+
+export interface SubtitleTaskBulkCreateReq {
+	configs: SubtitleGenerateConfig[];
+	/** 若同 video_path 已存在 PENDING/RUNNING 任务则跳过（默认 true） */
+	skip_if_exists: boolean;
 }
 
 export interface SubtitleTaskCreateRes {
@@ -127,6 +134,16 @@ export interface SubtitleTaskCreateRes {
 	video_path: string;
 	created_at: string;
 	updated_at: string;
+}
+
+export interface SubtitleTaskBulkCreateRes {
+	created: SubtitleTaskCreateRes[];
+	skipped: string[];
+	failed: SubtitleTaskBulkCreateFailedItem[];
+}
+
+export interface SubtitleTaskCreateReq {
+	config: SubtitleGenerateConfig;
 }
 
 export interface SubtitleTaskDeleteReq {
@@ -200,5 +217,21 @@ export interface SubtitleWebSearchRes {
 	cid: string;
 	/** 字幕列表 */
 	items: SubtitleWebRow[];
+}
+
+export interface VideoFolderScanItem {
+	video_name: string;
+	video_path: string;
+	video_size: number;
+	/** 同目录、同 stem 的字幕文件名列表（不含路径） */
+	subtitle_names: string[];
+}
+
+export interface VideoFolderScanReq {
+	root_dir: string;
+}
+
+export interface VideoFolderScanRes {
+	items: VideoFolderScanItem[];
 }
 

@@ -1,5 +1,5 @@
-mod utils;
-pub mod generate;
-pub mod types;
 mod file;
+pub mod generate;
 mod translate;
+pub mod types;
+mod utils;

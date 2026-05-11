@@ -1,4 +1,4 @@
-import { DatabaseOutlined, FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined, VideoCameraOutlined } from '@ant-design/icons'
 
 export const menu = [
   {
@@ -15,6 +15,11 @@ export const menu = [
     name: '字幕生成',
     path: '/subtitle-task',
     icon: <DatabaseOutlined />,
+  },
+  {
+    name: '视频查询',
+    path: '/video-folder-scan',
+    icon: <VideoCameraOutlined />,
   },
   {
     name: '文件系统',
