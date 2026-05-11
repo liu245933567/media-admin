@@ -89,13 +89,11 @@ pub struct SubtitleTaskDeleteRes {
 #[derive(Debug, Deserialize)]
 pub struct SubtitleTaskQueueResumeReq {}
 
-enum SubtitleTaskStatus {
+pub enum SubtitleTaskStatus {
     // 待处理
     PENDING,
     // 处理中
     RUNNING,
-    // 暂停中（已请求暂停，等待 worker 尽快退出）
-    PAUSING,
     // 完成
     COMPLETED,
     // 失败
@@ -107,7 +105,6 @@ impl fmt::Display for SubtitleTaskStatus {
         f.write_str(match self {
             Self::PENDING => "PENDING",
             Self::RUNNING => "RUNNING",
-            Self::PAUSING => "PAUSING",
             Self::COMPLETED => "COMPLETED",
             Self::FAILED => "FAILED",
         })

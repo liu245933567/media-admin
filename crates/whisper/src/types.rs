@@ -42,7 +42,7 @@ pub struct WhisperEngineConfig {
 impl Default for WhisperEngineConfig {
     fn default() -> Self {
         Self {
-            model_filename: "ggml-large-v3-turbo.bin".into(),
+            model_filename: "ggml-large-v3.bin".into(),
             use_gpu: true,
             flash_attn: true,
         }

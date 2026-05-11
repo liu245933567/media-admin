@@ -46,3 +46,15 @@ pub struct SubtitleGenerateConfig {
     pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
     pub translate_cfg: Option<SubtitleTranslateConfig>,
 }
+
+impl Default for SubtitleGenerateConfig {
+    fn default() -> Self {
+        Self {
+            video_path: "".to_string(),
+            vad_config: Some(VadConfig::default()),
+            whisper_engine_cfg: Some(WhisperEngineConfig::default()),
+            whisper_transcribe_options: Some(WhisperTranscribeOptions::default()),
+            translate_cfg: Some(SubtitleTranslateConfig::default()),
+        }
+    }
+}

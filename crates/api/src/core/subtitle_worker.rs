@@ -16,9 +16,12 @@ use tokio::sync::Notify;
 
 use crate::{
     core::subtitle_task::{
-        append_task_record, get_subtitle_task, set_subtitle_task_status,
+        append_task_record, get_subtitle_task, set_subtitle_task_status, SubtitleTaskStatus,
     },
-    entity::{generated_subtitles, subtitle_task, subtitle_task::Column as TaskColumn},
+    entity::{
+        generated_subtitles,
+        subtitle_task::{self, Column as TaskColumn},
+    },
 };
 
 const QUEUE_STATE_RUNNING: u8 = 0;
@@ -124,7 +127,10 @@ async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<subti
 
     let now = Utc::now().to_rfc3339();
     let res = subtitle_task::Entity::update_many()
-        .col_expr(TaskColumn::TaskStatus, sea_orm::sea_query::Expr::value("RUNNING"))
+        .col_expr(
+            TaskColumn::TaskStatus,
+            sea_orm::sea_query::Expr::value("RUNNING"),
+        )
         .col_expr(TaskColumn::UpdatedAt, sea_orm::sea_query::Expr::value(now))
         .filter(TaskColumn::TaskId.eq(task.task_id))
         .filter(TaskColumn::TaskStatus.eq("PENDING"))
@@ -139,14 +145,22 @@ async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<subti
     Ok(Some(claimed))
 }
 
-async fn process_task(db: &DatabaseConnection, queue: &SubtitleTaskQueue, task_id: i32) -> Result<()> {
+async fn process_task(
+    db: &DatabaseConnection,
+    queue: &SubtitleTaskQueue,
+    task_id: i32,
+) -> Result<()> {
     append_task_record(db, task_id, "INFO", "任务开始", "").await?;
 
     let task = get_subtitle_task(db, task_id).await?;
     let cfg: SubtitleGenerateConfig =
         serde_json::from_str(&task.config_json).context("解析 config_json 失败")?;
 
-    let gen_res = generate_subtitle_by_video(&cfg).await;
+    let gen_res = generate_subtitle_by_video(&SubtitleGenerateConfig {
+        video_path: cfg.video_path,
+        ..Default::default()
+    })
+    .await;
 
     match gen_res {
         Ok(items) => {
@@ -160,11 +174,12 @@ async fn process_task(db: &DatabaseConnection, queue: &SubtitleTaskQueue, task_i
                 };
                 model.insert(db).await?;
             }
-            set_subtitle_task_status(db, task_id, "COMPLETED").await?;
+            set_subtitle_task_status(db, task_id, &SubtitleTaskStatus::COMPLETED.to_string())
+                .await?;
             append_task_record(db, task_id, "INFO", "任务完成", "").await?;
         }
         Err(e) => {
-            set_subtitle_task_status(db, task_id, "FAILED").await?;
+            set_subtitle_task_status(db, task_id, &SubtitleTaskStatus::FAILED.to_string()).await?;
             append_task_record(db, task_id, "ERROR", "任务失败", &format!("{e:#}")).await?;
         }
     }
@@ -174,4 +189,3 @@ async fn process_task(db: &DatabaseConnection, queue: &SubtitleTaskQueue, task_i
 
     Ok(())
 }
-
