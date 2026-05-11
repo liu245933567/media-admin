@@ -1,64 +1,70 @@
 use std::path::Path;
 
-use anyhow::{Context, Result};
-use ma_whisper::{
-    generate::recognize_video_voice,
-    types::{VadConfig, WhisperEngineConfig, WhisperTranscribeOptions},
+use anyhow::Result;
+use ma_whisper::generate::recognize_video_voice;
+
+use crate::{
+    file::write_srt_file,
+    translate::translate_srt_file,
+    types::{SubtitleGenerateConfig, SubtitleGenerateItem},
+    utils::same_language,
 };
 
-use crate::{file::write_srt_file, types::SubtitleTranslateConfig, utils::same_language};
-
 pub async fn generate_subtitle_by_video(
-    video_path: &Path,
-    vad_config: Option<VadConfig>,
-    whisper_engine_cfg: Option<WhisperEngineConfig>,
-    whisper_transcribe_options: Option<WhisperTranscribeOptions>,
-    translate_cfg: Option<SubtitleTranslateConfig>,
-) -> Result<()> {
+    config: &SubtitleGenerateConfig,
+) -> Result<Vec<SubtitleGenerateItem>> {
+    let video_path = Path::new(&config.video_path);
+
     let recognize_result = recognize_video_voice(
         video_path,
-        vad_config,
-        whisper_engine_cfg,
-        whisper_transcribe_options,
+        config.vad_config.clone(),
+        config.whisper_engine_cfg.clone(),
+        config.whisper_transcribe_options.clone(),
     )
     .await?;
 
     let detected_lang = recognize_result.lang;
+    let all_segments = recognize_result.items;
 
     let srt_path = write_srt_file(
-        video_path,
+        &Path::new(&config.video_path),
         None,
-        &recognize_result.items,
-        recognize_result.lang,
+        &all_segments,
+        detected_lang.clone(),
     )
-    .with_context(|| format!("写入 SRT 失败: {}", video_path.display()))?;
+    .await?;
+
+    let mut generate_items = vec![SubtitleGenerateItem {
+        srt_path: srt_path.display().to_string(),
+    }];
 
     tracing::info!("[subtitle] 字幕生成完成: {}", srt_path.display());
 
     // 可选：翻译为目标语言
-    if let Some(cfg) = translate_cfg {
+    if let Some(cfg) = config.translate_cfg.as_ref() {
         // 同语种短路：原文已经是目标语言，无需翻译
-        if let Some(ref src) = detected_lang {
-            if same_language(src, &cfg.options.target_language) {
+        if let Some(src) = detected_lang.as_deref() {
+            if same_language(src, &cfg.target_language) {
                 tracing::info!(
                     "[subtitle] 检测语种 {src} 与目标语种 {} 一致，跳过翻译",
-                    cfg.options.target_language
+                    cfg.target_language
                 );
-                return Ok(srt_path.display().to_string());
+                return Ok(generate_items);
             }
         }
 
         if all_segments.is_empty() {
             tracing::info!("[subtitle] 无字幕条目，跳过翻译");
-            return Ok(srt_path.display().to_string());
+            return Ok(generate_items);
         }
 
         tracing::info!(
             "[subtitle] 开始翻译: {} -> {}",
             detected_lang.as_deref().unwrap_or("auto"),
-            cfg.options.target_language
+            cfg.target_language
         );
-        match translate_srt_file(&srt_path, None, cfg.options.clone()).await {
+
+        match translate_srt_file(&srt_path, None, cfg).await {
             Ok(translated) => {
                 tracing::info!("[subtitle] 翻译完成: {}", translated.display());
                 if cfg.remove_source_srt && translated != srt_path {
@@ -69,7 +75,11 @@ pub async fn generate_subtitle_by_video(
                         );
                     }
                 }
-                return Ok(translated.display().to_string());
+
+                generate_items.push(SubtitleGenerateItem { 
+                    srt_path: translated.display().to_string(),
+                });
+                return Ok(generate_items);
             }
             Err(e) => {
                 tracing::warn!("[subtitle] 翻译失败，保留原文 SRT: {e:#}");
@@ -77,5 +87,5 @@ pub async fn generate_subtitle_by_video(
         }
     }
 
-    Ok(srt_path.display().to_string())
+    Ok(generate_items)
 }

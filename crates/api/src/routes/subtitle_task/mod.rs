@@ -1,14 +1,8 @@
-use std::path::Path;
-
 use crate::{
-    core::{
-        subtitle_gen::generate_subtitle_with,
-        subtitle_task::{
-            create_subtitle_task, delete_subtitle_task, list_subtitle_tasks, SubtitleTaskCreateReq,
-            SubtitleTaskCreateRes, SubtitleTaskDeleteReq, SubtitleTaskDeleteRes,
-            SubtitleTaskListReq, SubtitleTaskListRes,
-        },
-        vad::VadConfig,
+    core::subtitle_task::{
+        create_subtitle_task, delete_subtitle_task, list_subtitle_tasks,
+        SubtitleTaskCreateRes, SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskListReq,
+        SubtitleTaskListRes,
     },
     error::AppError,
     state::AppState,
@@ -16,6 +10,7 @@ use crate::{
 };
 use axum::{extract::State, routing::post, Json, Router};
 use axum_extra::extract::WithRejection;
+use ma_subtitle::{generate::generate_subtitle_by_video, types::SubtitleGenerateConfig};
 
 pub fn routes() -> StateRouter {
     Router::new()
@@ -26,17 +21,15 @@ pub fn routes() -> StateRouter {
 
 async fn create_handler(
     State(state): State<AppState>,
-    WithRejection(Json(body), _): WithRejection<Json<SubtitleTaskCreateReq>, AppError>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateConfig>, AppError>,
 ) -> Result<Json<SubtitleTaskCreateRes>, AppError> {
-    let _ = generate_subtitle_with(
-        &Path::new(&body.video_path),
-        Some(VadConfig::default()),
-        None,
-        None,
-        None,
+    let _ = generate_subtitle_by_video(&body).await?;
+    let row = create_subtitle_task(
+        &state.db,
+        SubtitleTaskCreateReq {
+            video_path: body.video_path,
+        },
     )
-    .await?;
-    let row = create_subtitle_task(&state.db, body)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(row))

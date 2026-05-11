@@ -44,3 +44,41 @@ pub fn get_temp_wav_dir() -> PathBuf {
         Err(_) => get_default_app_path().join("temp/wav"),
     }
 }
+
+/// 获取翻译 OpenAI API 基地址
+pub fn get_translate_openai_base() -> Result<String> {
+    match std::env::var("TRANSLATE_OPENAI_BASE") {
+        Ok(base) => Ok(base.trim().to_string()),
+        Err(_) => bail!("未设置 TRANSLATE_OPENAI_API_BASE 环境变量"),
+    }
+}
+
+/// 获取翻译 OpenAI API 密钥
+pub fn get_translate_openai_api_key() -> Result<String> {
+    match std::env::var("TRANSLATE_OPENAI_API_KEY") {
+        Ok(key) => Ok(key.trim().to_string()),
+        Err(_) => bail!("未设置 TRANSLATE_OPENAI_API_KEY 环境变量"),
+    }
+}
+
+/// 获取翻译 OpenAI 默认模型
+pub fn get_translate_openai_default_model() -> Result<String> {
+    match std::env::var("TRANSLATE_OPENAI_DEFAULT_MODEL") {
+        Ok(model) => Ok(model.trim().to_string()),
+        Err(_) => bail!("未设置 TRANSLATE_OPENAI_DEFAULT_MODEL 环境变量"),
+    }
+}
+
+pub fn get_stash_base_url() -> Result<String> {
+    match std::env::var("STASH_BASE_URL") {
+        Ok(url) => Ok(url.trim().to_string()),
+        Err(_) => bail!("未设置 STASH_BASE_URL 环境变量"),
+    }
+}
+
+pub fn get_stash_api_key() -> Result<String> {
+    match std::env::var("STASH_API_KEY") {
+        Ok(key) => Ok(key.trim().to_string()),
+        Err(_) => bail!("未设置 STASH_API_KEY 环境变量"),
+    }
+}

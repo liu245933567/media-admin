@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, Context};
 use ma_whisper::types::WhisperTranscribeItem;
 use std::path::{Path, PathBuf};
 
@@ -86,9 +86,9 @@ pub fn fmt_srt_ts_centiseconds(cs: i64) -> String {
 /// - `segments`：语音识别结果
 /// - `lang`：识别到的语言短代码（如 `"zh"`、`"en"`）。
 ///   仅在 `srt_path == None` 且非空时影响文件名；为 `None` 时退化为 `<basename>.srt`。
-pub fn write_srt_file(
+pub async fn write_srt_file(
     video_path: &Path,
-    srt_path: Option<&Path>,
+    srt_path: Option<PathBuf>,
     segments: &Vec<WhisperTranscribeItem>,
     lang: Option<String>,
 ) -> Result<PathBuf> {
@@ -123,7 +123,9 @@ pub fn write_srt_file(
         None => default_srt_path(video_path, lang),
     };
 
-    std::fs::write(&srt_path, out)?;
+    tokio::fs::write(&srt_path, out)
+        .await
+        .with_context(|| format!("写出 SRT 失败: {}", srt_path.display()))?;
 
     Ok(srt_path)
 }

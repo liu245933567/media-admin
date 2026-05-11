@@ -22,6 +22,7 @@ pub struct WhisperTranscribeOutput {
 }
 
 /// whisper 引擎运行时配置（影响模型加载，启动期决定）
+#[derive(Clone, Deserialize)]
 pub struct WhisperEngineConfig {
     /// 模型文件名
     pub model_filename: String,
@@ -47,6 +48,7 @@ impl Default for WhisperEngineConfig {
 }
 
 /// whisper 解码可调参数（影响每次 transcribe 行为）
+#[derive(Clone, Deserialize)]
 pub struct WhisperTranscribeOptions {
     /// 语言代码：
     /// - `None`：完全用 whisper.cpp 编译默认（通常是 "en"），不调用 `set_xxx`。
@@ -96,7 +98,7 @@ impl Default for WhisperTranscribeOptions {
 }
 
 /// VAD 配置
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct VadConfig {
     /// 帧长 10/20/30（默认 30）
     pub frame_ms: u16,

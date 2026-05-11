@@ -10,5 +10,14 @@ name = "ma_subtitle"
 serde.workspace = true
 tracing.workspace = true
 anyhow.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+
+async-openai = { version = "0.38.0", default-features = false, features = [
+  "rustls",
+  "chat-completion",
+] }
 
 media-admin-whisper = { path = "../../crates/whisper" }
+media-admin-utils = { path = "../../crates/utils" }

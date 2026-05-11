@@ -2793,7 +2793,6 @@ name = "media-admin-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-openai",
  "axum",
  "axum-extra",
  "base64 0.22.1",
@@ -2803,6 +2802,8 @@ dependencies = [
  "futures-util",
  "hex",
  "hf-hub",
+ "media-admin-subtitle",
+ "media-admin-utils",
  "reqwest 0.13.3",
  "sea-orm",
  "sea-orm-migration",
@@ -2846,8 +2847,13 @@ name = "media-admin-subtitle"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-openai",
+ "futures",
+ "media-admin-utils",
  "media-admin-whisper",
+ "reqwest 0.13.3",
  "serde",
+ "tokio",
  "tracing",
 ]
 
