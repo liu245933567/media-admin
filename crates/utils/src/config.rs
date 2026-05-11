@@ -82,3 +82,60 @@ pub fn get_stash_api_key() -> Result<String> {
         Err(_) => bail!("未设置 STASH_API_KEY 环境变量"),
     }
 }
+
+pub fn get_app_data_dir() -> Result<PathBuf> {
+    match std::env::var("APP_DATA_DIR") {
+        Ok(path) => Ok(PathBuf::from(path.trim().to_string())),
+        Err(_) => Ok(get_default_app_path().join("data")),
+    }
+}
+
+/// 供 sqlx / SeaORM 使用的 SQLite 连接 URL。
+///
+/// 由 `SQLITE_DB_FILE` 或 `get_app_data_dir()/media_admin.db` 解析路径，相对路径按 `cwd` 转为绝对路径；
+/// Windows 盘符与 Unix 根路径按 sqlx 0.8 的 URL 规则分别处理；附带 `mode=rwc` 以便库文件不存在时可创建。
+pub fn get_sqlite_connect_url() -> Result<String> {
+    let path = match std::env::var("SQLITE_DB_FILE") {
+        Ok(file) => PathBuf::from(file.trim()),
+        Err(_) => get_app_data_dir()?.join("media_admin.db"),
+    };
+    let absolute = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let normalized = absolute.to_string_lossy().replace('\\', "/");
+
+    if cfg!(windows) {
+        let is_drive_letter = normalized
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_alphabetic)
+            && normalized.as_bytes().get(1) == Some(&b':')
+            && normalized.as_bytes().get(2) == Some(&b'/');
+
+        if is_drive_letter || normalized.starts_with("//") {
+            return Ok(format!("sqlite://{}?mode=rwc", normalized));
+        }
+    }
+
+    let path_in_url = if normalized.starts_with("//") {
+        normalized
+    } else if let Some(rest) = normalized.strip_prefix('/') {
+        rest.to_string()
+    } else {
+        normalized
+    };
+
+    Ok(format!("sqlite:///{}?mode=rwc", path_in_url))
+}
+
+pub fn get_sqlx_logging() -> bool {
+    match std::env::var("SQLX_LOGGING") {
+        Ok(v) => {
+            let s = v.trim().to_ascii_lowercase();
+            matches!(s.as_str(), "1" | "true" | "yes" | "on")
+        }
+        Err(_) => cfg!(debug_assertions),
+    }
+}

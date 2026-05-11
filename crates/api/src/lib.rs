@@ -5,21 +5,18 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{
-    config::{SQLITE_DATA_DIR, SQLITE_DB_FILE},
-    log::init_tracing,
-    migration::Migrator,
-    state::AppState,
-};
+use crate::{log::init_tracing, migration::Migrator, state::AppState};
 
-mod middleware;
-mod routes;
+use ma_utils::config::{get_app_data_dir, get_sqlite_connect_url, get_sqlx_logging};
+
 mod config;
-pub mod core;
-pub mod entity;
+mod core;
+mod entity;
 mod error;
-pub mod log;
+mod log;
+mod middleware;
 mod migration;
+mod routes;
 mod state;
 
 fn build_router(app_state: AppState) -> Router<()> {
@@ -80,9 +77,10 @@ pub async fn start() {
 }
 
 async fn connect_db() -> anyhow::Result<DatabaseConnection> {
-    tokio::fs::create_dir_all(SQLITE_DATA_DIR).await?;
+    tokio::fs::create_dir_all(get_app_data_dir()?).await?;
 
-    let mut options = ConnectOptions::new(SQLITE_DB_FILE.to_owned());
+    let mut options = ConnectOptions::new(get_sqlite_connect_url()?);
+
     options
         .max_connections(10)
         .min_connections(1)
@@ -90,7 +88,7 @@ async fn connect_db() -> anyhow::Result<DatabaseConnection> {
         .acquire_timeout(Duration::from_secs(8))
         .idle_timeout(Duration::from_secs(600))
         .max_lifetime(Duration::from_secs(1800))
-        .sqlx_logging(cfg!(debug_assertions));
+        .sqlx_logging(get_sqlx_logging());
 
     let db = Database::connect(options).await?;
     tracing::info!("connected sqlite database");
