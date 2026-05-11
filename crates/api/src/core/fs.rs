@@ -12,6 +12,18 @@ pub struct FsListReq {
     pub parent_path: Option<String>,
 }
 
+#[typeshare::typeshare]
+#[derive(Debug, Deserialize)]
+pub struct FsReadTextReq {
+    pub path: String,
+}
+
+#[typeshare::typeshare]
+#[derive(Debug, Serialize)]
+pub struct FsReadTextRes {
+    pub content: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct FsListItem {
     pub name: String,
@@ -85,4 +97,39 @@ pub async fn get_fs_list(parent_path: Option<String>) -> Result<Vec<FsListItem>>
         });
     }
     Ok(list)
+}
+
+/// 读取文本文件（用于预览字幕内容）
+pub async fn read_text_file(path: String) -> Result<FsReadTextRes> {
+    let p = PathBuf::from(&path);
+    if !p.is_absolute() {
+        bail!("path 必须为绝对路径");
+    }
+    if !p.exists() {
+        bail!("path 不存在");
+    }
+    if p.is_dir() {
+        bail!("path 不能为目录");
+    }
+
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let allowed = ["srt", "ass", "ssa", "vtt"];
+    if !allowed.contains(&ext.as_str()) {
+        bail!("不支持读取该文件类型");
+    }
+
+    let meta = tokio::fs::metadata(&p).await?;
+    // 防止一次性读取过大文件导致内存压力
+    const MAX: u64 = 2 * 1024 * 1024;
+    if meta.len() > MAX {
+        bail!("文件过大，无法预览（> 2MB）");
+    }
+
+    let bytes = tokio::fs::read(&p).await?;
+    let content = String::from_utf8_lossy(&bytes).to_string();
+    Ok(FsReadTextRes { content })
 }

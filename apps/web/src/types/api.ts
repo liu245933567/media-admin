@@ -16,6 +16,14 @@ export interface FsListReq {
 	parent_path?: string;
 }
 
+export interface FsReadTextReq {
+	path: string;
+}
+
+export interface FsReadTextRes {
+	content: string;
+}
+
 /** VAD 配置 */
 export interface VadConfig {
 	/** 帧长 10/20/30（默认 30） */

@@ -3,6 +3,8 @@ import type {
   DownloadResponse,
   FsListItem,
   FsListReq,
+  FsReadTextReq,
+  FsReadTextRes,
   SubtitleTaskBulkCreateReq,
   SubtitleTaskBulkCreateRes,
   SubtitleTaskCreateReq,
@@ -27,6 +29,11 @@ import { post } from './utils'
 /** 查询设备文件树 */
 export function fetchFsList(params: FsListReq) {
   return post<FsListItem[], FsListReq>('/fs/list', params)
+}
+
+/** 读取文本文件（用于预览字幕内容） */
+export function fetchFsReadText(params: FsReadTextReq) {
+  return post<FsReadTextRes, FsReadTextReq>('/fs/read-text', params)
 }
 
 /** 递归扫描文件夹下视频文件（同 stem 字幕列表） */
