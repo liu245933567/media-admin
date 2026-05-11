@@ -1,4 +1,1 @@
 [env]
-
-[profile.dev]
-opt-level = 0

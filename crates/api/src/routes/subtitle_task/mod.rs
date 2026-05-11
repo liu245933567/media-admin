@@ -1,6 +1,6 @@
 use crate::{
     core::subtitle_task::{
-        create_subtitle_task, delete_subtitle_task, list_subtitle_tasks,
+        create_subtitle_task, delete_subtitle_task, list_subtitle_tasks, SubtitleTaskCreateReq,
         SubtitleTaskCreateRes, SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskListReq,
         SubtitleTaskListRes,
     },
@@ -30,8 +30,8 @@ async fn create_handler(
             video_path: body.video_path,
         },
     )
-        .await
-        .map_err(AppError::Internal)?;
+    .await
+    .map_err(AppError::Internal)?;
     Ok(Json(row))
 }
 

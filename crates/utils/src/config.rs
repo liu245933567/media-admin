@@ -19,7 +19,7 @@ pub fn get_models_dir() -> PathBuf {
 fn get_ffmpeg_dir() -> PathBuf {
     match std::env::var("FFMPEG_DIR") {
         Ok(path) => PathBuf::from(path),
-        Err(_) => get_default_app_path().join("ffmpeg"),
+        Err(_) => get_default_app_path().join("tools/ffmpeg"),
     }
 }
 
