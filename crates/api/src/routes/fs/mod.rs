@@ -1,9 +1,6 @@
-use crate::{
-    core::fs::{get_fs_list, read_text_file, FsListItem, FsListReq, FsReadTextReq, FsReadTextRes},
-    error::AppError,
-    StateRouter,
-};
-use axum::{routing::post, Json, Router};
+use crate::{StateRouter, error::AppError};
+use ma_service::fs::{get_fs_list, read_text_file, FsListItem, FsListReq, FsReadTextReq, FsReadTextRes};
+use axum::{Json, Router, routing::post};
 use axum_extra::extract::WithRejection;
 
 pub fn routes() -> StateRouter {

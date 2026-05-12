@@ -1,9 +1,7 @@
-use crate::{
-    core::video_folder_scan::{scan_video_folder, VideoFolderScanReq, VideoFolderScanRes},
-    error::AppError,
-    StateRouter,
-};
-use axum::{routing::post, Json, Router};
+use crate::{StateRouter, error::AppError};
+use ma_service::video_folder_scan::{VideoFolderScanReq, VideoFolderScanRes, scan_video_folder};
+
+use axum::{Json, Router, routing::post};
 use axum_extra::extract::WithRejection;
 
 pub fn routes() -> StateRouter {

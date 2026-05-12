@@ -1,19 +1,18 @@
-use crate::{
-    core::subtitle_task::{
-        bulk_create_subtitle_tasks, create_subtitle_task, delete_subtitle_task, list_subtitle_tasks,
-        pause_subtitle_task_queue, resume_subtitle_task_queue, SubtitleTaskBulkCreateReq,
-        SubtitleTaskBulkCreateRes, SubtitleTaskCreateDbReq, SubtitleTaskCreateReq,
-        SubtitleTaskCreateRes, SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskListReq,
-        SubtitleTaskListRes, SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes,
-        SubtitleTaskQueueResumeReq, SubtitleTaskQueueResumeRes, SubtitleTaskQueueStatusReq,
-        SubtitleTaskQueueStatusRes,
-    },
-    error::AppError,
-    state::AppState,
-    StateRouter,
+use crate::{AppState, StateRouter, error::AppError};
+use ma_service::subtitle_task::{
+    SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes, SubtitleTaskQueueResumeRes,
+    SubtitleTaskQueueStatusReq, SubtitleTaskQueueStatusRes, bulk_create_subtitle_tasks,
+    create_subtitle_task, delete_subtitle_task, list_subtitle_tasks, pause_subtitle_task_queue,
+    resume_subtitle_task_queue,
 };
-use axum::{extract::State, routing::post, Json, Router};
+
+use axum::{Json, Router, extract::State, routing::post};
 use axum_extra::extract::WithRejection;
+use ma_service::subtitle_task::types::{
+    SubtitleTaskBulkCreateReq, SubtitleTaskBulkCreateRes, SubtitleTaskCreateReq,
+    SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskItem, SubtitleTaskListReq,
+    SubtitleTaskListRes, SubtitleTaskQueueResumeReq,
+};
 pub fn routes() -> StateRouter {
     Router::new()
         .route("/tasks/list", post(list_handler))
@@ -28,18 +27,10 @@ pub fn routes() -> StateRouter {
 async fn create_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleTaskCreateReq>, AppError>,
-) -> Result<Json<SubtitleTaskCreateRes>, AppError> {
-    let SubtitleTaskCreateReq { config } = body;
-    let config_json = serde_json::to_string(&config).map_err(|e| AppError::Internal(e.into()))?;
-    let row = create_subtitle_task(
-        &state.db,
-        SubtitleTaskCreateDbReq {
-            video_path: config.video_path.clone(),
-            config_json,
-        },
-    )
-    .await
-    .map_err(AppError::Internal)?;
+) -> Result<Json<SubtitleTaskItem>, AppError> {
+    let row = create_subtitle_task(&state.db, body)
+        .await
+        .map_err(AppError::Internal)?;
     state.subtitle_task_queue.enqueue();
     Ok(Json(row))
 }
@@ -64,7 +55,7 @@ async fn list_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleTaskListReq>, AppError>,
 ) -> Result<Json<SubtitleTaskListRes>, AppError> {
-    let page = list_subtitle_tasks(&state.db, body)
+    let page = list_subtitle_tasks(&state.db, &body)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(page))

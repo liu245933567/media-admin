@@ -1,9 +1,8 @@
-use crate::core::xunlei::{
-    decode_subtitle_id, encode_subtitle_id, thunder_cid_from_file, DownloadPayload,
-    ThunderSubtitleClient,
+use crate::xunlei::{
+    DownloadPayload, ThunderSubtitleClient, decode_subtitle_id, encode_subtitle_id,
+    thunder_cid_from_file,
 };
-use crate::error::AppError;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use typeshare::typeshare;
@@ -114,7 +113,7 @@ pub async fn search_subtitles(params: SubtitleWebSearchReq) -> Result<SubtitleWe
             language: Some("chi".into()),
             two_letter_iso_language_name: Some("zh".into()),
         };
-        let id = encode_subtitle_id(&payload).map_err(AppError::Internal)?;
+        let id = encode_subtitle_id(&payload).map_err(|e| anyhow!("编码字幕 ID 失败: {e}"))?;
 
         items.push(SubtitleWebRow {
             id,
@@ -131,6 +130,7 @@ pub async fn search_subtitles(params: SubtitleWebSearchReq) -> Result<SubtitleWe
         items,
     })
 }
+
 /// 下载字幕
 pub async fn download_subtitle(params: DownloadBody) -> Result<DownloadResponse> {
     let video = PathBuf::from(params.video_path.trim());
@@ -160,17 +160,15 @@ pub async fn download_subtitle(params: DownloadBody) -> Result<DownloadResponse>
     let stem = video
         .file_stem()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| AppError::BadRequest("无法解析视频主文件名".into()))?;
+        .ok_or_else(|| anyhow!("无法解析视频主文件名"))?;
 
     let ext = normalize_ext(&payload.format);
-    let parent = video
-        .parent()
-        .ok_or_else(|| AppError::BadRequest("无法解析视频目录".into()))?;
+    let parent = video.parent().ok_or_else(|| anyhow!("无法解析视频目录"))?;
     let subtitle_path = parent.join(format!("{stem}.{ext}"));
 
     tokio::fs::write(&subtitle_path, &bytes)
         .await
-        .map_err(|e| AppError::Internal(e.into()))?;
+        .map_err(|e| anyhow!("写入字幕文件失败: {e}"))?;
 
     let subtitle_path_str = subtitle_path.display().to_string();
 

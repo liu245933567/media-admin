@@ -8,7 +8,7 @@ import type {
   SubtitleTaskBulkCreateReq,
   SubtitleTaskBulkCreateRes,
   SubtitleTaskCreateReq,
-  SubtitleTaskCreateRes,
+  SubtitleTaskItem,
   SubtitleTaskDeleteReq,
   SubtitleTaskDeleteRes,
   SubtitleTaskListReq,
@@ -56,7 +56,7 @@ export function downloadSubtitleToDisk(params: DownloadBody) {
 
 /** 向 subtitle_task 表插入一条记录 */
 export function createSubtitleTask(params: SubtitleTaskCreateReq) {
-  return post<SubtitleTaskCreateRes, SubtitleTaskCreateReq>(
+  return post<SubtitleTaskItem, SubtitleTaskCreateReq>(
     '/subtitle-task/tasks',
     params,
   )

@@ -1,7 +1,7 @@
 use std::{
     sync::{
-        atomic::{AtomicU8, Ordering},
         Arc,
+        atomic::{AtomicU8, Ordering},
     },
     time::Duration,
 };
@@ -10,19 +10,18 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use ma_subtitle::{generate::generate_subtitle_by_video, types::SubtitleGenerateConfig};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    QueryOrder, Set,
 };
 use tokio::sync::Notify;
 
-use crate::{
-    core::subtitle_task::{
-        append_task_record, get_subtitle_task, set_subtitle_task_status, SubtitleTaskStatus,
-    },
-    entity::{
-        generated_subtitles,
-        subtitle_task::{self, Column as TaskColumn},
-    },
+use crate::subtitle_task::{
+    append_task_record, get_subtitle_task, set_subtitle_task_status, types::SubtitleTaskStatus,
 };
+use ma_db::entity::generated_subtitles::ActiveModel as GeneratedSubtitlesActiveModel;
+use ma_db::entity::subtitle_task::Column as SubtitleTaskColumn;
+use ma_db::entity::subtitle_task::Entity as SubtitleTaskEntity;
+use ma_db::entity::subtitle_task::Model as SubtitleTaskModel;
 
 const QUEUE_STATE_RUNNING: u8 = 0;
 const QUEUE_STATE_PAUSING: u8 = 1;
@@ -114,10 +113,10 @@ async fn tick(db: &DatabaseConnection, queue: &SubtitleTaskQueue) -> Result<()> 
     Ok(())
 }
 
-async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<subtitle_task::Model>> {
-    let task = subtitle_task::Entity::find()
-        .filter(TaskColumn::TaskStatus.eq("PENDING"))
-        .order_by_asc(TaskColumn::TaskId)
+async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<SubtitleTaskModel>> {
+    let task = SubtitleTaskEntity::find()
+        .filter(SubtitleTaskColumn::TaskStatus.eq(SubtitleTaskStatus::PENDING.to_string()))
+        .order_by_asc(SubtitleTaskColumn::TaskId)
         .one(db)
         .await?;
 
@@ -126,14 +125,17 @@ async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<subti
     };
 
     let now = Utc::now().to_rfc3339();
-    let res = subtitle_task::Entity::update_many()
+    let res = SubtitleTaskEntity::update_many()
         .col_expr(
-            TaskColumn::TaskStatus,
-            sea_orm::sea_query::Expr::value("RUNNING"),
+            SubtitleTaskColumn::TaskStatus,
+            sea_orm::sea_query::Expr::value(SubtitleTaskStatus::RUNNING.to_string()),
         )
-        .col_expr(TaskColumn::UpdatedAt, sea_orm::sea_query::Expr::value(now))
-        .filter(TaskColumn::TaskId.eq(task.task_id))
-        .filter(TaskColumn::TaskStatus.eq("PENDING"))
+        .col_expr(
+            SubtitleTaskColumn::UpdatedAt,
+            sea_orm::sea_query::Expr::value(now),
+        )
+        .filter(SubtitleTaskColumn::TaskId.eq(task.task_id))
+        .filter(SubtitleTaskColumn::TaskStatus.eq(SubtitleTaskStatus::PENDING.to_string()))
         .exec(db)
         .await?;
 
@@ -166,8 +168,8 @@ async fn process_task(
         Ok(items) => {
             let now = Utc::now().to_rfc3339();
             for it in items {
-                let model = generated_subtitles::ActiveModel {
-                    subtitle_id: sea_orm::ActiveValue::NotSet,
+                let model = GeneratedSubtitlesActiveModel {
+                    subtitle_id: ActiveValue::NotSet,
                     task_id: Set(Some(task_id)),
                     subtitle_path: Set(it.srt_path),
                     created_at: Set(now.clone()),

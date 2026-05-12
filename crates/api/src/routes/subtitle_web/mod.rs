@@ -1,12 +1,11 @@
-use crate::{
-    core::subtitles_web::{download_subtitle, DownloadBody, DownloadResponse},
-    error::AppError,
-    StateRouter,
-};
-use axum::{routing::post, Json, Router};
+use crate::{StateRouter, error::AppError};
+use axum::{Json, Router, routing::post};
 use axum_extra::extract::WithRejection;
 
-use crate::core::subtitles_web::{search_subtitles, SubtitleWebSearchReq, SubtitleWebSearchRes};
+use ma_service::subtitles_web::{
+    DownloadBody, DownloadResponse, SubtitleWebSearchReq, SubtitleWebSearchRes, download_subtitle,
+    search_subtitles,
+};
 
 pub fn routes() -> StateRouter {
     Router::new()

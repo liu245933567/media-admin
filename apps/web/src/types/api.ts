@@ -136,7 +136,7 @@ export interface SubtitleTaskBulkCreateReq {
 	skip_if_exists: boolean;
 }
 
-export interface SubtitleTaskCreateRes {
+export interface SubtitleTaskItem {
 	task_id: number;
 	task_status: string;
 	video_path: string;
@@ -145,7 +145,7 @@ export interface SubtitleTaskCreateRes {
 }
 
 export interface SubtitleTaskBulkCreateRes {
-	created: SubtitleTaskCreateRes[];
+	created: SubtitleTaskItem[];
 	skipped: string[];
 	failed: SubtitleTaskBulkCreateFailedItem[];
 }

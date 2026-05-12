@@ -1,160 +1,42 @@
-use crate::entity::{
-    generated_subtitles::{Column as GenColumn, Entity as GenEntity},
-    subtitle_task::{self, Column, Entity},
-    subtitle_task_record::{self, Column as RecColumn, Entity as RecEntity},
-};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::Utc;
+
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, PaginatorTrait,
     QueryFilter, QueryOrder, Set, TransactionTrait,
 };
+
+use ma_db::entity::subtitle_task::Column as SubtitleTaskColumn;
+use ma_db::entity::subtitle_task::Entity as SubtitleTaskEntity;
+use ma_db::entity::subtitle_task::Model as SubtitleTaskModel;
+
+use ma_db::entity::subtitle_task_record::Column as SubtitleTaskRecordColumn;
+use ma_db::entity::subtitle_task_record::Entity as SubtitleTaskRecordEntity;
+use ma_db::entity::subtitle_task_record::ActiveModel as SubtitleTaskRecordActiveModel;
+
+use ma_db::entity::generated_subtitles::Column as GeneratedSubtitlesColumn;
+use ma_db::entity::generated_subtitles::Entity as GeneratedSubtitlesEntity;
+
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use typeshare::typeshare;
 
-use ma_subtitle::types::SubtitleGenerateConfig;
-
-#[typeshare]
-#[derive(Deserialize)]
-pub struct SubtitleTaskCreateReq {
-    pub config: SubtitleGenerateConfig,
-}
-
-fn default_true() -> bool {
-    true
-}
-
-#[typeshare]
-#[derive(Deserialize)]
-pub struct SubtitleTaskBulkCreateReq {
-    pub configs: Vec<SubtitleGenerateConfig>,
-    /// 若同 video_path 已存在 PENDING/RUNNING 任务则跳过（默认 true）
-    #[serde(default = "default_true")]
-    pub skip_if_exists: bool,
-}
-
-#[typeshare]
-#[derive(Clone, Serialize)]
-pub struct SubtitleTaskBulkCreateFailedItem {
-    pub video_path: String,
-    pub error: String,
-}
-
-#[typeshare]
-#[derive(Serialize)]
-pub struct SubtitleTaskBulkCreateRes {
-    pub created: Vec<SubtitleTaskCreateRes>,
-    pub skipped: Vec<String>,
-    pub failed: Vec<SubtitleTaskBulkCreateFailedItem>,
-}
-
-#[derive(Debug)]
-pub struct SubtitleTaskCreateDbReq {
-    pub video_path: String,
-    pub config_json: String,
-}
-
-#[typeshare]
-#[derive(Serialize)]
-pub struct SubtitleTaskCreateRes {
-    pub task_id: i32,
-    pub task_status: String,
-    pub video_path: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-fn default_list_page() -> i32 {
-    1
-}
-
-fn default_list_page_size() -> i32 {
-    20
-}
-
-#[typeshare]
-#[derive(Debug, Deserialize)]
-pub struct SubtitleTaskListReq {
-    #[serde(default = "default_list_page")]
-    pub page: i32,
-    #[serde(default = "default_list_page_size")]
-    pub page_size: i32,
-    pub task_status: Option<String>,
-    pub video_path_contains: Option<String>,
-}
-
-#[typeshare]
-#[derive(Clone, Serialize)]
-pub struct SubtitleTaskRow {
-    pub task_id: i32,
-    pub task_status: String,
-    pub video_path: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[typeshare]
-#[derive(Serialize)]
-pub struct SubtitleTaskListRes {
-    pub items: Vec<SubtitleTaskRow>,
-    pub total: i32,
-}
-
-#[typeshare]
-#[derive(Debug, Deserialize)]
-pub struct SubtitleTaskDeleteReq {
-    pub task_id: i32,
-}
-
-#[typeshare]
-#[derive(Serialize)]
-pub struct SubtitleTaskDeleteRes {
-    pub ok: bool,
-}
-
-#[typeshare]
-#[derive(Debug, Deserialize)]
-pub struct SubtitleTaskQueueResumeReq {}
-
-pub enum SubtitleTaskStatus {
-    // 待处理
-    PENDING,
-    // 处理中
-    RUNNING,
-    // 完成
-    COMPLETED,
-    // 失败
-    FAILED,
-}
-
-impl fmt::Display for SubtitleTaskStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::PENDING => "PENDING",
-            Self::RUNNING => "RUNNING",
-            Self::COMPLETED => "COMPLETED",
-            Self::FAILED => "FAILED",
-        })
-    }
-}
+pub mod types;
+use types::*;
 
 pub async fn create_subtitle_task(
     db: &DatabaseConnection,
-    req: SubtitleTaskCreateDbReq,
-) -> Result<SubtitleTaskCreateRes> {
-    let video_path = req.video_path.trim().to_string();
+    req: SubtitleTaskCreateReq,
+) -> Result<SubtitleTaskItem> {
+    let video_path = req.config.video_path.trim().to_string();
     if video_path.is_empty() {
         bail!("video_path 不能为空");
     }
-    let config_json = req.config_json.trim().to_string();
-    if config_json.is_empty() {
-        bail!("config_json 不能为空");
-    }
+    let config_json = serde_json::to_string(&req.config)
+        .map_err(|e| anyhow::anyhow!("序列化 config 失败: {}", e))?;
 
     let now = Utc::now().to_rfc3339();
 
-    let model = subtitle_task::ActiveModel {
+    let model = ma_db::entity::subtitle_task::ActiveModel {
         task_id: NotSet,
         task_status: Set(SubtitleTaskStatus::PENDING.to_string()),
         video_path: Set(video_path.clone()),
@@ -172,15 +54,21 @@ pub async fn bulk_create_subtitle_tasks(
     db: &DatabaseConnection,
     req: SubtitleTaskBulkCreateReq,
 ) -> Result<SubtitleTaskBulkCreateRes> {
-    if req.configs.is_empty() {
+    let SubtitleTaskBulkCreateReq {
+        configs,
+        skip_if_exists,
+    } = req;
+    if configs.is_empty() {
         bail!("configs 不能为空");
     }
 
-    let mut created: Vec<SubtitleTaskCreateRes> = Vec::new();
+    let skip_if_exists = skip_if_exists.unwrap_or(true);
+
+    let mut created: Vec<SubtitleTaskItem> = Vec::new();
     let mut skipped: Vec<String> = Vec::new();
     let mut failed: Vec<SubtitleTaskBulkCreateFailedItem> = Vec::new();
 
-    for cfg in req.configs.into_iter() {
+    for cfg in configs.into_iter() {
         let video_path = cfg.video_path.trim().to_string();
         if video_path.is_empty() {
             failed.push(SubtitleTaskBulkCreateFailedItem {
@@ -190,10 +78,10 @@ pub async fn bulk_create_subtitle_tasks(
             continue;
         }
 
-        if req.skip_if_exists {
-            let existing = Entity::find()
-                .filter(Column::VideoPath.eq(video_path.clone()))
-                .filter(Column::TaskStatus.is_in([
+        if skip_if_exists {
+            let existing = SubtitleTaskEntity::find()
+                .filter(SubtitleTaskColumn::VideoPath.eq(video_path.clone()))
+                .filter(SubtitleTaskColumn::TaskStatus.is_in([
                     SubtitleTaskStatus::PENDING.to_string(),
                     SubtitleTaskStatus::RUNNING.to_string(),
                 ]))
@@ -205,26 +93,7 @@ pub async fn bulk_create_subtitle_tasks(
             }
         }
 
-        let config_json = match serde_json::to_string(&cfg) {
-            Ok(v) => v,
-            Err(e) => {
-                failed.push(SubtitleTaskBulkCreateFailedItem {
-                    video_path,
-                    error: e.to_string(),
-                });
-                continue;
-            }
-        };
-
-        match create_subtitle_task(
-            db,
-            SubtitleTaskCreateDbReq {
-                video_path: video_path.clone(),
-                config_json,
-            },
-        )
-        .await
-        {
+        match create_subtitle_task(db, SubtitleTaskCreateReq { config: cfg }).await {
             Ok(row) => created.push(row),
             Err(e) => failed.push(SubtitleTaskBulkCreateFailedItem {
                 video_path,
@@ -240,8 +109,8 @@ pub async fn bulk_create_subtitle_tasks(
     })
 }
 
-fn row_from_model(m: subtitle_task::Model) -> SubtitleTaskCreateRes {
-    SubtitleTaskCreateRes {
+fn row_from_model(m: SubtitleTaskModel) -> SubtitleTaskItem {
+    SubtitleTaskItem {
         task_id: m.task_id,
         task_status: m.task_status,
         video_path: m.video_path,
@@ -252,19 +121,19 @@ fn row_from_model(m: subtitle_task::Model) -> SubtitleTaskCreateRes {
 
 pub async fn list_subtitle_tasks(
     db: &DatabaseConnection,
-    req: SubtitleTaskListReq,
+    req: &SubtitleTaskListReq,
 ) -> Result<SubtitleTaskListRes> {
-    let page = req.page.max(1) as u64;
-    let page_size = (req.page_size.clamp(1, 100)) as u64;
+    let page = req.current.max(1);
+    let page_size = req.page_size.clamp(1, 100);
 
-    let mut q = Entity::find();
+    let mut q = SubtitleTaskEntity::find();
     if let Some(s) = req
         .task_status
         .as_ref()
         .map(|x| x.trim())
         .filter(|x| !x.is_empty())
     {
-        q = q.filter(Column::TaskStatus.eq(s.to_string()));
+        q = q.filter(SubtitleTaskColumn::TaskStatus.eq(s.to_string()));
     }
     if let Some(p) = req
         .video_path_contains
@@ -272,10 +141,12 @@ pub async fn list_subtitle_tasks(
         .map(|x| x.trim())
         .filter(|x| !x.is_empty())
     {
-        q = q.filter(Column::VideoPath.contains(p));
+        q = q.filter(SubtitleTaskColumn::VideoPath.contains(p));
     }
 
-    let paginator = q.order_by_desc(Column::TaskId).paginate(db, page_size);
+    let paginator = q
+        .order_by_desc(SubtitleTaskColumn::TaskId)
+        .paginate(db, page_size);
 
     let total = paginator.num_items().await? as i32;
     let models = paginator.fetch_page(page - 1).await?;
@@ -298,7 +169,7 @@ pub async fn delete_subtitle_task(
     db: &DatabaseConnection,
     task_id: i32,
 ) -> Result<SubtitleTaskDeleteRes> {
-    let task = Entity::find_by_id(task_id).one(db).await?;
+    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
     let Some(task) = task else {
         bail!("任务不存在");
     };
@@ -308,17 +179,17 @@ pub async fn delete_subtitle_task(
 
     let txn = db.begin().await?;
 
-    RecEntity::delete_many()
-        .filter(RecColumn::TaskId.eq(task_id))
+    SubtitleTaskRecordEntity::delete_many()
+        .filter(SubtitleTaskRecordColumn::TaskId.eq(task_id))
         .exec(&txn)
         .await?;
 
-    GenEntity::delete_many()
-        .filter(GenColumn::TaskId.eq(task_id))
+    GeneratedSubtitlesEntity::delete_many()
+        .filter(GeneratedSubtitlesColumn::TaskId.eq(task_id))
         .exec(&txn)
         .await?;
 
-    let del = Entity::delete_by_id(task_id).exec(&txn).await?;
+    let del = SubtitleTaskEntity::delete_by_id(task_id).exec(&txn).await?;
     if del.rows_affected == 0 {
         txn.rollback().await?;
         bail!("任务不存在");
@@ -328,11 +199,8 @@ pub async fn delete_subtitle_task(
     Ok(SubtitleTaskDeleteRes { ok: true })
 }
 
-pub async fn get_subtitle_task(
-    db: &DatabaseConnection,
-    task_id: i32,
-) -> Result<subtitle_task::Model> {
-    let task = Entity::find_by_id(task_id).one(db).await?;
+pub async fn get_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Result<SubtitleTaskModel> {
+    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
     task.ok_or_else(|| anyhow::anyhow!("任务不存在"))
 }
 
@@ -342,13 +210,16 @@ pub async fn set_subtitle_task_status(
     status: &str,
 ) -> Result<()> {
     let now = Utc::now().to_rfc3339();
-    let res = subtitle_task::Entity::update_many()
+    let res = SubtitleTaskEntity::update_many()
         .col_expr(
-            Column::TaskStatus,
+            SubtitleTaskColumn::TaskStatus,
             sea_orm::sea_query::Expr::value(status.to_string()),
         )
-        .col_expr(Column::UpdatedAt, sea_orm::sea_query::Expr::value(now))
-        .filter(Column::TaskId.eq(task_id))
+        .col_expr(
+            SubtitleTaskColumn::UpdatedAt,
+            sea_orm::sea_query::Expr::value(now),
+        )
+        .filter(SubtitleTaskColumn::TaskId.eq(task_id))
         .exec(db)
         .await?;
     if res.rows_affected == 0 {
@@ -365,7 +236,7 @@ pub async fn append_task_record(
     record_detail: &str,
 ) -> Result<()> {
     let now = Utc::now().to_rfc3339();
-    let model = subtitle_task_record::ActiveModel {
+    let model = SubtitleTaskRecordActiveModel {
         record_id: NotSet,
         task_id: Set(task_id),
         record_status: Set(record_status.to_string()),

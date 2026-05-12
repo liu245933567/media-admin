@@ -28,7 +28,7 @@ fn wait_for_dev_server(web_url: &str) -> Result<(), String> {
     let started = Instant::now();
     loop {
         if std::net::TcpStream::connect(&addr).is_ok() {
-            log::info!("dev server reachable at {addr}");
+            tracing::info!("dev server reachable at {addr}");
             return Ok(());
         }
         if started.elapsed() > timeout {
@@ -60,18 +60,15 @@ pub fn run() {
     }
     dotenvy::dotenv().ok();
 
+    // 默认已包含 Stdout + Webview；需 `with_default_subscriber` 才会安装全局 subscriber（含文件）
+    let tracing_plugin = tauri_plugin_tracing::Builder::new()
+        .with_file_logging()
+        .with_default_subscriber()
+        .build();
+
     tauri::Builder::default()
+        .plugin(tracing_plugin)
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-
-            ma_api::log::init_tracing();
-
             let listen = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
 
             let addr = tauri::async_runtime::block_on(ma_api::spawn_server(&listen))

@@ -1,4 +1,4 @@
-use sea_orm_migration::prelude::*;
+use sea_orm_migration::prelude::{MigrationTrait, MigratorTrait, async_trait};
 
 mod m20260509_000001_init;
 

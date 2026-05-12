@@ -1,9 +1,8 @@
-use crate::{core::stash::forward_graphql, error::AppError};
-use axum::{routing::post, Json, Router};
+use crate::{StateRouter, error::AppError};
+use axum::{Json, Router, routing::post};
 use axum_extra::extract::WithRejection;
+use ma_service::stash::forward_graphql;
 use serde_json::Value;
-
-use crate::StateRouter;
 
 pub fn routes() -> StateRouter {
     Router::new().route("/graphql", post(graphql_proxy_handler))
