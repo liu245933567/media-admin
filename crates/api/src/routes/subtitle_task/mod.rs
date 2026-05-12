@@ -2,19 +2,20 @@ use crate::{AppState, StateRouter, error::AppError};
 use ma_service::subtitle_task::{
     SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes, SubtitleTaskQueueResumeRes,
     SubtitleTaskQueueStatusReq, SubtitleTaskQueueStatusRes, bulk_create_subtitle_tasks,
-    create_subtitle_task, delete_subtitle_task, list_subtitle_tasks, pause_subtitle_task_queue,
-    resume_subtitle_task_queue,
+    create_subtitle_task, default_subtitle_generate_config, delete_subtitle_task, list_subtitle_tasks,
+    pause_subtitle_task_queue, resume_subtitle_task_queue,
 };
 
-use axum::{Json, Router, extract::State, routing::post};
+use axum::{Json, Router, extract::State, routing::{get, post}};
 use axum_extra::extract::WithRejection;
 use ma_service::subtitle_task::types::{
     SubtitleTaskBulkCreateReq, SubtitleTaskBulkCreateRes, SubtitleTaskCreateReq,
-    SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskItem, SubtitleTaskListReq,
-    SubtitleTaskListRes, SubtitleTaskQueueResumeReq,
+    SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskGenerateDefaultsRes, SubtitleTaskItem,
+    SubtitleTaskListReq, SubtitleTaskListRes, SubtitleTaskQueueResumeReq,
 };
 pub fn routes() -> StateRouter {
     Router::new()
+        .route("/generate-defaults", get(generate_defaults_handler))
         .route("/tasks/list", post(list_handler))
         .route("/tasks", post(create_handler))
         .route("/tasks/bulk", post(bulk_create_handler))
@@ -22,6 +23,10 @@ pub fn routes() -> StateRouter {
         .route("/queue/pause", post(queue_pause_handler))
         .route("/queue/resume", post(queue_resume_handler))
         .route("/queue/status", post(queue_status_handler))
+}
+
+async fn generate_defaults_handler() -> Json<SubtitleTaskGenerateDefaultsRes> {
+    Json(default_subtitle_generate_config())
 }
 
 async fn create_handler(

@@ -1,4 +1,4 @@
-import { DatabaseOutlined, FileOutlined, FileSearchOutlined, HomeOutlined, PlaySquareOutlined, SettingOutlined, VideoCameraOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, FileSearchOutlined, HomeOutlined, SettingOutlined, VideoCameraOutlined } from '@ant-design/icons'
 
 export const menu = [
   {
@@ -21,16 +21,16 @@ export const menu = [
     path: '/video-folder-scan',
     icon: <VideoCameraOutlined />,
   },
-  {
-    name: '文件系统',
-    path: '/file-system',
-    icon: <FileOutlined />,
-  },
-  {
-    name: 'Stash 库',
-    path: '/stash-scenes',
-    icon: <PlaySquareOutlined />,
-  },
+  // {
+  //   name: '文件系统',
+  //   path: '/file-system',
+  //   icon: <FileOutlined />,
+  // },
+  // {
+  //   name: 'Stash 库',
+  //   path: '/stash-scenes',
+  //   icon: <PlaySquareOutlined />,
+  // },
   {
     name: '设置',
     path: '/setting',

@@ -43,6 +43,12 @@ pub struct SubtitleTaskItem {
 }
 
 #[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskGenerateDefaultsRes {
+    pub config: SubtitleGenerateConfig,
+}
+
+#[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct SubtitleTaskListReq {
     pub current: u32,

@@ -13,6 +13,7 @@ import type {
   SubtitleTaskCreateReq,
   SubtitleTaskDeleteReq,
   SubtitleTaskDeleteRes,
+  SubtitleTaskGenerateDefaultsRes,
   SubtitleTaskItem,
   SubtitleTaskListReq,
   SubtitleTaskListRes,
@@ -57,6 +58,14 @@ export function searchSubtitles(params: SubtitleWebSearchReq) {
 /** 下载字幕到后端磁盘（写入视频同目录） */
 export function downloadSubtitleToDisk(params: DownloadBody) {
   return post<DownloadResponse, DownloadBody>('/subtitle-web/download', params)
+}
+
+/** React Query 与「字幕任务默认配置」接口共用的 queryKey */
+export const subtitleTaskGenerateDefaultsQueryKey = ['subtitle-task', 'generate-defaults'] as const
+
+/** 获取新建字幕任务的默认配置（与后端 `SubtitleGenerateConfig::default()` 一致） */
+export function fetchSubtitleTaskGenerateDefaults() {
+  return get<SubtitleTaskGenerateDefaultsRes>('/subtitle-task/generate-defaults')
 }
 
 /** 向 subtitle_task 表插入一条记录 */

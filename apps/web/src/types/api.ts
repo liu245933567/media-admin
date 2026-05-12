@@ -135,13 +135,17 @@ export interface WhisperTranscribeOptions {
 
 /** 翻译选项 */
 export interface SubtitleTranslateConfig {
+	/** 调用模型的基础 URL */
+	base_url: string;
+	/** 调用模型的 API 密钥 */
+	api_key: string;
 	/** 模型名，默认 `tencent/Hunyuan-MT-7B` */
 	model: string;
 	/** 目标语言，例如 "Chinese"、"English"、"Japanese" */
 	target_language: string;
-	/** 并发数（同时在飞的请求数） */
+	/** 并发数（同时在飞的请求数） 默认 4 */
 	concurrency: number;
-	/** 单批字幕条数。`>1` 时启用批量上下文翻译，`=1` 走逐条翻译。 */
+	/** 单批字幕条数。`>1` 时启用批量上下文翻译，`=1` 走逐条翻译。 默认 8 */
 	batch_size: number;
 	/** 是否在翻译完成后删除原文 SRT。默认 `false`，两份文件并存便于核对。 */
 	remove_source_srt: boolean;
@@ -191,6 +195,10 @@ export interface SubtitleTaskDeleteReq {
 
 export interface SubtitleTaskDeleteRes {
 	ok: boolean;
+}
+
+export interface SubtitleTaskGenerateDefaultsRes {
+	config: SubtitleGenerateConfig;
 }
 
 export interface SubtitleTaskListReq {

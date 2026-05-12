@@ -21,7 +21,15 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 pub mod types;
+use ma_subtitle::types::SubtitleGenerateConfig;
 use types::*;
+
+/// 新建任务表单的默认配置（与 `SubtitleGenerateConfig::default()` 一致）
+pub fn default_subtitle_generate_config() -> SubtitleTaskGenerateDefaultsRes {
+    SubtitleTaskGenerateDefaultsRes {
+        config: SubtitleGenerateConfig::default(),
+    }
+}
 
 pub async fn create_subtitle_task(
     db: &DatabaseConnection,

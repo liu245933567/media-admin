@@ -63,7 +63,7 @@ pub fn get_temp_wav_dir() -> PathBuf {
 pub fn get_translate_openai_base() -> Result<String> {
     match std::env::var("TRANSLATE_OPENAI_BASE") {
         Ok(base) => Ok(base.trim().to_string()),
-        Err(_) => bail!("未设置 TRANSLATE_OPENAI_API_BASE 环境变量"),
+        Err(_) => bail!("未设置 TRANSLATE_OPENAI_BASE 环境变量"),
     }
 }
 

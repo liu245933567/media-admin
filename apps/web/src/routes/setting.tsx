@@ -41,7 +41,7 @@ function closeEventSource(r: RefObject <EventSource | null>) {
 function subscribeDownloadJob(
   jobId: string,
   ref: RefObject <EventSource | null>,
-  onProgress: (p: DownloadProgressSnapshot) => void,
+  onProgress: (p: DownloadProgressSnapshot | null) => void,
   onTerminal: (p: DownloadProgressSnapshot) => void,
   onTransportError: () => void,
 ) {
@@ -60,6 +60,7 @@ function subscribeDownloadJob(
         setTimeout(() => {
           if (ref.current === es) {
             es.close()
+            onProgress(null)
             ref.current = null
           }
         }, 500)
@@ -252,6 +253,33 @@ function RouteComponent() {
           showIcon
           title="下载目录与安装路径由服务端配置（环境变量 DOWNLOAD_DIR、MODELS_DIR、FFMPEG_DIR 或默认 ~/.media-admin 下子目录）。"
         />
+
+        <Card title="字幕翻译 API" variant="borderless" className="shadow-sm">
+          <Typography.Paragraph className="mb-2 text-neutral-600">
+            翻译走 OpenAI 兼容接口（如硅基流动）。服务端可配置全局凭据；在「新增字幕任务」里也可按任务填写
+            <code className="mx-1 rounded bg-neutral-100 px-1">base_url</code>
+            /
+            <code className="mx-1 rounded bg-neutral-100 px-1">api_key</code>
+            ，表单非空时优先于环境变量。
+          </Typography.Paragraph>
+          <ul className="list-inside list-disc space-y-1 text-sm text-neutral-600">
+            <li>
+              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_BASE</code>
+              {' '}
+              — API 根地址；未在任务中填写 base_url 时使用。
+            </li>
+            <li>
+              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_API_KEY</code>
+              {' '}
+              — 密钥；未在任务中填写 api_key 时使用。
+            </li>
+            <li>
+              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_DEFAULT_MODEL</code>
+              {' '}
+              — 可选；部分部署用于默认模型名（任务表单里仍可单独指定模型）。
+            </li>
+          </ul>
+        </Card>
 
         <Card title="Whisper 模型" variant="borderless" className="shadow-sm">
           <Space direction="vertical" size="middle" className="w-full">

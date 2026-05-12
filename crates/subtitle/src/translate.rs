@@ -20,9 +20,6 @@ use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
 use crate::file::{build_srt, parse_srt};
 use crate::types::SubtitleTranslateConfig;
 
-/// 翻译并发数上限（硅基流动有 RPM 限制，过大易触发 429）
-const DEFAULT_CONCURRENCY: usize = 4;
-
 /// 单条翻译请求的最长等待时间（含网络 + 服务端推理）
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -33,9 +30,6 @@ const MAX_RETRIES: u32 = 3;
 const RETRY_INITIAL_DELAY: Duration = Duration::from_millis(800);
 const RETRY_MAX_DELAY: Duration = Duration::from_secs(8);
 
-/// 默认批量翻译的单批字幕条数
-const DEFAULT_BATCH_SIZE: usize = 8;
-
 /// 单次批量请求的 max_tokens 上限
 const BATCH_MAX_TOKENS_CAP: u32 = 4096;
 
@@ -43,10 +37,31 @@ const BATCH_MAX_TOKENS_CAP: u32 = 4096;
 const BATCH_DELIM_PREFIX: &str = "<<<";
 const BATCH_DELIM_SUFFIX: &str = ">>>";
 
-/// 创建一个连接到硅基流动的 OpenAI 兼容客户端。
-pub fn build_siliconflow_client() -> Result<Client<OpenAIConfig>> {
-    let base = get_translate_openai_base()?;
-    let key = get_translate_openai_api_key()?;
+/// 解析本次翻译使用的 API 基址与密钥：`options` 中非空字段优先，否则读环境变量
+/// `TRANSLATE_OPENAI_BASE` / `TRANSLATE_OPENAI_API_KEY`。
+fn resolve_translate_credentials(options: &SubtitleTranslateConfig) -> Result<(String, String)> {
+    let base = {
+        let t = options.base_url.trim();
+        if t.is_empty() {
+            get_translate_openai_base()?
+        } else {
+            t.to_string()
+        }
+    };
+    let key = {
+        let t = options.api_key.trim();
+        if t.is_empty() {
+            get_translate_openai_api_key()?
+        } else {
+            t.to_string()
+        }
+    };
+    Ok((base, key))
+}
+
+/// 创建 OpenAI 兼容客户端（硅基流动等），凭据来自任务配置或环境变量。
+pub fn build_translate_openai_client(options: &SubtitleTranslateConfig) -> Result<Client<OpenAIConfig>> {
+    let (base, key) = resolve_translate_credentials(options)?;
 
     let config = OpenAIConfig::new().with_api_base(base).with_api_key(key);
 
@@ -383,7 +398,7 @@ pub async fn translate_srt_file(
         anyhow::bail!("SRT 文件无有效条目: {}", src_srt.display());
     }
 
-    let client = Arc::new(build_siliconflow_client()?);
+    let client = Arc::new(build_translate_openai_client(options)?);
     let total = entries.len();
     let model = options.model.clone();
     let lang = options.target_language.clone();
