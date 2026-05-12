@@ -24,6 +24,16 @@ export interface FsReadTextRes {
 	content: string;
 }
 
+export interface PageParams {
+	current: number;
+	page_size: number;
+}
+
+export interface PageResult<T> {
+	data: T[];
+	total: number;
+}
+
 /** VAD 配置 */
 export interface VadConfig {
 	/** 帧长 10/20/30（默认 30） */
@@ -133,9 +143,10 @@ export interface SubtitleTaskBulkCreateFailedItem {
 export interface SubtitleTaskBulkCreateReq {
 	configs: SubtitleGenerateConfig[];
 	/** 若同 video_path 已存在 PENDING/RUNNING 任务则跳过（默认 true） */
-	skip_if_exists: boolean;
+	skip_if_exists?: boolean;
 }
 
+/** 字幕任务列表 - 返回给前端 */
 export interface SubtitleTaskItem {
 	task_id: number;
 	task_status: string;
@@ -163,7 +174,7 @@ export interface SubtitleTaskDeleteRes {
 }
 
 export interface SubtitleTaskListReq {
-	page: number;
+	current: number;
 	page_size: number;
 	task_status?: string;
 	video_path_contains?: string;

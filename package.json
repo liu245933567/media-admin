@@ -12,6 +12,6 @@
     "build:desktop": "pnpm --filter @media-admin/desktop build",
     "lint": "pnpm --filter web lint",
     "preview": "pnpm --filter web preview",
-    "typeshare": "pnpm --filter web typeshare"
+    "typeshare": "typeshare crates --lang=typescript --output-file=apps/web/src/types/api.ts"
   }
 }

@@ -45,8 +45,8 @@ pub struct SubtitleTaskItem {
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct SubtitleTaskListReq {
-    pub current: u64,
-    pub page_size: u64,
+    pub current: u32,
+    pub page_size: u32,
     pub task_status: Option<String>,
     pub video_path_contains: Option<String>,
 }

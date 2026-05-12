@@ -123,8 +123,8 @@ pub async fn list_subtitle_tasks(
     db: &DatabaseConnection,
     req: &SubtitleTaskListReq,
 ) -> Result<SubtitleTaskListRes> {
-    let page = req.current.max(1);
-    let page_size = req.page_size.clamp(1, 100);
+    let page = u64::from(req.current.max(1));
+    let page_size = u64::from(req.page_size.clamp(1, 100));
 
     let mut q = SubtitleTaskEntity::find();
     if let Some(s) = req

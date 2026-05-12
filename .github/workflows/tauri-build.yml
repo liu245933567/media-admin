@@ -1,0 +1,62 @@
+# 推送到 GitHub 后在云端打包桌面端，并把安装包挂到 Actions 产物里供下载。
+# 说明：
+# - 产物在：仓库 Actions 标签页 → 对应运行记录 → Artifacts（默认保留约 90 天）。
+# - 若需要长期公开下载：推送 tag（如 v0.1.0）并用 softprops/action-gh-release 或 tauri-apps/tauri-action 发布到 GitHub Releases。
+
+name: Tauri 桌面端打包
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Linux 系统依赖（Tauri / WebKit）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: 安装依赖 pnpm workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Tauri build beforeBuildCommand 用 pnpm 构建 web
+        run: pnpm --filter @media-admin/desktop build
+
+      - name: 上传安装包目录
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-admin-${{ matrix.os }}
+          path: apps/desktop/target/release/bundle/
+          if-no-files-found: warn

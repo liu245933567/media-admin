@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm run dev --prefix ../web",
-    "beforeBuildCommand": "npm run build --prefix ../web"
+    "beforeDevCommand": "pnpm --dir ../web run dev",
+    "beforeBuildCommand": "pnpm --dir ../web run build"
   },
   "app": {
     "windows": [],

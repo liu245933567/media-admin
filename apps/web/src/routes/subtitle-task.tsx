@@ -181,11 +181,9 @@ function PageComponent() {
           },
         ]}
         request={async (params) => {
-          const page = Number(params.current ?? 1)
-          const pageSize = Number(params.pageSize ?? 20)
           const res = await fetchSubtitleTaskList({
-            page,
-            page_size: pageSize,
+            current: params.current ?? 1,
+            page_size: params.pageSize ?? 20,
             task_status: params.task_status,
             video_path_contains: params.video_path_contains,
           })
