@@ -63,6 +63,8 @@ fn resolve_translate_credentials(options: &SubtitleTranslateConfig) -> Result<(S
 pub fn build_translate_openai_client(options: &SubtitleTranslateConfig) -> Result<Client<OpenAIConfig>> {
     let (base, key) = resolve_translate_credentials(options)?;
 
+    tracing::info!("构建翻译 OpenAI 客户端: base={base}, key={key}");
+
     let config = OpenAIConfig::new().with_api_base(base).with_api_key(key);
 
     let http = reqwest::Client::builder()
@@ -211,6 +213,50 @@ fn parse_delimiter_line(line: &str) -> Option<usize> {
     inner.parse::<usize>().ok()
 }
 
+/// 若命中则说明应立刻结束整条翻译任务（不再逐条重试、不写「部分未翻译」结果）。
+const TRANSLATE_TASK_FATAL_MARKER: &str = "[translate-task-abort]";
+
+fn openai_error_should_abort_whole_task(err: &OpenAIError) -> bool {
+    match err {
+        OpenAIError::JSONDeserialize(_, body) => {
+            let b = body.to_ascii_lowercase();
+            b.contains("api key is invalid")
+                || b.contains("invalid api key")
+                || b.contains("incorrect api key")
+                || b.contains("unauthorized")
+                || b.contains("authentication")
+                || b.contains("invalid token")
+                || b.contains("access denied")
+        }
+        OpenAIError::ApiError(api) => {
+            let m = api.message.to_ascii_lowercase();
+            let code = api.code.as_deref().unwrap_or("").to_ascii_lowercase();
+            m.contains("api key")
+                && (m.contains("invalid") || m.contains("incorrect"))
+                || m.contains("unauthorized")
+                || m.contains("invalid_api_key")
+                || m.contains("incorrect api key")
+                || code == "invalid_api_key"
+                || code == "unauthorized"
+        }
+        _ => false,
+    }
+}
+
+fn map_openai_translate_err(e: OpenAIError) -> anyhow::Error {
+    if openai_error_should_abort_whole_task(&e) {
+        anyhow!(
+            "{TRANSLATE_TASK_FATAL_MARKER} 翻译 API 鉴权失败或密钥无效，已中止任务: {e:#}"
+        )
+    } else {
+        anyhow::Error::from(e)
+    }
+}
+
+fn anyhow_should_abort_translate_task(e: &anyhow::Error) -> bool {
+    format!("{e:#}").contains(TRANSLATE_TASK_FATAL_MARKER)
+}
+
 /// 判断 OpenAIError 是否值得重试。
 ///
 /// - 网络层错误（连接被打断、读超时等）→ 重试
@@ -275,7 +321,7 @@ async fn translate_one(
                     delay = (delay * 2).min(RETRY_MAX_DELAY);
                     continue;
                 }
-                return Err(anyhow::Error::from(e));
+                return Err(map_openai_translate_err(e));
             }
         }
     }
@@ -348,7 +394,7 @@ async fn translate_batch(
                     delay = (delay * 2).min(RETRY_MAX_DELAY);
                     continue;
                 }
-                return Err(anyhow::Error::from(e));
+                return Err(map_openai_translate_err(e));
             }
         }
     }
@@ -424,9 +470,9 @@ pub async fn translate_srt_file(
     );
 
     let translated: Vec<(usize, Result<String>)> = if batch_size > 1 {
-        run_batched(&client, &model, &lang, work_items, batch_size, concurrency).await
+        run_batched(&client, &model, &lang, work_items, batch_size, concurrency).await?
     } else {
-        run_one_by_one(&client, &model, &lang, work_items, concurrency).await
+        run_one_by_one(&client, &model, &lang, work_items, concurrency).await?
     };
 
     let mut ok = 0usize;
@@ -445,6 +491,9 @@ pub async fn translate_srt_file(
                 }
             }
             Err(e) => {
+                if anyhow_should_abort_translate_task(&e) {
+                    return Err(e).context(format!("字幕翻译在第 {} 条处中止", i + 1));
+                }
                 fail += 1;
                 tracing::warn!("第 {} 条翻译失败，保留原文: {:#}", i + 1, e);
                 entries[i].text = format!("[未翻译] {}", entries[i].text.trim());
@@ -476,53 +525,77 @@ async fn run_batched(
     items: Vec<(usize, String)>,
     batch_size: usize,
     concurrency: usize,
-) -> Vec<(usize, Result<String>)> {
+) -> Result<Vec<(usize, Result<String>)>> {
     let total = items.len();
     let done = Arc::new(AtomicUsize::new(0));
 
     let batches: Vec<Vec<(usize, String)>> = items.chunks(batch_size).map(|c| c.to_vec()).collect();
     let total_batches = batches.len();
 
-    stream::iter(batches.into_iter().enumerate().map(|(bi, batch)| {
-        let client = client.clone();
-        let model = model.to_string();
-        let lang = target_language.to_string();
-        let done = done.clone();
-        async move {
-            let segments: Vec<&str> = batch.iter().map(|(_, t)| t.as_str()).collect();
-            match translate_batch(&client, &model, &lang, &segments).await {
-                Ok(translations) => {
-                    let mut results = Vec::with_capacity(batch.len());
-                    for ((i, src), t) in batch.into_iter().zip(translations) {
-                        let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                        log_translate_pair(n, total, i, &src, Ok(&t));
-                        results.push((i, Ok(t)));
+    let per_batch: Vec<Result<Vec<(usize, Result<String>)>>> = stream::iter(
+        batches.into_iter().enumerate().map(|(bi, batch)| {
+            let client = client.clone();
+            let model = model.to_string();
+            let lang = target_language.to_string();
+            let done = done.clone();
+            async move {
+                let segments: Vec<&str> = batch.iter().map(|(_, t)| t.as_str()).collect();
+                match translate_batch(&client, &model, &lang, &segments).await {
+                    Ok(translations) => {
+                        let mut results = Vec::with_capacity(batch.len());
+                        for ((i, src), t) in batch.into_iter().zip(translations) {
+                            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                            log_translate_pair(n, total, i, &src, Ok(&t));
+                            results.push((i, Ok(t)));
+                        }
+                        Ok(results)
                     }
-                    results
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "第 {}/{} 批翻译失败，回退到逐条翻译: {:#}",
-                        bi + 1,
-                        total_batches,
-                        e
-                    );
-                    let mut results = Vec::with_capacity(batch.len());
-                    for (i, text) in batch.into_iter() {
-                        let res = translate_one(&client, &model, &lang, &text).await;
-                        let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                        log_translate_pair(n, total, i, &text, res.as_deref());
-                        results.push((i, res));
+                    Err(e) => {
+                        if anyhow_should_abort_translate_task(&e) {
+                            tracing::error!(
+                                "第 {}/{} 批翻译因鉴权等原因中止，不再逐条重试: {:#}",
+                                bi + 1,
+                                total_batches,
+                                e
+                            );
+                            return Err(e);
+                        }
+                        tracing::warn!(
+                            "第 {}/{} 批翻译失败，回退到逐条翻译: {:#}",
+                            bi + 1,
+                            total_batches,
+                            e
+                        );
+                        let mut results = Vec::with_capacity(batch.len());
+                        for (i, text) in batch.into_iter() {
+                            let res = translate_one(&client, &model, &lang, &text).await;
+                            if let Err(ref re) = res {
+                                if anyhow_should_abort_translate_task(re) {
+                                    return Err(anyhow::anyhow!("{:#}", re));
+                                }
+                            }
+                            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                            log_translate_pair(n, total, i, &text, res.as_deref());
+                            results.push((i, res));
+                        }
+                        Ok(results)
                     }
-                    results
                 }
             }
-        }
-    }))
+        }),
+    )
     .buffer_unordered(concurrency)
-    .flat_map(stream::iter)
     .collect()
-    .await
+    .await;
+
+    let mut out = Vec::new();
+    for br in per_batch {
+        match br {
+            Ok(v) => out.extend(v),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(out)
 }
 
 /// 逐条并发翻译。每条完成后立即打印 `[N/total]` 进度。
@@ -532,11 +605,11 @@ async fn run_one_by_one(
     target_language: &str,
     items: Vec<(usize, String)>,
     concurrency: usize,
-) -> Vec<(usize, Result<String>)> {
+) -> Result<Vec<(usize, Result<String>)>> {
     let total = items.len();
     let done = Arc::new(AtomicUsize::new(0));
 
-    stream::iter(items.into_iter().map(|(i, text)| {
+    let rows: Vec<(usize, Result<String>)> = stream::iter(items.into_iter().map(|(i, text)| {
         let client = client.clone();
         let model = model.to_string();
         let lang = target_language.to_string();
@@ -550,7 +623,17 @@ async fn run_one_by_one(
     }))
     .buffer_unordered(concurrency)
     .collect()
-    .await
+    .await;
+
+    for (_, res) in &rows {
+        if let Err(e) = res {
+            if anyhow_should_abort_translate_task(e) {
+                return Err(anyhow::anyhow!("{:#}", e));
+            }
+        }
+    }
+
+    Ok(rows)
 }
 
 /// 打印一条字幕的翻译结果。`idx` 为 0-based 在原 SRT 中的下标，日志按 1-based 显示。

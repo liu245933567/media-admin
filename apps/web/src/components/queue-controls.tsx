@@ -1,24 +1,32 @@
 import { PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { App, Button } from 'antd'
-import { fetchSubtitleTaskQueueStatus, pauseSubtitleTaskQueue, resumeSubtitleTaskQueue } from '@/request'
+
+export interface QueueControlsProps {
+  onChanged?: () => void
+  /** React Query 缓存键，例如 ['subtitle-task-queue-status'] */
+  statusQueryKey: readonly string[]
+  fetchQueueStatus: () => Promise<{ status: string }>
+  pauseQueue: () => Promise<unknown>
+  resumeQueue: () => Promise<unknown>
+}
 
 type QueueStatus = 'RUNNING' | 'PAUSING' | 'PAUSED' | 'UNKNOWN'
 
-export function QueueControls(props: { onChanged?: () => void }) {
+export function QueueControls(props: QueueControlsProps) {
   const { message } = App.useApp()
 
   const queueStatusQuery = useQuery({
-    queryKey: ['subtitle-task-queue-status'],
+    queryKey: props.statusQueryKey,
     queryFn: async () => {
-      const res = await fetchSubtitleTaskQueueStatus()
+      const res = await props.fetchQueueStatus()
       return (res.status ?? 'UNKNOWN') as QueueStatus
     },
     refetchInterval: 2000,
   })
 
   const pauseMutation = useMutation({
-    mutationFn: () => pauseSubtitleTaskQueue(),
+    mutationFn: () => props.pauseQueue(),
     onSuccess: () => {
       message.success('已请求暂停任务队列：将等待当前任务执行完成后暂停')
       queueStatusQuery.refetch()
@@ -30,7 +38,7 @@ export function QueueControls(props: { onChanged?: () => void }) {
   })
 
   const resumeMutation = useMutation({
-    mutationFn: () => resumeSubtitleTaskQueue(),
+    mutationFn: () => props.resumeQueue(),
     onSuccess: () => {
       message.success('任务队列已开始')
       queueStatusQuery.refetch()

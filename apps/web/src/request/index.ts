@@ -4,6 +4,8 @@ import type {
   DownloadResponse,
   FfmpegDownloadStartReq,
   FfmpegSetupStatusRes,
+  FsDeleteReq,
+  FsDeleteRes,
   FsListItem,
   FsListReq,
   FsReadTextReq,
@@ -23,6 +25,22 @@ import type {
   SubtitleTaskQueueResumeRes,
   SubtitleTaskQueueStatusReq,
   SubtitleTaskQueueStatusRes,
+  SubtitleTaskRetryReq,
+  SubtitleTaskRetryRes,
+  SubtitleTranslateTaskCreateReq,
+  SubtitleTranslateTaskDeleteReq,
+  SubtitleTranslateTaskDeleteRes,
+  SubtitleTranslateTaskItem,
+  SubtitleTranslateTaskListReq,
+  SubtitleTranslateTaskListRes,
+  SubtitleTranslateTaskQueuePauseReq,
+  SubtitleTranslateTaskQueuePauseRes,
+  SubtitleTranslateTaskQueueResumeReq,
+  SubtitleTranslateTaskQueueResumeRes,
+  SubtitleTranslateTaskQueueStatusReq,
+  SubtitleTranslateTaskQueueStatusRes,
+  SubtitleTranslateTaskRetryReq,
+  SubtitleTranslateTaskRetryRes,
   SubtitleWebSearchReq,
   SubtitleWebSearchRes,
   VideoFolderScanReq,
@@ -40,6 +58,11 @@ export function fetchFsList(params: FsListReq) {
 /** 读取文本文件（用于预览字幕内容） */
 export function fetchFsReadText(params: FsReadTextReq) {
   return post<FsReadTextRes, FsReadTextReq>('/fs/read-text', params)
+}
+
+/** 删除磁盘上的字幕文件（扩展名与目录扫描一致） */
+export function fetchFsDeleteSubtitle(params: FsDeleteReq) {
+  return post<FsDeleteRes, FsDeleteReq>('/fs/delete-subtitle', params)
 }
 
 /** 递归扫描文件夹下视频文件（同 stem 字幕列表） */
@@ -62,6 +85,8 @@ export function downloadSubtitleToDisk(params: DownloadBody) {
 
 /** React Query 与「字幕任务默认配置」接口共用的 queryKey */
 export const subtitleTaskGenerateDefaultsQueryKey = ['subtitle-task', 'generate-defaults'] as const
+
+export const subtitleTaskQueueStatusQueryKey = ['subtitle-task-queue-status'] as const
 
 /** 获取新建字幕任务的默认配置（与后端 `SubtitleGenerateConfig::default()` 一致） */
 export function fetchSubtitleTaskGenerateDefaults() {
@@ -100,7 +125,68 @@ export function deleteSubtitleTask(params: SubtitleTaskDeleteReq) {
   )
 }
 
-/** 暂停字幕任务队列（取消当前 RUNNING 并重新入队；worker 停止 claim 新任务） */
+/** 失败任务重置为待处理并重新入队 */
+export function retrySubtitleTask(params: SubtitleTaskRetryReq) {
+  return post<SubtitleTaskRetryRes, SubtitleTaskRetryReq>(
+    '/subtitle-task/tasks/retry',
+    params,
+  )
+}
+
+/** React Query 与「字幕翻译任务队列状态」共用的 queryKey */
+export const subtitleTranslateTaskQueueStatusQueryKey = ['subtitle-translate-task-queue-status'] as const
+
+/** 分页查询 subtitle_translate_task */
+export function fetchSubtitleTranslateTaskList(params: SubtitleTranslateTaskListReq) {
+  return post<SubtitleTranslateTaskListRes, SubtitleTranslateTaskListReq>(
+    '/subtitle-translate-task/tasks/list',
+    params,
+  )
+}
+
+export function createSubtitleTranslateTask(params: SubtitleTranslateTaskCreateReq) {
+  return post<SubtitleTranslateTaskItem, SubtitleTranslateTaskCreateReq>(
+    '/subtitle-translate-task/tasks',
+    params,
+  )
+}
+
+export function deleteSubtitleTranslateTask(params: SubtitleTranslateTaskDeleteReq) {
+  return post<SubtitleTranslateTaskDeleteRes, SubtitleTranslateTaskDeleteReq>(
+    '/subtitle-translate-task/tasks/delete',
+    params,
+  )
+}
+
+export function retrySubtitleTranslateTask(params: SubtitleTranslateTaskRetryReq) {
+  return post<SubtitleTranslateTaskRetryRes, SubtitleTranslateTaskRetryReq>(
+    '/subtitle-translate-task/tasks/retry',
+    params,
+  )
+}
+
+export function pauseSubtitleTranslateTaskQueue(params: SubtitleTranslateTaskQueuePauseReq = {}) {
+  return post<SubtitleTranslateTaskQueuePauseRes, SubtitleTranslateTaskQueuePauseReq>(
+    '/subtitle-translate-task/queue/pause',
+    params,
+  )
+}
+
+export function resumeSubtitleTranslateTaskQueue(params: SubtitleTranslateTaskQueueResumeReq = {}) {
+  return post<SubtitleTranslateTaskQueueResumeRes, SubtitleTranslateTaskQueueResumeReq>(
+    '/subtitle-translate-task/queue/resume',
+    params,
+  )
+}
+
+export function fetchSubtitleTranslateTaskQueueStatus(params: SubtitleTranslateTaskQueueStatusReq = {}) {
+  return post<SubtitleTranslateTaskQueueStatusRes, SubtitleTranslateTaskQueueStatusReq>(
+    '/subtitle-translate-task/queue/status',
+    params,
+  )
+}
+
+/** 暂停字幕任务队列（不再 claim 新任务；当前任务跑完后进入已暂停） */
 export function pauseSubtitleTaskQueue(params: SubtitleTaskQueuePauseReq = {}) {
   return post<SubtitleTaskQueuePauseRes, SubtitleTaskQueuePauseReq>(
     '/subtitle-task/queue/pause',

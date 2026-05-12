@@ -5,11 +5,12 @@ import { SearchOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { App, Button, Checkbox, Input, Modal, Space, Tag, Typography } from 'antd'
-import { useMemo, useRef, useState } from 'react'
+import { App, Button, Input, List, Modal, Popconfirm, Space, Typography } from 'antd'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { FsDirTreeSelect } from '@/component/fs-dir-tree-select'
 import { SubtitleWebModal } from '@/component/subtitle-web-modal'
-import { createSubtitleTask, createSubtitleTasksBulk, fetchFsReadText, scanVideoFolder } from '@/request'
+import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
+import { fetchFsDeleteSubtitle, fetchFsReadText, scanVideoFolder } from '@/request'
 
 export const Route = createFileRoute('/video-folder-scan')({
   component: PageComponent,
@@ -30,7 +31,7 @@ function formatBytes(n: number): string {
 }
 
 function PageComponent() {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const actionRef = useRef<ActionType>(null)
 
   const [rootDir, setRootDir] = useState('')
@@ -47,6 +48,24 @@ function PageComponent() {
   const [subtitlePreviewTitle, setSubtitlePreviewTitle] = useState('')
   const [subtitlePreviewLoading, setSubtitlePreviewLoading] = useState(false)
   const [subtitlePreviewContent, setSubtitlePreviewContent] = useState('')
+
+  const [deletingSubtitleKey, setDeletingSubtitleKey] = useState<string | null>(null)
+
+  const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
+  const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
+  const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<VideoFolderScanItem[] | undefined>()
+
+  const openSubtitleCreateSingle = useCallback((videoPath: string) => {
+    setSubtitleTaskBulkRows(undefined)
+    setSubtitleTaskCreateInitialPath(videoPath)
+    setSubtitleTaskCreateOpen(true)
+  }, [])
+
+  const openSubtitleCreateBulk = useCallback((rows: VideoFolderScanItem[]) => {
+    setSubtitleTaskCreateInitialPath(undefined)
+    setSubtitleTaskBulkRows(rows)
+    setSubtitleTaskCreateOpen(true)
+  }, [])
 
   function joinVideoDir(videoPath: string, filename: string): string {
     const i1 = videoPath.lastIndexOf('/')
@@ -74,6 +93,34 @@ function PageComponent() {
     }
     finally {
       setSubtitlePreviewLoading(false)
+    }
+  }
+
+  function subtitleRowKey(videoPath: string, subtitleName: string): string {
+    return `${videoPath}\u0000${subtitleName}`
+  }
+
+  async function deleteSubtitleFile(videoPath: string, subtitleName: string) {
+    const path = joinVideoDir(videoPath, subtitleName)
+    const key = subtitleRowKey(videoPath, subtitleName)
+    setDeletingSubtitleKey(key)
+    try {
+      await fetchFsDeleteSubtitle({ path })
+      message.success('字幕文件已删除')
+      setData(prev =>
+        prev.map((item) => {
+          if (item.video_path !== videoPath)
+            return item
+          const names = item.subtitle_names ?? []
+          return { ...item, subtitle_names: names.filter(n => n !== subtitleName) }
+        }),
+      )
+    }
+    catch (e) {
+      message.error((e as Error).message || '删除失败')
+    }
+    finally {
+      setDeletingSubtitleKey(null)
     }
   }
 
@@ -174,15 +221,7 @@ function PageComponent() {
             key="enqueue"
             type="link"
             className="m-0! p-0!"
-            onClick={async () => {
-              try {
-                await createSubtitleTask({ config: { video_path: row.video_path } })
-                message.success('任务已添加')
-              }
-              catch (e) {
-                message.error((e as Error).message || '添加失败')
-              }
-            }}
+            onClick={() => openSubtitleCreateSingle(row.video_path)}
           >
             字幕生成
           </Button>,
@@ -200,7 +239,7 @@ function PageComponent() {
         ],
       },
     ]
-  }, [message])
+  }, [openSubtitleCreateSingle])
 
   async function runScan() {
     const p = rootDir.trim()
@@ -225,6 +264,18 @@ function PageComponent() {
 
   return (
     <PageContainer title="视频文件查询">
+      <SubtitleTaskCreateDrawerForm
+        open={subtitleTaskCreateOpen}
+        onOpenChange={(open) => {
+          setSubtitleTaskCreateOpen(open)
+          if (!open) {
+            setSubtitleTaskCreateInitialPath(undefined)
+            setSubtitleTaskBulkRows(undefined)
+          }
+        }}
+        initialVideoPath={subtitleTaskCreateInitialPath}
+        bulkSourceRows={subtitleTaskBulkRows}
+      />
       <Modal
         title={subtitlePreviewTitle ? `字幕内容：${subtitlePreviewTitle}` : '字幕内容'}
         open={subtitlePreviewOpen}
@@ -235,7 +286,7 @@ function PageComponent() {
         }}
         footer={null}
         width={900}
-        destroyOnClose
+        destroyOnHidden
       >
         <div className="max-h-[65vh] overflow-auto rounded bg-gray-50 p-3">
           <pre className="whitespace-pre-wrap font-mono text-xs leading-5">
@@ -270,18 +321,54 @@ function PageComponent() {
             if (!list.length)
               return null
             return (
-              <div className="flex flex-col gap-1 py-1">
-                {list.map(name => (
-                  <div key={name}>
-                    <Tag
-                      className="cursor-pointer"
-                      onClick={() => void openSubtitlePreview(row.video_path, name)}
+              <List
+                size="small"
+                bordered
+                className="max-w-3xl bg-white"
+                dataSource={list}
+                renderItem={(name) => {
+                  const delKey = subtitleRowKey(row.video_path, name)
+                  return (
+                    <List.Item
+                      className="!px-3 !py-2"
+                      actions={[
+                        <Button
+                          key="preview"
+                          type="link"
+                          size="small"
+                          className="m-0! p-0!"
+                          onClick={() => void openSubtitlePreview(row.video_path, name)}
+                        >
+                          预览
+                        </Button>,
+                        <Popconfirm
+                          key="delete"
+                          title="删除字幕文件"
+                          description={`确定从磁盘删除「${name}」？此操作不可恢复。`}
+                          okText="删除"
+                          cancelText="取消"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => void deleteSubtitleFile(row.video_path, name)}
+                        >
+                          <Button
+                            type="link"
+                            danger
+                            size="small"
+                            className="m-0! p-0!"
+                            loading={deletingSubtitleKey === delKey}
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>,
+                      ]}
                     >
-                      {name}
-                    </Tag>
-                  </div>
-                ))}
-              </div>
+                      <Typography.Text ellipsis={{ tooltip: name }} className="max-w-[min(52vw,36rem)]">
+                        {name}
+                      </Typography.Text>
+                    </List.Item>
+                  )
+                }}
+              />
             )
           },
         }}
@@ -319,67 +406,7 @@ function PageComponent() {
             key="bulk-enqueue"
             type="primary"
             disabled={!selectedRows.length}
-            onClick={() => {
-              let skipExisting = true
-              modal.confirm({
-                title: '批量字幕生成',
-                content: (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-1">
-                      <span>已选择</span>
-                      <span className="font-semibold">{selectedRows.length}</span>
-                      <span>个视频</span>
-                    </div>
-                    <Checkbox
-                      defaultChecked
-                      onChange={(e) => {
-                        skipExisting = e.target.checked
-                      }}
-                    >
-                      跳过已存在字幕文件的条目
-                    </Checkbox>
-                  </div>
-                ),
-                okText: '开始生成',
-                cancelText: '取消',
-                onOk: async () => {
-                  const targets = (skipExisting
-                    ? selectedRows.filter(v => (v.subtitle_names ?? []).length === 0)
-                    : selectedRows)
-
-                  if (!targets.length) {
-                    message.warning('没有需要生成的条目（可能都已存在字幕）')
-                    return
-                  }
-
-                  try {
-                    const res = await createSubtitleTasksBulk({
-                      configs: targets.map(v => ({ video_path: v.video_path })),
-                      skip_if_exists: true,
-                    })
-
-                    const ok = res.created?.length ?? 0
-                    const skipped = res.skipped?.length ?? 0
-                    const failed = res.failed ?? []
-
-                    if (failed.length === 0) {
-                      const parts = [
-                        `已添加 ${ok} 个任务`,
-                        skipped ? `跳过 ${skipped} 个（已在队列中）` : '',
-                      ].filter(Boolean)
-                      message.success(parts.join('，'))
-                      return
-                    }
-
-                    message.warning(`已添加 ${ok} 个任务，跳过 ${skipped} 个，失败 ${failed.length} 个（打开控制台查看详情）`)
-                    console.error('[bulk subtitle generate] failed:', failed)
-                  }
-                  catch (e) {
-                    message.error((e as Error).message || '批量添加失败')
-                  }
-                },
-              })
-            }}
+            onClick={() => openSubtitleCreateBulk(selectedRows)}
           >
             批量字幕生成
           </Button>,

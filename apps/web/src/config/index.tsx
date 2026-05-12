@@ -1,4 +1,4 @@
-import { DatabaseOutlined, FileSearchOutlined, HomeOutlined, SettingOutlined, VideoCameraOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, FileSearchOutlined, HomeOutlined, SettingOutlined, TranslationOutlined, VideoCameraOutlined } from '@ant-design/icons'
 
 export const menu = [
   {
@@ -10,6 +10,11 @@ export const menu = [
     name: '字幕查询',
     path: '/subtitle-web',
     icon: <FileSearchOutlined />,
+  },
+  {
+    name: '字幕翻译',
+    path: '/subtitle-translate-task',
+    icon: <TranslationOutlined />,
   },
   {
     name: '字幕生成',

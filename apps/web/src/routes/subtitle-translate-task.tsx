@@ -1,6 +1,6 @@
 import type { ActionType } from '@ant-design/pro-components'
 import type { TagProps } from 'antd'
-import type { SubtitleTaskRow } from '@/types/api'
+import type { SubtitleTranslateTaskRow } from '@/types/api'
 import {
   PageContainer,
   ProTable,
@@ -11,22 +11,21 @@ import { App, Button, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useRef, useState } from 'react'
 import { QueueControls } from '@/components/queue-controls'
-import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
+import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
 import {
-  deleteSubtitleTask,
-  fetchSubtitleTaskList,
-  fetchSubtitleTaskQueueStatus,
-  pauseSubtitleTaskQueue,
-  resumeSubtitleTaskQueue,
-  retrySubtitleTask,
-  subtitleTaskQueueStatusQueryKey,
+  deleteSubtitleTranslateTask,
+  fetchSubtitleTranslateTaskList,
+  fetchSubtitleTranslateTaskQueueStatus,
+  pauseSubtitleTranslateTaskQueue,
+  resumeSubtitleTranslateTaskQueue,
+  retrySubtitleTranslateTask,
+  subtitleTranslateTaskQueueStatusQueryKey,
 } from '@/request'
 
-export const Route = createFileRoute('/subtitle-task')({
+export const Route = createFileRoute('/subtitle-translate-task')({
   component: PageComponent,
 })
 
-/** 与后端 task_status 字符串一致 */
 const TASK_STATUS_META: Record<
   string,
   { label: string, color: TagProps['color'] }
@@ -50,7 +49,7 @@ function PageComponent() {
   const [createOpen, setCreateOpen] = useState(false)
 
   const retryMutation = useMutation({
-    mutationFn: retrySubtitleTask,
+    mutationFn: retrySubtitleTranslateTask,
     onSuccess: () => {
       message.success('已重新开始')
       tableActionRef.current?.reload()
@@ -60,7 +59,7 @@ function PageComponent() {
     },
   })
 
-  function confirmDelete(record: SubtitleTaskRow) {
+  function confirmDelete(record: SubtitleTranslateTaskRow) {
     modal.confirm({
       title: '删除任务',
       content: (
@@ -74,9 +73,6 @@ function PageComponent() {
             </strong>
             ？删除后不可恢复。
           </p>
-          <p className="mt-2 text-sm text-neutral-500">
-            将一并移除该任务的执行记录与生成字幕关联数据。
-          </p>
         </div>
       ),
       okText: '删除',
@@ -84,7 +80,7 @@ function PageComponent() {
       cancelText: '取消',
       onOk: async () => {
         try {
-          await deleteSubtitleTask({ task_id: record.task_id })
+          await deleteSubtitleTranslateTask({ task_id: record.task_id })
           message.success('已删除')
           tableActionRef.current?.reload()
         }
@@ -97,13 +93,13 @@ function PageComponent() {
   }
 
   return (
-    <PageContainer title="字幕任务入库">
-      <SubtitleTaskCreateDrawerForm
+    <PageContainer title="字幕翻译任务">
+      <SubtitleTranslateTaskCreateDrawerForm
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => tableActionRef.current?.reload()}
       />
-      <ProTable<SubtitleTaskRow>
+      <ProTable<SubtitleTranslateTaskRow>
         rowKey="task_id"
         actionRef={tableActionRef}
         search={{
@@ -116,10 +112,10 @@ function PageComponent() {
           </Button>,
           <QueueControls
             key="queue-controls"
-            statusQueryKey={subtitleTaskQueueStatusQueryKey}
-            fetchQueueStatus={fetchSubtitleTaskQueueStatus}
-            pauseQueue={pauseSubtitleTaskQueue}
-            resumeQueue={resumeSubtitleTaskQueue}
+            statusQueryKey={subtitleTranslateTaskQueueStatusQueryKey}
+            fetchQueueStatus={fetchSubtitleTranslateTaskQueueStatus}
+            pauseQueue={pauseSubtitleTranslateTaskQueue}
+            resumeQueue={resumeSubtitleTranslateTaskQueue}
             onChanged={() => tableActionRef.current?.reload()}
           />,
         ]}
@@ -127,9 +123,9 @@ function PageComponent() {
         columns={[
           {
             title: '路径包含',
-            dataIndex: 'video_path_contains',
+            dataIndex: 'path_contains',
             hideInTable: true,
-            fieldProps: { placeholder: '模糊匹配 video_path' },
+            fieldProps: { placeholder: '模糊匹配源 SRT 路径' },
           },
           {
             title: '任务 ID',
@@ -162,8 +158,8 @@ function PageComponent() {
             },
           },
           {
-            title: '视频路径',
-            dataIndex: 'video_path',
+            title: '源 SRT 路径',
+            dataIndex: 'source_srt_path',
             search: false,
             ellipsis: true,
           },
@@ -184,7 +180,7 @@ function PageComponent() {
           {
             title: '操作',
             dataIndex: 'action',
-            width: 240,
+            width: 220,
             search: false,
             render: (_, record) => (
               <div className="flex flex-wrap items-center gap-2">
@@ -215,11 +211,11 @@ function PageComponent() {
           },
         ]}
         request={async (params) => {
-          const res = await fetchSubtitleTaskList({
+          const res = await fetchSubtitleTranslateTaskList({
             current: params.current ?? 1,
             page_size: params.pageSize ?? 20,
             task_status: params.task_status,
-            video_path_contains: params.video_path_contains,
+            path_contains: params.path_contains,
           })
           return {
             data: res.items,

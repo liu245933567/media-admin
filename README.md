@@ -62,3 +62,7 @@ https://developer.nvidia.com/cuda-downloads
 
 `cargo install typeshare-cli`
 `typeshare . --lang=typescript --output-file=./src/types/api.ts`
+
+## 待完成
+
+- [ ] 执行任务的实时日志查看功能

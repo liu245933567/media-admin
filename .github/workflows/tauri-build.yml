@@ -19,15 +19,24 @@ concurrency:
 
 jobs:
   build:
+    name: Build on ${{ matrix.os }} with CUDA ${{ matrix.cuda }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
-
-    runs-on: ${{ matrix.os }}
+        include:
+          - os: windows-2022
+            cuda: "12.4.1"
+          - os: ubuntu-22.04
+            cuda: "12.4.1"
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install CUDA
+        uses: jimver/cuda-toolkit@v0.2.0
+        with:
+          cuda: ${{ matrix.cuda }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -57,6 +66,6 @@ jobs:
       - name: 上传安装包目录
         uses: actions/upload-artifact@v4
         with:
-          name: media-admin-${{ matrix.os }}
+          name: media-admin-${{ matrix.os }}-cuda-${{ matrix.cuda }}
           path: apps/desktop/target/release/bundle/
           if-no-files-found: warn

@@ -88,6 +88,18 @@ pub struct SubtitleTaskDeleteRes {
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
+pub struct SubtitleTaskRetryReq {
+    pub task_id: i32,
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct SubtitleTaskRetryRes {
+    pub ok: bool,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
 pub struct SubtitleTaskQueueResumeReq {}
 
 pub enum SubtitleTaskStatus {

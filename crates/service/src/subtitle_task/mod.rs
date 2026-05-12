@@ -173,6 +173,50 @@ pub async fn list_subtitle_tasks(
     Ok(SubtitleTaskListRes { items, total })
 }
 
+pub async fn retry_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Result<SubtitleTaskRetryRes> {
+    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
+    let Some(task) = task else {
+        bail!("任务不存在");
+    };
+    if task.task_status != SubtitleTaskStatus::FAILED.to_string() {
+        bail!("仅失败任务可重新开始");
+    }
+
+    let txn = db.begin().await?;
+
+    SubtitleTaskRecordEntity::delete_many()
+        .filter(SubtitleTaskRecordColumn::TaskId.eq(task_id))
+        .exec(&txn)
+        .await?;
+
+    GeneratedSubtitlesEntity::delete_many()
+        .filter(GeneratedSubtitlesColumn::TaskId.eq(task_id))
+        .exec(&txn)
+        .await?;
+
+    let now = Utc::now().to_rfc3339();
+    let res = SubtitleTaskEntity::update_many()
+        .col_expr(
+            SubtitleTaskColumn::TaskStatus,
+            sea_orm::sea_query::Expr::value(SubtitleTaskStatus::PENDING.to_string()),
+        )
+        .col_expr(
+            SubtitleTaskColumn::UpdatedAt,
+            sea_orm::sea_query::Expr::value(now),
+        )
+        .filter(SubtitleTaskColumn::TaskId.eq(task_id))
+        .exec(&txn)
+        .await?;
+
+    if res.rows_affected == 0 {
+        txn.rollback().await?;
+        bail!("任务不存在");
+    }
+
+    txn.commit().await?;
+    Ok(SubtitleTaskRetryRes { ok: true })
+}
+
 pub async fn delete_subtitle_task(
     db: &DatabaseConnection,
     task_id: i32,

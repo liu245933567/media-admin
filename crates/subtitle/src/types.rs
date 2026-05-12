@@ -1,10 +1,11 @@
+use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeOptions};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 /// 翻译选项
 #[typeshare]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SubtitleTranslateConfig {
     /// 调用模型的基础 URL
     pub base_url: String,
@@ -25,8 +26,8 @@ pub struct SubtitleTranslateConfig {
 impl Default for SubtitleTranslateConfig {
     fn default() -> Self {
         Self {
-            base_url: "https://api.siliconflow.com/v1".to_string(),
-            api_key: "".to_string(),
+            base_url: get_translate_openai_base().unwrap_or_default(),
+            api_key: get_translate_openai_api_key().unwrap_or_default(),
             model: "tencent/Hunyuan-MT-7B".to_string(),
             target_language: "Chinese".to_string(),
             concurrency: 4,

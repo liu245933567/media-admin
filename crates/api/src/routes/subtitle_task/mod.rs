@@ -3,7 +3,7 @@ use ma_service::subtitle_task::{
     SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes, SubtitleTaskQueueResumeRes,
     SubtitleTaskQueueStatusReq, SubtitleTaskQueueStatusRes, bulk_create_subtitle_tasks,
     create_subtitle_task, default_subtitle_generate_config, delete_subtitle_task, list_subtitle_tasks,
-    pause_subtitle_task_queue, resume_subtitle_task_queue,
+    pause_subtitle_task_queue, resume_subtitle_task_queue, retry_subtitle_task,
 };
 
 use axum::{Json, Router, extract::State, routing::{get, post}};
@@ -11,7 +11,8 @@ use axum_extra::extract::WithRejection;
 use ma_service::subtitle_task::types::{
     SubtitleTaskBulkCreateReq, SubtitleTaskBulkCreateRes, SubtitleTaskCreateReq,
     SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskGenerateDefaultsRes, SubtitleTaskItem,
-    SubtitleTaskListReq, SubtitleTaskListRes, SubtitleTaskQueueResumeReq,
+    SubtitleTaskListReq, SubtitleTaskListRes, SubtitleTaskQueueResumeReq, SubtitleTaskRetryReq,
+    SubtitleTaskRetryRes,
 };
 pub fn routes() -> StateRouter {
     Router::new()
@@ -20,6 +21,7 @@ pub fn routes() -> StateRouter {
         .route("/tasks", post(create_handler))
         .route("/tasks/bulk", post(bulk_create_handler))
         .route("/tasks/delete", post(delete_handler))
+        .route("/tasks/retry", post(retry_handler))
         .route("/queue/pause", post(queue_pause_handler))
         .route("/queue/resume", post(queue_resume_handler))
         .route("/queue/status", post(queue_status_handler))
@@ -81,6 +83,26 @@ async fn delete_handler(
             }
         })
         .map(Json)
+}
+
+async fn retry_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleTaskRetryReq>, AppError>,
+) -> Result<Json<SubtitleTaskRetryRes>, AppError> {
+    retry_subtitle_task(&state.db, body.task_id)
+        .await
+        .map_err(|e| {
+            let m = e.to_string();
+            if m == "任务不存在" || m == "仅失败任务可重新开始" {
+                AppError::BadRequest(m)
+            } else {
+                AppError::Internal(e)
+            }
+        })
+        .map(|res| {
+            state.subtitle_task_queue.enqueue();
+            Json(res)
+        })
 }
 
 async fn queue_pause_handler(

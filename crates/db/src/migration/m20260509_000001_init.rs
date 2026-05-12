@@ -103,10 +103,116 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(SubtitleTranslateTask::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::TaskId)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::TaskStatus)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::SourceSrtPath)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::ConfigJson)
+                            .string()
+                            .not_null()
+                            .default("{}"),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::CreatedAt)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTask::UpdatedAt)
+                            .string()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(SubtitleTranslateTaskRecord::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::RecordId)
+                            .integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::TaskId)
+                            .integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::RecordStatus)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::RecordDesc)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::RecordDetail)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::CreatedAt)
+                            .string()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(SubtitleTranslateTaskRecord::UpdatedAt)
+                            .string()
+                            .not_null(),
+                    )
+                    .to_owned(),
+            )
             .await
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(SubtitleTranslateTaskRecord::Table)
+                    .if_exists()
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .drop_table(
+                Table::drop()
+                    .table(SubtitleTranslateTask::Table)
+                    .if_exists()
+                    .to_owned(),
+            )
+            .await?;
+
         manager
             .drop_table(
                 Table::drop()
@@ -166,4 +272,27 @@ enum GeneratedSubtitles {
     TaskId,
     SubtitlePath,
     CreatedAt,
+}
+
+#[derive(DeriveIden)]
+enum SubtitleTranslateTask {
+    Table,
+    TaskId,
+    TaskStatus,
+    SourceSrtPath,
+    ConfigJson,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(DeriveIden)]
+enum SubtitleTranslateTaskRecord {
+    Table,
+    RecordId,
+    TaskId,
+    RecordStatus,
+    RecordDesc,
+    RecordDetail,
+    CreatedAt,
+    UpdatedAt,
 }

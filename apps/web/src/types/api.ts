@@ -32,6 +32,14 @@ export interface FfmpegSetupStatusRes {
 	local_ready: boolean;
 }
 
+export interface FsDeleteReq {
+	path: string;
+}
+
+export interface FsDeleteRes {
+	ok: boolean;
+}
+
 export interface FsListReq {
 	parent_path?: string;
 }
@@ -241,6 +249,84 @@ export interface SubtitleTaskQueueStatusReq {
 export interface SubtitleTaskQueueStatusRes {
 	/** RUNNING / PAUSING / PAUSED */
 	status: string;
+}
+
+export interface SubtitleTaskRetryReq {
+	task_id: number;
+}
+
+export interface SubtitleTaskRetryRes {
+	ok: boolean;
+}
+
+export interface SubtitleTranslateTaskCreateReq {
+	source_srt_path: string;
+	config: SubtitleTranslateConfig;
+}
+
+export interface SubtitleTranslateTaskDeleteReq {
+	task_id: number;
+}
+
+export interface SubtitleTranslateTaskDeleteRes {
+	ok: boolean;
+}
+
+export interface SubtitleTranslateTaskItem {
+	task_id: number;
+	task_status: string;
+	source_srt_path: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface SubtitleTranslateTaskListReq {
+	current: number;
+	page_size: number;
+	task_status?: string;
+	path_contains?: string;
+}
+
+export interface SubtitleTranslateTaskRow {
+	task_id: number;
+	task_status: string;
+	source_srt_path: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface SubtitleTranslateTaskListRes {
+	items: SubtitleTranslateTaskRow[];
+	total: number;
+}
+
+export interface SubtitleTranslateTaskQueuePauseReq {
+}
+
+export interface SubtitleTranslateTaskQueuePauseRes {
+	ok: boolean;
+}
+
+export interface SubtitleTranslateTaskQueueResumeReq {
+}
+
+export interface SubtitleTranslateTaskQueueResumeRes {
+	ok: boolean;
+}
+
+export interface SubtitleTranslateTaskQueueStatusReq {
+}
+
+export interface SubtitleTranslateTaskQueueStatusRes {
+	status: string;
+}
+
+export interface SubtitleTranslateTaskRetryReq {
+	task_id: number;
+}
+
+export interface SubtitleTranslateTaskRetryRes {
+	ok: boolean;
 }
 
 /** 搜索字幕结果 - 列表单项 */

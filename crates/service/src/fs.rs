@@ -24,6 +24,18 @@ pub struct FsReadTextRes {
     pub content: String,
 }
 
+#[typeshare::typeshare]
+#[derive(Debug, Deserialize)]
+pub struct FsDeleteReq {
+    pub path: String,
+}
+
+#[typeshare::typeshare]
+#[derive(Debug, Serialize)]
+pub struct FsDeleteRes {
+    pub ok: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub struct FsListItem {
     pub name: String,
@@ -132,4 +144,37 @@ pub async fn read_text_file(path: String) -> Result<FsReadTextRes> {
     let bytes = tokio::fs::read(&p).await?;
     let content = String::from_utf8_lossy(&bytes).to_string();
     Ok(FsReadTextRes { content })
+}
+
+fn subtitle_ext_allowed_for_delete(ext: &str) -> bool {
+    matches!(
+        ext,
+        "srt" | "ass" | "ssa" | "vtt" | "sub" | "smi"
+    )
+}
+
+/// 删除字幕文件（与视频目录扫描识别的字幕扩展名一致）
+pub async fn delete_subtitle_file(path: String) -> Result<FsDeleteRes> {
+    let p = PathBuf::from(&path);
+    if !p.is_absolute() {
+        bail!("path 必须为绝对路径");
+    }
+    if !p.exists() {
+        bail!("path 不存在");
+    }
+    if p.is_dir() {
+        bail!("path 不能为目录");
+    }
+
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !subtitle_ext_allowed_for_delete(&ext) {
+        bail!("仅支持删除字幕文件（srt / ass / ssa / vtt / sub / smi）");
+    }
+
+    tokio::fs::remove_file(&p).await?;
+    Ok(FsDeleteRes { ok: true })
 }
