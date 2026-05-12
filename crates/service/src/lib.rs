@@ -1,4 +1,5 @@
 pub mod fs;
+pub mod setup_download;
 pub mod stash;
 pub mod subtitle_task;
 pub mod subtitle_worker;

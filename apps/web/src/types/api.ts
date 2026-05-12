@@ -7,9 +7,29 @@ export interface DownloadBody {
 	subtitle_id: string;
 }
 
+export interface DownloadJobStartRes {
+	job_id: string;
+}
+
+/** SSE / 内部共用的进度快照（JSON） */
+export interface DownloadProgressSnapshot {
+	phase: string;
+	bytes_received: number;
+	bytes_total?: number;
+	message: string;
+}
+
 export interface DownloadResponse {
 	subtitle_path: string;
 	record_id: number;
+}
+
+export interface FfmpegDownloadStartReq {
+}
+
+/** FFmpeg 工具目录是否已安装可执行文件 */
+export interface FfmpegSetupStatusRes {
+	local_ready: boolean;
 }
 
 export interface FsListReq {
@@ -252,5 +272,25 @@ export interface VideoFolderScanReq {
 
 export interface VideoFolderScanRes {
 	items: VideoFolderScanItem[];
+}
+
+export interface WhisperDownloadStartReq {
+	model_id: string;
+}
+
+/** Whisper 可下载项（静态目录） */
+export interface WhisperModelItem {
+	id: string;
+	label: string;
+	filename: string;
+	description: string;
+	/** 人类可读大小，如 "3.1 GiB" */
+	size_hint: string;
+	/** 模型目录下是否已有同名文件 */
+	local_ready: boolean;
+}
+
+export interface WhisperModelsListRes {
+	items: WhisperModelItem[];
 }
 

@@ -1,4 +1,5 @@
 use axum::Router;
+use ma_service::setup_download::SetupDownloadState;
 use ma_service::subtitle_worker::{SubtitleTaskQueue, spawn_subtitle_task_worker};
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
@@ -17,6 +18,14 @@ fn build_router(app_state: AppState) -> Router<()> {
         .with_state(app_state)
 }
 
+fn build_setup_download_state() -> anyhow::Result<SetupDownloadState> {
+    let client = reqwest::Client::builder()
+        .user_agent("media-admin/0.1")
+        .build()
+        .map_err(|e| anyhow::anyhow!("构建 HTTP 客户端失败: {e}"))?;
+    Ok(SetupDownloadState::new(client))
+}
+
 /// 启动 Axum（阻塞当前 async 上下文直至进程退出）。
 pub async fn serve() -> anyhow::Result<()> {
     ma_utils::log::init_tracing();
@@ -30,9 +39,12 @@ pub async fn serve() -> anyhow::Result<()> {
     let subtitle_task_queue = SubtitleTaskQueue::new();
     spawn_subtitle_task_worker(db.clone(), subtitle_task_queue.clone());
 
+    let setup_download = build_setup_download_state()?;
+
     let app_state = AppState {
         db,
         subtitle_task_queue,
+        setup_download,
     };
 
     let app = build_router(app_state);
@@ -54,9 +66,12 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
 
     spawn_subtitle_task_worker(db.clone(), subtitle_task_queue.clone());
 
+    let setup_download = build_setup_download_state()?;
+
     let app_state = AppState {
         db,
         subtitle_task_queue,
+        setup_download,
     };
     let app = build_router(app_state);
 
@@ -78,9 +93,10 @@ pub async fn start() {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct AppState {
     pub db: DatabaseConnection,
     pub subtitle_task_queue: SubtitleTaskQueue,
+    pub setup_download: SetupDownloadState,
 }
 
 type StateRouter = Router<AppState>;

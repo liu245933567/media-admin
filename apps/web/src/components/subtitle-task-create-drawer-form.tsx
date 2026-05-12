@@ -1,8 +1,9 @@
 import type { SubtitleGenerateConfig } from '@/types/api'
-import { DrawerForm, ProFormDependency, ProFormDigit, ProFormGroup, ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import { DrawerForm, ProFormDependency, ProFormDigit, ProFormGroup, ProFormSelect, ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import { useQuery } from '@tanstack/react-query'
 import { App, Divider } from 'antd'
 import { useMemo, useState } from 'react'
-import { createSubtitleTask } from '@/request'
+import { createSubtitleTask, fetchWhisperModels, whisperModelsQueryKey } from '@/request'
 
 export interface SubtitleTaskCreateDrawerFormProps {
   open: boolean
@@ -12,6 +13,18 @@ export interface SubtitleTaskCreateDrawerFormProps {
 
 export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerFormProps) {
   const { message } = App.useApp()
+  const whisperModelsQuery = useQuery({
+    queryKey: whisperModelsQueryKey,
+    queryFn: fetchWhisperModels,
+  })
+  const whisperModelFilenameOptions = useMemo(
+    () =>
+      (whisperModelsQuery.data?.items ?? []).map(m => ({
+        label: `${m.label}（${m.filename}）${m.local_ready ? ' · 已就绪' : ''}`,
+        value: m.filename,
+      })),
+    [whisperModelsQuery.data?.items],
+  )
   const [enableVadConfig, setEnableVadConfig] = useState(false)
   const [enableWhisperEngineCfg, setEnableWhisperEngineCfg] = useState(false)
   const [enableWhisperTranscribeOptions, setEnableWhisperTranscribeOptions] = useState(false)
@@ -29,7 +42,6 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
   const whisperEngineDefaults = useMemo(() => {
     return {
-      model_filename: '',
       use_gpu: true,
       flash_attn: true,
     }
@@ -181,12 +193,17 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
           return (
             <ProFormGroup title="Whisper 引擎配置">
-              <ProFormText
+              <ProFormSelect
                 name={['whisper_engine_cfg', 'model_filename']}
-                label="模型文件名"
-                placeholder="例如：ggml-large-v3.bin"
-                initialValue={whisperEngineDefaults.model_filename}
-                rules={[{ required: true, message: '请输入模型文件名' }]}
+                label="模型文件"
+                placeholder="请选择模型文件"
+                rules={[{ required: true, message: '请选择模型文件' }]}
+                options={whisperModelFilenameOptions}
+                fieldProps={{
+                  showSearch: true,
+                  loading: whisperModelsQuery.isPending,
+                  optionFilterProp: 'label',
+                }}
               />
               <ProFormSwitch
                 name={['whisper_engine_cfg', 'use_gpu']}

@@ -15,12 +15,26 @@ pub fn get_models_dir() -> PathBuf {
     }
 }
 
-/// 获取ffmpeg目录
-fn get_ffmpeg_dir() -> PathBuf {
+/// 获取下载目录
+pub fn get_download_dir() -> PathBuf {
+    match std::env::var("DOWNLOAD_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => get_default_app_path().join("download"),
+    }
+}
+
+/// 获取 ffmpeg 安装目录（可写入 `ffmpeg` / `ffmpeg.exe`）
+pub fn get_ffmpeg_dir() -> PathBuf {
     match std::env::var("FFMPEG_DIR") {
         Ok(path) => PathBuf::from(path),
         Err(_) => get_default_app_path().join("tools/ffmpeg"),
     }
+}
+
+/// 配置的 FFMPEG_DIR 下是否已存在 ffmpeg / ffmpeg.exe（不校验是否可执行）
+pub fn ffmpeg_tool_installed() -> bool {
+    let dir = get_ffmpeg_dir();
+    dir.join("ffmpeg.exe").is_file() || dir.join("ffmpeg").is_file()
 }
 
 /// 获取 ffmpeg 可执行文件路径
