@@ -127,13 +127,14 @@ export function FsDirTreeSelect({
       treeData={treeData}
       placeholder={safePlaceholder}
       allowClear
-      showSearch
+      showSearch={{
+        treeNodeFilterProp: 'title',
+      }}
       disabled={disabled}
       loading={initialLoading}
       treeDataSimpleMode={false}
       listHeight={420}
-      treeLine
-      treeNodeFilterProp="title"
+      labelInValue
       onInputKeyDown={(e) => {
         if (e.key === 'Enter')
           onPressEnter?.()

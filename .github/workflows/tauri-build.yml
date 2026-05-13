@@ -75,7 +75,17 @@ jobs:
       - name: 安装依赖 pnpm workspace
         run: pnpm install --frozen-lockfile
 
-      - name: Tauri build beforeBuildCommand 用 pnpm 构建 web
+      # Linux AppImage：linuxdeploy 对带 .relr.dyn 的库执行 strip 易失败（见 tauri-apps/tauri#14796）。
+      # NO_STRIP 跳过该 strip；APPIMAGE_EXTRACT_AND_RUN 在无 FUSE 的 CI 上解压运行 linuxdeploy 等 AppImage。
+      - name: Tauri build（Windows）
+        if: runner.os == 'Windows'
+        run: pnpm --filter @media-admin/desktop build
+
+      - name: Tauri build（Linux，兼容 AppImage / linuxdeploy）
+        if: runner.os == 'Linux'
+        env:
+          NO_STRIP: "true"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         run: pnpm --filter @media-admin/desktop build
 
       - name: 上传安装包与 release 可执行文件

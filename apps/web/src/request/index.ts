@@ -1,11 +1,7 @@
 import type {
-  DownloadBody,
   DownloadJobStartRes,
-  DownloadResponse,
   FfmpegDownloadStartReq,
   FfmpegSetupStatusRes,
-  FsDeleteReq,
-  FsDeleteRes,
   FsListItem,
   FsListReq,
   FsReadTextReq,
@@ -41,8 +37,6 @@ import type {
   SubtitleTranslateTaskQueueStatusRes,
   SubtitleTranslateTaskRetryReq,
   SubtitleTranslateTaskRetryRes,
-  SubtitleWebSearchReq,
-  SubtitleWebSearchRes,
   VideoFolderScanReq,
   VideoFolderScanRes,
   WhisperDownloadStartReq,
@@ -55,14 +49,11 @@ export function fetchFsList(params: FsListReq) {
   return post<FsListItem[], FsListReq>('/fs/list', params)
 }
 
+export const fsReadTextQueryKey = ['fs', 'read-text'] as const
+
 /** 读取文本文件（用于预览字幕内容） */
 export function fetchFsReadText(params: FsReadTextReq) {
   return post<FsReadTextRes, FsReadTextReq>('/fs/read-text', params)
-}
-
-/** 删除磁盘上的字幕文件（扩展名与目录扫描一致） */
-export function fetchFsDeleteSubtitle(params: FsDeleteReq) {
-  return post<FsDeleteRes, FsDeleteReq>('/fs/delete-subtitle', params)
 }
 
 /** 递归扫描文件夹下视频文件（同 stem 字幕列表） */
@@ -70,18 +61,7 @@ export function scanVideoFolder(params: VideoFolderScanReq) {
   return post<VideoFolderScanRes, VideoFolderScanReq>('/video-folder/scan', params)
 }
 
-/** 查询网络字幕 */
-export function searchSubtitles(params: SubtitleWebSearchReq) {
-  return post<SubtitleWebSearchRes, SubtitleWebSearchReq>(
-    '/subtitle-web/search',
-    params,
-  )
-}
-
-/** 下载字幕到后端磁盘（写入视频同目录） */
-export function downloadSubtitleToDisk(params: DownloadBody) {
-  return post<DownloadResponse, DownloadBody>('/subtitle-web/download', params)
-}
+export * from './stash'
 
 /** React Query 与「字幕任务默认配置」接口共用的 queryKey */
 export const subtitleTaskGenerateDefaultsQueryKey = ['subtitle-task', 'generate-defaults'] as const
@@ -242,4 +222,4 @@ export function startFfmpegDownload(params: FfmpegDownloadStartReq = {}) {
   )
 }
 
-export * from './stash'
+export * from './subtitle'

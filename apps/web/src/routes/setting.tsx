@@ -247,7 +247,7 @@ function RouteComponent() {
 
   return (
     <PageContainer title="设置" subTitle="模型与工具下载">
-      <Space orientation="vertical" size="large" className="w-full max-w-3xl">
+      <Space orientation="vertical" size="large" className="w-full">
         <Alert
           type="info"
           showIcon

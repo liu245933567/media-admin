@@ -3,7 +3,7 @@ import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { createFileRoute } from '@tanstack/react-router'
 import { App, Button } from 'antd'
 import { useState } from 'react'
-import { downloadSubtitleToDisk, searchSubtitles } from '@/request'
+import { downloadSubtitleToDiskApi, searchSubtitlesApi } from '@/request'
 
 export const Route = createFileRoute('/subtitle-web')({
   component: PageComponent,
@@ -26,7 +26,7 @@ function PageComponent() {
       message.warning('请先查询字幕')
       return
     }
-    const res = await downloadSubtitleToDisk({ video_path, subtitle_id: subtitle.id })
+    const res = await downloadSubtitleToDiskApi({ video_path, subtitle_id: subtitle.id })
     message.success(`已写入磁盘：${res.subtitle_path}`)
   }
 
@@ -68,7 +68,7 @@ function PageComponent() {
           if (!video_path) {
             return { data: [], success: true }
           }
-          const r = await searchSubtitles({ video_path })
+          const r = await searchSubtitlesApi({ video_path })
           setSearchResult(r)
           return {
             data: r.items,

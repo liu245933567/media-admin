@@ -7,7 +7,7 @@
     "dev:web": "pnpm --filter web dev",
     "dev:server": "cargo run -p media-admin-server",
     "dev:desktop": "pnpm --filter @media-admin/desktop dev",
-    "build": "pnpm --filter web build",
+    "build:web": "pnpm --filter web build",
     "build:server": "cargo build -p media-admin-server",
     "build:desktop": "pnpm --filter @media-admin/desktop build",
     "lint": "pnpm --filter web lint",

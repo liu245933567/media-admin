@@ -96,6 +96,7 @@ pub fn run() {
             )
             .title("Media Admin")
             .inner_size(1280.0, 800.0)
+            .decorations(false)
             .build()
             .map_err(|e| format!("failed to create main window: {e}"))?;
 

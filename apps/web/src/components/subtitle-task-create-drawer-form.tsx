@@ -107,7 +107,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
         props.onOpenChange(open)
       }}
       grid
-      drawerProps={{ destroyOnClose: true }}
+      drawerProps={{ destroyOnHidden: true }}
       initialValues={initialValues}
       submitter={{
         searchConfig: { submitText: '提交' },
@@ -169,7 +169,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
           <Alert
             type="info"
             showIcon
-            message={(
+            title={(
               <span>
                 已选
                 <strong className="mx-1">{props.bulkSourceRows?.length ?? 0}</strong>
