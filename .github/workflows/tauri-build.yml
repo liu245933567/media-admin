@@ -33,11 +33,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CUDA 本地安装包解压 + 写入 /usr/local 需要大量空间；默认还带 --samples，易触发 No space left on device。
+      - name: 释放磁盘空间（Linux / CUDA）
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+
       - name: Install CUDA
         uses: jimver/cuda-toolkit@v0.2.35
         with:
           cuda: ${{ matrix.cuda }}
           log-file-suffix: ${{ matrix.os }}-cuda-${{ matrix.cuda }}.txt
+          # 仅 Linux + local 安装生效：去掉 samples，减少磁盘占用（CI 编译不需要示例）。
+          linux-local-args: '["--toolkit"]'
 
       - uses: dtolnay/rust-toolchain@stable
 

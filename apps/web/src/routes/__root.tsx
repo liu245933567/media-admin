@@ -1,4 +1,4 @@
-import { ProLayout, ProProvider } from '@ant-design/pro-components'
+import { ProLayout } from '@ant-design/pro-components'
 import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { menu } from '@/config'
