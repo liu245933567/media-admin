@@ -1,4 +1,4 @@
-# 仅在 release 分支推送（或在该分支上手动触发）时在云端打包桌面端，并把安装包与 target/release 可执行文件挂到 Actions 产物里供下载。
+# 推送到 main 分支时在云端打包桌面端，并把安装包与 target/release 可执行文件挂到 Actions 产物里供下载。
 # 说明：
 # - 产物在：仓库 Actions 标签页 → 对应运行记录 → Artifacts（默认保留约 90 天）。
 # - 若需要长期公开下载：推送 tag（如 v0.1.0）并用 softprops/action-gh-release 或 tauri-apps/tauri-action 发布到 GitHub Releases。
@@ -7,7 +7,7 @@ name: Tauri 桌面端打包
 
 on:
   push:
-    branches: [release]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,6 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/release'
     name: Build on ${{ matrix.os }} with CUDA ${{ matrix.cuda }}
     runs-on: ${{ matrix.os }}
     strategy:
