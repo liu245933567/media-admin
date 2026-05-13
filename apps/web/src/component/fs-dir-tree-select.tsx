@@ -133,8 +133,6 @@ export function FsDirTreeSelect({
       disabled={disabled}
       loading={initialLoading}
       treeDataSimpleMode={false}
-      listHeight={420}
-      labelInValue
       onInputKeyDown={(e) => {
         if (e.key === 'Enter')
           onPressEnter?.()

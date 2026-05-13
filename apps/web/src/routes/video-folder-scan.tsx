@@ -1,11 +1,11 @@
-import type { ActionType } from '@ant-design/pro-components'
+import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import type { VideoFolderScanItem } from '@/types/api'
 import { SearchOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { useMutation } from '@tanstack/react-query'
 
 import { createFileRoute } from '@tanstack/react-router'
-import { App, Button, Input, List, Popconfirm, Space, Tooltip, Typography } from 'antd'
+import { App, Button, Input, List, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
 import { useCallback, useRef, useState } from 'react'
 import { FsDirTreeSelect } from '@/component/fs-dir-tree-select'
 import { SubtitleWebModal } from '@/component/subtitle-web-modal'
@@ -13,6 +13,15 @@ import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { fetchFsDeleteSubtitleApi, scanVideoFolder } from '@/request'
 import { formatBytes } from '@/utils'
+
+function getParentPath(videoPath: string): string {
+  const i1 = videoPath.lastIndexOf('/')
+  const i2 = videoPath.lastIndexOf('\\')
+  const i = Math.max(i1, i2)
+  if (i < 0)
+    return ''
+  return videoPath.slice(0, i)
+}
 
 function joinVideoDir(videoPath: string, filename: string): string {
   const i1 = videoPath.lastIndexOf('/')
@@ -63,6 +72,65 @@ function DeleteSubtitleButton({ videoPath, subtitleName, onDeleted }: { videoPat
   )
 }
 
+function filterConfig(): ProColumns<VideoFolderScanItem> {
+  return {
+    filterIcon: (filtered) => {
+      return <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+    },
+    filterDropdown: ({ selectedKeys, setSelectedKeys, confirm, clearFilters, close }) => {
+      const v = String(selectedKeys?.[0] ?? '')
+      return (
+        <div className="p-2">
+          <Input
+            autoFocus
+            placeholder="输入关键字筛选"
+            value={v}
+            onChange={(e) => {
+              const next = e.target.value
+              setSelectedKeys(next ? [next] : [])
+            }}
+            onPressEnter={() => confirm()}
+            style={{ width: 220 }}
+          />
+          <div className="mt-2">
+            <Space size={8}>
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => confirm()}
+              >
+                确定
+              </Button>
+              <Button
+                size="small"
+                onClick={() => {
+                  clearFilters?.()
+                  confirm()
+                }}
+              >
+                重置
+              </Button>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => close()}
+              >
+                关闭
+              </Button>
+            </Space>
+          </div>
+        </div>
+      )
+    },
+    onFilter: (val, record) => {
+      const q = String(val ?? '').trim().toLowerCase()
+      if (!q)
+        return true
+      return String(record.video_name ?? '').toLowerCase().includes(q)
+    },
+  }
+}
+
 export const Route = createFileRoute('/video-folder-scan')({
   component: PageComponent,
 })
@@ -71,7 +139,7 @@ function PageComponent() {
   const actionRef = useRef<ActionType>(null)
   const { message } = App.useApp()
 
-  const [rootDir, setRootDir] = useState('')
+  const [params, setParams] = useState<{ rootDir: string }>({ rootDir: '' })
 
   const [selectedRows, setSelectedRows] = useState<VideoFolderScanItem[]>([])
 
@@ -91,13 +159,6 @@ function PageComponent() {
     setSubtitleTaskCreateOpen(true)
   }, [])
 
-  const scanVideoFolderMutation = useMutation({
-    mutationFn: () => scanVideoFolder({ root_dir: rootDir }),
-    onError: (error) => {
-      message.error(error.message ?? '查询失败')
-    },
-  })
-
   return (
     <PageContainer title={false}>
       <SubtitleTaskCreateDrawerForm
@@ -112,12 +173,18 @@ function PageComponent() {
         initialVideoPath={subtitleTaskCreateInitialPath}
         bulkSourceRows={subtitleTaskBulkRows}
       />
-
       <ProTable<VideoFolderScanItem>
         rowKey="video_path"
         actionRef={actionRef}
         search={false}
-        loading={scanVideoFolderMutation.isPending}
+        params={params}
+        request={async (params) => {
+          const res = await scanVideoFolder({ root_dir: params.rootDir })
+          return {
+            data: res.items,
+            success: true,
+          }
+        }}
         options={{ reload: false, density: false, setting: false }}
         expandable={{
           rowExpandable: row => (row.subtitle_names ?? []).length > 0,
@@ -128,9 +195,8 @@ function PageComponent() {
             return (
               <List
                 size="small"
-                bordered
-                className="max-w-3xl bg-white"
                 dataSource={list}
+                className="ml-4!"
                 renderItem={(name) => {
                   return (
                     <List.Item
@@ -169,125 +235,44 @@ function PageComponent() {
             )
           },
         }}
+        manualRequest
         rowSelection={{
           selectedRowKeys: selectedRows.map(v => v.video_path),
           onChange: (_keys, rows) => {
             setSelectedRows(rows)
           },
         }}
-        dataSource={scanVideoFolderMutation.data?.items ?? []}
         pagination={{ pageSize: 20, showSizeChanger: true }}
-        toolBarRender={() => [
-          <FsDirTreeSelect
-            key="root"
-            style={{ width: 520 }}
-            value={rootDir}
-            placeholder="请选择后端可访问的文件夹（递归扫描子目录）"
-            onChange={setRootDir}
-            onPressEnter={() => scanVideoFolderMutation.mutate()}
-          />,
-          <Button
-            key="scan"
-            type="primary"
-            loading={scanVideoFolderMutation.isPending}
-            onClick={() => scanVideoFolderMutation.mutate()}
-          >
-            查询
-          </Button>,
-          <Button
-            key="select-no-sub"
-            disabled={!scanVideoFolderMutation.data?.items.length}
-            onClick={() => {
-              const rows = scanVideoFolderMutation.data?.items.filter(v => (v.subtitle_names ?? []).length === 0) ?? []
-              setSelectedRows(rows)
-            }}
-          >
-            选择无字幕视频
-          </Button>,
+        toolBarRender={(_action, { selectedRows }) => [
           <Button
             key="bulk-enqueue"
             type="primary"
-            disabled={!selectedRows.length}
-            onClick={() => openSubtitleCreateBulk(selectedRows)}
+            disabled={!selectedRows?.length}
+            onClick={() => openSubtitleCreateBulk(selectedRows ?? [])}
           >
             批量字幕生成
           </Button>,
         ]}
+        onRequestError={(error) => {
+          message.error(error.message ?? '查询失败')
+        }}
+        toolbar={{
+          search: {
+            onSearch: (value) => {
+              setParams(prev => ({ ...prev, rootDir: value }))
+            },
+          },
+        }}
         columns={[
           {
             title: '视频名称',
             dataIndex: 'video_name',
-            width: 220,
             ellipsis: true,
             search: false,
-            filterIcon: (filtered) => {
-              return <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
-            },
-            filterDropdown: ({ selectedKeys, setSelectedKeys, confirm, clearFilters, close }) => {
-              const v = String(selectedKeys?.[0] ?? '')
-              return (
-                <div className="p-2">
-                  <Input
-                    autoFocus
-                    placeholder="输入关键字筛选"
-                    value={v}
-                    onChange={(e) => {
-                      const next = e.target.value
-                      setSelectedKeys(next ? [next] : [])
-                    }}
-                    onPressEnter={() => confirm()}
-                    style={{ width: 220 }}
-                  />
-                  <div className="mt-2">
-                    <Space size={8}>
-                      <Button
-                        type="primary"
-                        size="small"
-                        onClick={() => confirm()}
-                      >
-                        确定
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          clearFilters?.()
-                          confirm()
-                        }}
-                      >
-                        重置
-                      </Button>
-                      <Button
-                        size="small"
-                        type="link"
-                        onClick={() => close()}
-                      >
-                        关闭
-                      </Button>
-                    </Space>
-                  </div>
-                </div>
-              )
-            },
-            onFilter: (val, record) => {
-              const q = String(val ?? '').trim().toLowerCase()
-              if (!q)
-                return true
-              return String(record.video_name ?? '').toLowerCase().includes(q)
-            },
+            copyable: true,
+            ...filterConfig(),
           },
-          {
-            title: '视频路径',
-            dataIndex: 'video_path',
-            ellipsis: true,
-            search: false,
-          },
-          {
-            title: '视频大小',
-            dataIndex: 'video_size',
-            width: 120,
-            search: false,
-            render: (_, row) => formatBytes(Number(row.video_size)),
-          },
+          Table.EXPAND_COLUMN,
           {
             title: '字幕文件',
             dataIndex: 'subtitle_names',
@@ -297,9 +282,37 @@ function PageComponent() {
               const list = row.subtitle_names ?? []
               if (!list.length)
                 return <Typography.Text type="secondary">-</Typography.Text>
-              return <span>{list.length}</span>
+              return (
+                <span>
+                  {list.length}
+                  个
+                </span>
+              )
             },
           },
+          {
+            title: '文件夹',
+            dataIndex: 'video_path',
+            ellipsis: true,
+            search: false,
+            render: (_, row) => {
+              const parentPath = getParentPath(row.video_path)
+
+              return (
+                <Typography.Text ellipsis={{ tooltip: parentPath }} className="max-w-[min(52vw,36rem)]">
+                  {parentPath}
+                </Typography.Text>
+              )
+            },
+          },
+          {
+            title: '视频大小',
+            dataIndex: 'video_size',
+            width: 120,
+            search: false,
+            render: (_, row) => formatBytes(Number(row.video_size)),
+          },
+
           {
             title: '操作',
             valueType: 'option',

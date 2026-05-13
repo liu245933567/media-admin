@@ -1,7 +1,8 @@
 import type { SubtitleWebRow } from '@/types/api'
+import { DownloadOutlined } from '@ant-design/icons'
 import { ProTable } from '@ant-design/pro-components'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { App, Button, Modal } from 'antd'
+import { App, Button, Modal, Tooltip } from 'antd'
 import { useState } from 'react'
 import { downloadSubtitleToDiskApi, searchSubtitlesApi } from '@/request'
 
@@ -19,14 +20,14 @@ function DownloadButton({ videoPath, subtitle, onDownloaded }: { videoPath: stri
     },
   })
   return (
-    <Button
-      size="small"
-      loading={downloadSubtitleToDiskMutation.isPending}
-      type="primary"
-      onClick={() => downloadSubtitleToDiskMutation.mutate({ video_path: videoPath, subtitle_id: subtitle.id })}
-    >
-      下载到磁盘
-    </Button>
+    <Tooltip title="下载到与视频同目录">
+      <Button
+        loading={downloadSubtitleToDiskMutation.isPending}
+        type="text"
+        icon={<DownloadOutlined />}
+        onClick={() => downloadSubtitleToDiskMutation.mutate({ video_path: videoPath, subtitle_id: subtitle.id })}
+      />
+    </Tooltip>
   )
 }
 

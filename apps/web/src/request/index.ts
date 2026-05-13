@@ -49,8 +49,6 @@ export function fetchFsList(params: FsListReq) {
   return post<FsListItem[], FsListReq>('/fs/list', params)
 }
 
-export const fsReadTextQueryKey = ['fs', 'read-text'] as const
-
 /** 读取文本文件（用于预览字幕内容） */
 export function fetchFsReadText(params: FsReadTextReq) {
   return post<FsReadTextRes, FsReadTextReq>('/fs/read-text', params)

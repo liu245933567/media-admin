@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Modal, Result, Spin } from 'antd'
 import { useMemo, useState } from 'react'
-import { fetchFsReadText, fsReadTextQueryKey } from '@/request'
+import { fetchFsReadText } from '@/request'
 import { deserializeSubtitleText } from '@/utils/subtitle'
 
 export interface SubtitleDetailModalProps {
@@ -17,16 +17,15 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
     return subtitlePath.split('/').pop()
   }, [subtitlePath])
 
-  const fsReadTextQuery = useQuery({
-    queryKey: fsReadTextQueryKey,
-    queryFn: async () => {
+  const fsReadTextQuery = useMutation({
+    mutationFn: async () => {
       const res = await fetchFsReadText({ path: subtitlePath })
       return deserializeSubtitleText(res.content)
     },
   })
 
   const renderSubtitleContent = () => {
-    if (fsReadTextQuery.isFetching) {
+    if (fsReadTextQuery.isPending) {
       return <Spin spinning />
     }
 
@@ -55,10 +54,16 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
 
   return (
     <>
-      {trigger({ setOpen })}
+      {trigger({ setOpen: (open) => {
+        setOpen(open)
+        if (open) {
+          fsReadTextQuery.mutate()
+        }
+      } })}
       <Modal
         title={subtitlePreviewTitle ? `字幕内容：${subtitlePreviewTitle}` : '字幕内容'}
         open={open}
+        loading={fsReadTextQuery.isPending}
         onCancel={() => {
           setOpen(false)
         }}
