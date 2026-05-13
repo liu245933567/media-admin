@@ -49,11 +49,17 @@ export function SubtitleWebModal({
   const subtitleWebSearchQuery = useQuery({
     queryKey: ['subtitle-web-search', videoPath],
     queryFn: () => searchSubtitlesApi({ video_path: videoPath }),
+    enabled: false,
   })
 
   return (
     <>
-      {trigger({ setOpen })}
+      {trigger({ setOpen: (open) => {
+        setOpen(open)
+        if (open) {
+          subtitleWebSearchQuery.refetch()
+        }
+      } })}
       <Modal
         title="网络字幕搜索/下载"
         open={open}

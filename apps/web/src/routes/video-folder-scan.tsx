@@ -6,11 +6,10 @@ import { useMutation } from '@tanstack/react-query'
 
 import { createFileRoute } from '@tanstack/react-router'
 import { App, Button, Input, List, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
-import { useCallback, useRef, useState } from 'react'
-import { FsDirTreeSelect } from '@/component/fs-dir-tree-select'
-import { SubtitleWebModal } from '@/component/subtitle-web-modal'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
+import { SubtitleWebModal } from '@/components/subtitle-web-modal'
 import { fetchFsDeleteSubtitleApi, scanVideoFolder } from '@/request'
 import { formatBytes } from '@/utils'
 
@@ -141,8 +140,6 @@ function PageComponent() {
 
   const [params, setParams] = useState<{ rootDir: string }>({ rootDir: '' })
 
-  const [selectedRows, setSelectedRows] = useState<VideoFolderScanItem[]>([])
-
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
   const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<VideoFolderScanItem[] | undefined>()
@@ -158,6 +155,141 @@ function PageComponent() {
     setSubtitleTaskBulkRows(rows)
     setSubtitleTaskCreateOpen(true)
   }, [])
+
+  const expandable = useMemo(() => ({
+    rowExpandable: (row: VideoFolderScanItem) => (row.subtitle_names ?? []).length > 0,
+    expandedRowRender: (row: VideoFolderScanItem) => {
+      const list = row.subtitle_names ?? []
+      if (!list.length)
+        return null
+      return (
+        <List
+          size="small"
+          dataSource={list}
+          className="ml-4!"
+          renderItem={(name) => {
+            return (
+              <List.Item
+                actions={[
+                  <SubtitleDetailModal
+                    subtitlePath={joinVideoDir(row.video_path, name)}
+                    key="preview"
+                    trigger={({ setOpen }) => (
+                      <Button
+                        type="link"
+                        size="small"
+                        className="m-0! p-0!"
+                        onClick={() => setOpen(true)}
+                      >
+                        预览
+                      </Button>
+                    )}
+                  />,
+                  <DeleteSubtitleButton
+                    key="delete"
+                    videoPath={row.video_path}
+                    subtitleName={name}
+                    onDeleted={() => {
+                      actionRef.current?.reload()
+                    }}
+                  />,
+                ]}
+              >
+                <Typography.Text ellipsis={{ tooltip: name }} className="max-w-[min(52vw,36rem)]">
+                  {name}
+                </Typography.Text>
+              </List.Item>
+            )
+          }}
+        />
+      )
+    },
+  }), [])
+
+  const columns = useMemo<ProColumns<VideoFolderScanItem>[]>(() => [
+    {
+      title: '视频名称',
+      dataIndex: 'video_name',
+      ellipsis: true,
+      search: false,
+      copyable: true,
+      ...filterConfig(),
+    },
+    Table.EXPAND_COLUMN,
+    {
+      title: '字幕文件',
+      dataIndex: 'subtitle_names',
+      width: 110,
+      search: false,
+      render: (_, row) => {
+        const list = row.subtitle_names ?? []
+        if (!list.length)
+          return <Typography.Text type="secondary">-</Typography.Text>
+        return (
+          <span>
+            {list.length}
+            个
+          </span>
+        )
+      },
+    },
+    {
+      title: '文件夹',
+      dataIndex: 'video_path',
+      ellipsis: true,
+      search: false,
+      render: (_, row) => {
+        const parentPath = getParentPath(row.video_path)
+
+        return (
+          <Typography.Text ellipsis={{ tooltip: parentPath }} className="max-w-[min(52vw,36rem)]">
+            {parentPath}
+          </Typography.Text>
+        )
+      },
+    },
+    {
+      title: '视频大小',
+      dataIndex: 'video_size',
+      width: 120,
+      search: false,
+      render: (_, row) => formatBytes(Number(row.video_size)),
+    },
+
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 200,
+      render: (_, { video_path }, _index, action) => [
+        <Button
+          key="enqueue"
+          type="link"
+          className="m-0! p-0!"
+          onClick={() => openSubtitleCreateSingle(video_path)}
+        >
+          生成字幕
+        </Button>,
+        <SubtitleWebModal
+          key="subtitle-web"
+          videoPath={video_path}
+          trigger={({ setOpen }) => (
+            <Tooltip title="查询网络字幕">
+              <Button
+                type="link"
+                className="m-0! p-0!"
+                onClick={() => setOpen(true)}
+              >
+                查询网络字幕
+              </Button>
+            </Tooltip>
+          )}
+          onDownloaded={() => {
+            action?.reload()
+          }}
+        />,
+      ],
+    },
+  ], [openSubtitleCreateSingle])
 
   return (
     <PageContainer title={false}>
@@ -186,62 +318,9 @@ function PageComponent() {
           }
         }}
         options={{ reload: false, density: false, setting: false }}
-        expandable={{
-          rowExpandable: row => (row.subtitle_names ?? []).length > 0,
-          expandedRowRender: (row) => {
-            const list = row.subtitle_names ?? []
-            if (!list.length)
-              return null
-            return (
-              <List
-                size="small"
-                dataSource={list}
-                className="ml-4!"
-                renderItem={(name) => {
-                  return (
-                    <List.Item
-                      actions={[
-                        <SubtitleDetailModal
-                          subtitlePath={joinVideoDir(row.video_path, name)}
-                          key="preview"
-                          trigger={({ setOpen }) => (
-                            <Button
-                              type="link"
-                              size="small"
-                              className="m-0! p-0!"
-                              onClick={() => setOpen(true)}
-                            >
-                              预览
-                            </Button>
-                          )}
-                        />,
-                        <DeleteSubtitleButton
-                          key="delete"
-                          videoPath={row.video_path}
-                          subtitleName={name}
-                          onDeleted={() => {
-                            actionRef.current?.reload()
-                          }}
-                        />,
-                      ]}
-                    >
-                      <Typography.Text ellipsis={{ tooltip: name }} className="max-w-[min(52vw,36rem)]">
-                        {name}
-                      </Typography.Text>
-                    </List.Item>
-                  )
-                }}
-              />
-            )
-          },
-        }}
+        expandable={expandable}
         manualRequest
-        rowSelection={{
-          selectedRowKeys: selectedRows.map(v => v.video_path),
-          onChange: (_keys, rows) => {
-            setSelectedRows(rows)
-          },
-        }}
+        rowSelection={{}}
         pagination={{ pageSize: 20, showSizeChanger: true }}
         toolBarRender={(_action, { selectedRows }) => [
           <Button
@@ -263,90 +342,7 @@ function PageComponent() {
             },
           },
         }}
-        columns={[
-          {
-            title: '视频名称',
-            dataIndex: 'video_name',
-            ellipsis: true,
-            search: false,
-            copyable: true,
-            ...filterConfig(),
-          },
-          Table.EXPAND_COLUMN,
-          {
-            title: '字幕文件',
-            dataIndex: 'subtitle_names',
-            width: 110,
-            search: false,
-            render: (_, row) => {
-              const list = row.subtitle_names ?? []
-              if (!list.length)
-                return <Typography.Text type="secondary">-</Typography.Text>
-              return (
-                <span>
-                  {list.length}
-                  个
-                </span>
-              )
-            },
-          },
-          {
-            title: '文件夹',
-            dataIndex: 'video_path',
-            ellipsis: true,
-            search: false,
-            render: (_, row) => {
-              const parentPath = getParentPath(row.video_path)
-
-              return (
-                <Typography.Text ellipsis={{ tooltip: parentPath }} className="max-w-[min(52vw,36rem)]">
-                  {parentPath}
-                </Typography.Text>
-              )
-            },
-          },
-          {
-            title: '视频大小',
-            dataIndex: 'video_size',
-            width: 120,
-            search: false,
-            render: (_, row) => formatBytes(Number(row.video_size)),
-          },
-
-          {
-            title: '操作',
-            valueType: 'option',
-            width: 200,
-            render: (_, { video_path }, _index, action) => [
-              <Button
-                key="enqueue"
-                type="link"
-                className="m-0! p-0!"
-                onClick={() => openSubtitleCreateSingle(video_path)}
-              >
-                生成字幕
-              </Button>,
-              <SubtitleWebModal
-                key="subtitle-web"
-                videoPath={video_path}
-                trigger={({ setOpen }) => (
-                  <Tooltip title="查询网络字幕">
-                    <Button
-                      type="link"
-                      className="m-0! p-0!"
-                      onClick={() => setOpen(true)}
-                    >
-                      查询网络字幕
-                    </Button>
-                  </Tooltip>
-                )}
-                onDownloaded={() => {
-                  action?.reload()
-                }}
-              />,
-            ],
-          },
-        ]}
+        columns={columns}
       />
     </PageContainer>
   )

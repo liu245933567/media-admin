@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { Modal, Result, Spin } from 'antd'
+import { Drawer, Modal, Result, Spin } from 'antd'
 import { useMemo, useState } from 'react'
 import { fetchFsReadText } from '@/request'
 import { deserializeSubtitleText } from '@/utils/subtitle'
@@ -37,14 +37,14 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
       <div>
         {
           fsReadTextQuery.data?.map(item => (
-            <div key={item.startTime}>
-              <div>
+            <div key={item.startTime} className="flex gap-4">
+              <div className="text-gray-500">
                 <span>{item.startTime}</span>
                 ~
                 <span>{item.endTime}</span>
               </div>
 
-              <div>{item.text}</div>
+              <div className="flex-1">{item.text}</div>
             </div>
           ))
         }
@@ -60,19 +60,19 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
           fsReadTextQuery.mutate()
         }
       } })}
-      <Modal
+      <Drawer
         title={subtitlePreviewTitle ? `字幕内容：${subtitlePreviewTitle}` : '字幕内容'}
         open={open}
         loading={fsReadTextQuery.isPending}
-        onCancel={() => {
+        onClose={() => {
           setOpen(false)
         }}
+        size={1100}
         footer={null}
-        width={900}
         destroyOnHidden
       >
         {renderSubtitleContent()}
-      </Modal>
+      </Drawer>
     </>
   )
 }
