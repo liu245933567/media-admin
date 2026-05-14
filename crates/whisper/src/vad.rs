@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use webrtc_vad::{SampleRate, Vad, VadMode};
 
 use crate::types::VadConfig;

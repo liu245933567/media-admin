@@ -32,7 +32,7 @@ reqwest = { version = "0.13.3", features = [
 ], default-features = false }
 typeshare = "1.0.5"
 sqlx = { version = "0.8.6", default-features = false, features = [
-  "runtime-tokio",
+  "runtime-tokio-rustls",
   "sqlite",
   "macros",
   "migrate",
@@ -40,3 +40,5 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 log = "0.4"
 chrono = "0.4"
 dotenvy = "0.15"
+taskmill = "0.7.1"
+tokio-util = "0.7"

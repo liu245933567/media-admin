@@ -1,6 +1,12 @@
 use crate::{AppState, StateRouter, error::AppError};
 use axum::{Json, Router, extract::State, routing::post};
 use axum_extra::extract::WithRejection;
+use ma_service::subtitle_translate_task::types::{
+    SubtitleTranslateTaskCreateReq, SubtitleTranslateTaskDeleteReq, SubtitleTranslateTaskDeleteRes,
+    SubtitleTranslateTaskItem, SubtitleTranslateTaskListReq, SubtitleTranslateTaskListRes,
+    SubtitleTranslateTaskQueueResumeReq, SubtitleTranslateTaskRetryReq,
+    SubtitleTranslateTaskRetryRes,
+};
 use ma_service::subtitle_translate_task::{
     SubtitleTranslateTaskQueuePauseReq, SubtitleTranslateTaskQueuePauseRes,
     SubtitleTranslateTaskQueueResumeRes, SubtitleTranslateTaskQueueStatusReq,
@@ -8,11 +14,6 @@ use ma_service::subtitle_translate_task::{
     delete_subtitle_translate_task, list_subtitle_translate_tasks,
     pause_subtitle_translate_task_queue, resume_subtitle_translate_task_queue,
     retry_subtitle_translate_task,
-};
-use ma_service::subtitle_translate_task::types::{
-    SubtitleTranslateTaskCreateReq, SubtitleTranslateTaskDeleteReq, SubtitleTranslateTaskDeleteRes,
-    SubtitleTranslateTaskItem, SubtitleTranslateTaskListReq, SubtitleTranslateTaskListRes,
-    SubtitleTranslateTaskQueueResumeReq, SubtitleTranslateTaskRetryReq, SubtitleTranslateTaskRetryRes,
 };
 
 pub fn routes() -> StateRouter {
@@ -86,7 +87,10 @@ async fn retry_handler(
 
 async fn queue_pause_handler(
     State(state): State<AppState>,
-    WithRejection(Json(_body), _): WithRejection<Json<SubtitleTranslateTaskQueuePauseReq>, AppError>,
+    WithRejection(Json(_body), _): WithRejection<
+        Json<SubtitleTranslateTaskQueuePauseReq>,
+        AppError,
+    >,
 ) -> Result<Json<SubtitleTranslateTaskQueuePauseRes>, AppError> {
     state.subtitle_translate_task_queue.request_pause();
 
@@ -99,7 +103,10 @@ async fn queue_pause_handler(
 
 async fn queue_resume_handler(
     State(state): State<AppState>,
-    WithRejection(Json(_body), _): WithRejection<Json<SubtitleTranslateTaskQueueResumeReq>, AppError>,
+    WithRejection(Json(_body), _): WithRejection<
+        Json<SubtitleTranslateTaskQueueResumeReq>,
+        AppError,
+    >,
 ) -> Result<Json<SubtitleTranslateTaskQueueResumeRes>, AppError> {
     state.subtitle_translate_task_queue.resume();
 
@@ -114,7 +121,10 @@ async fn queue_resume_handler(
 
 async fn queue_status_handler(
     State(state): State<AppState>,
-    WithRejection(Json(_body), _): WithRejection<Json<SubtitleTranslateTaskQueueStatusReq>, AppError>,
+    WithRejection(Json(_body), _): WithRejection<
+        Json<SubtitleTranslateTaskQueueStatusReq>,
+        AppError,
+    >,
 ) -> Result<Json<SubtitleTranslateTaskQueueStatusRes>, AppError> {
     Ok(Json(SubtitleTranslateTaskQueueStatusRes {
         status: state.subtitle_translate_task_queue.status().to_string(),

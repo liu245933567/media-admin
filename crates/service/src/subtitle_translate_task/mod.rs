@@ -83,8 +83,7 @@ pub async fn list_subtitle_translate_tasks(
     let offset_i = i64::try_from((page - 1).saturating_mul(page_size))?;
 
     let total: i64 = {
-        let mut qb =
-            QueryBuilder::new("SELECT COUNT(*) FROM subtitle_translate_task WHERE 1=1");
+        let mut qb = QueryBuilder::new("SELECT COUNT(*) FROM subtitle_translate_task WHERE 1=1");
         push_translate_task_list_filters(&mut qb, req);
         qb.build_query_scalar().fetch_one(db).await?
     };
@@ -98,8 +97,10 @@ pub async fn list_subtitle_translate_tasks(
     qb.push(" OFFSET ");
     qb.push_bind(offset_i);
 
-    let models: Vec<SubtitleTranslateTask> =
-        qb.build_query_as::<SubtitleTranslateTask>().fetch_all(db).await?;
+    let models: Vec<SubtitleTranslateTask> = qb
+        .build_query_as::<SubtitleTranslateTask>()
+        .fetch_all(db)
+        .await?;
 
     let items = models
         .into_iter()

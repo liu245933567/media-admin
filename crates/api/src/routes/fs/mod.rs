@@ -1,10 +1,10 @@
 use crate::{StateRouter, error::AppError};
-use ma_service::fs::{
-    delete_subtitle_file, get_fs_list, read_text_file, FsDeleteReq, FsDeleteRes, FsListItem,
-    FsListReq, FsReadTextReq, FsReadTextRes,
-};
 use axum::{Json, Router, routing::post};
 use axum_extra::extract::WithRejection;
+use ma_service::fs::{
+    FsDeleteReq, FsDeleteRes, FsListItem, FsListReq, FsReadTextReq, FsReadTextRes,
+    delete_subtitle_file, get_fs_list, read_text_file,
+};
 
 pub fn routes() -> StateRouter {
     Router::new()

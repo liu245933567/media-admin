@@ -2,17 +2,22 @@ use crate::{AppState, StateRouter, error::AppError};
 use ma_service::subtitle_task::{
     SubtitleTaskQueuePauseReq, SubtitleTaskQueuePauseRes, SubtitleTaskQueueResumeRes,
     SubtitleTaskQueueStatusReq, SubtitleTaskQueueStatusRes, bulk_create_subtitle_tasks,
-    create_subtitle_task, default_subtitle_generate_config, delete_subtitle_task, list_subtitle_tasks,
-    pause_subtitle_task_queue, resume_subtitle_task_queue, retry_subtitle_task,
+    create_subtitle_task, default_subtitle_generate_config, delete_subtitle_task,
+    list_subtitle_tasks, pause_subtitle_task_queue, resume_subtitle_task_queue,
+    retry_subtitle_task,
 };
 
-use axum::{Json, Router, extract::State, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use axum_extra::extract::WithRejection;
 use ma_service::subtitle_task::types::{
     SubtitleTaskBulkCreateReq, SubtitleTaskBulkCreateRes, SubtitleTaskCreateReq,
-    SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskGenerateDefaultsRes, SubtitleTaskItem,
-    SubtitleTaskListReq, SubtitleTaskListRes, SubtitleTaskQueueResumeReq, SubtitleTaskRetryReq,
-    SubtitleTaskRetryRes,
+    SubtitleTaskDeleteReq, SubtitleTaskDeleteRes, SubtitleTaskGenerateDefaultsRes,
+    SubtitleTaskItem, SubtitleTaskListReq, SubtitleTaskListRes, SubtitleTaskQueueResumeReq,
+    SubtitleTaskRetryReq, SubtitleTaskRetryRes,
 };
 pub fn routes() -> StateRouter {
     Router::new()

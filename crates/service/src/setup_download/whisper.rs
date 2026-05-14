@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow, bail};
 use futures_util::StreamExt;
-use ma_utils::config::{get_models_dir, get_download_dir};
+use ma_utils::config::{get_download_dir, get_models_dir};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::watch;
 
@@ -81,7 +81,11 @@ pub async fn run_whisper_download(
                 "downloading",
                 received,
                 total,
-                format!("已下载 {} / {}", format_bytes(received), format_total(total)),
+                format!(
+                    "已下载 {} / {}",
+                    format_bytes(received),
+                    format_total(total)
+                ),
             )
             .await;
         }
@@ -90,14 +94,7 @@ pub async fn run_whisper_download(
     file.flush().await?;
     drop(file);
 
-    send_progress(
-        &progress,
-        "moving",
-        received,
-        total,
-        "正在写入模型目录",
-    )
-    .await;
+    send_progress(&progress, "moving", received, total, "正在写入模型目录").await;
 
     let models_dir = get_models_dir();
     tokio::fs::create_dir_all(&models_dir).await?;

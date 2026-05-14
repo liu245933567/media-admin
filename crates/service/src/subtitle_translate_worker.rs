@@ -6,18 +6,15 @@ use ma_subtitle::{translate::translate_srt_file, types::SubtitleTranslateConfig}
 use sqlx::SqlitePool;
 
 use crate::subtitle_translate_task::{
-    append_translate_task_record, get_subtitle_translate_task,
-    set_subtitle_translate_task_status, types::SubtitleTranslateTaskStatus,
+    append_translate_task_record, get_subtitle_translate_task, set_subtitle_translate_task_status,
+    types::SubtitleTranslateTaskStatus,
 };
 use crate::task_queue::BackgroundTaskQueue;
 use ma_db::entity::subtitle_translate_task::SubtitleTranslateTask;
 
 pub type SubtitleTranslateTaskQueue = BackgroundTaskQueue;
 
-pub fn spawn_subtitle_translate_task_worker(
-    db: SqlitePool,
-    queue: SubtitleTranslateTaskQueue,
-) {
+pub fn spawn_subtitle_translate_task_worker(db: SqlitePool, queue: SubtitleTranslateTaskQueue) {
     tokio::spawn(async move {
         loop {
             if let Err(e) = tick(&db, &queue).await {
@@ -57,22 +54,15 @@ async fn tick(db: &SqlitePool, queue: &SubtitleTranslateTaskQueue) -> Result<()>
             &SubtitleTranslateTaskStatus::FAILED.to_string(),
         )
         .await;
-        let _ = append_translate_task_record(
-            db,
-            task_id,
-            "ERROR",
-            "任务异常退出",
-            &format!("{e:#}"),
-        )
-        .await;
+        let _ =
+            append_translate_task_record(db, task_id, "ERROR", "任务异常退出", &format!("{e:#}"))
+                .await;
     }
     queue.mark_paused_if_pausing();
     Ok(())
 }
 
-async fn claim_next_pending_task(
-    db: &SqlitePool,
-) -> Result<Option<SubtitleTranslateTask>> {
+async fn claim_next_pending_task(db: &SqlitePool) -> Result<Option<SubtitleTranslateTask>> {
     let task: Option<SubtitleTranslateTask> = sqlx::query_as::<_, SubtitleTranslateTask>(
         r#"
         SELECT task_id, task_status, source_srt_path, config_json, created_at, updated_at
@@ -117,8 +107,8 @@ async fn process_translate_task(db: &SqlitePool, task_id: i32) -> Result<()> {
     append_translate_task_record(db, task_id, "INFO", "任务开始", "").await?;
 
     let task = get_subtitle_translate_task(db, task_id).await?;
-    let cfg: SubtitleTranslateConfig = serde_json::from_str(&task.config_json)
-        .context("解析 config_json 失败")?;
+    let cfg: SubtitleTranslateConfig =
+        serde_json::from_str(&task.config_json).context("解析 config_json 失败")?;
 
     let src = Path::new(&task.source_srt_path);
     let out = translate_srt_file(src, None, &cfg).await;
@@ -147,14 +137,8 @@ async fn process_translate_task(db: &SqlitePool, task_id: i32) -> Result<()> {
                 &SubtitleTranslateTaskStatus::FAILED.to_string(),
             )
             .await?;
-            append_translate_task_record(
-                db,
-                task_id,
-                "ERROR",
-                "任务失败",
-                &format!("{e:#}"),
-            )
-            .await?;
+            append_translate_task_record(db, task_id, "ERROR", "任务失败", &format!("{e:#}"))
+                .await?;
         }
     }
 

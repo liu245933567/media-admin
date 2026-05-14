@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
 

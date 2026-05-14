@@ -42,18 +42,20 @@ async fn whisper_download_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<WhisperDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {
-    let res = state.setup_download.start_whisper_download(body).await.map_err(|e| {
-        let s = e.to_string();
-        if s.contains("whisper_download_blocked:already_present") {
-            AppError::BadRequest("该模型已在本地就绪，无需下载".into())
-        }
-        else if s.starts_with("未知模型 id:") {
-            AppError::BadRequest(s)
-        }
-        else {
-            AppError::Internal(e)
-        }
-    })?;
+    let res = state
+        .setup_download
+        .start_whisper_download(body)
+        .await
+        .map_err(|e| {
+            let s = e.to_string();
+            if s.contains("whisper_download_blocked:already_present") {
+                AppError::BadRequest("该模型已在本地就绪，无需下载".into())
+            } else if s.starts_with("未知模型 id:") {
+                AppError::BadRequest(s)
+            } else {
+                AppError::Internal(e)
+            }
+        })?;
     Ok(Json(res))
 }
 
@@ -61,15 +63,18 @@ async fn ffmpeg_download_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<FfmpegDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {
-    let res = state.setup_download.start_ffmpeg_download(body).await.map_err(|e| {
-        let s = e.to_string();
-        if s.contains("ffmpeg_download_blocked:already_present") {
-            AppError::BadRequest("FFmpeg 已在本地就绪，无需下载".into())
-        }
-        else {
-            AppError::Internal(e)
-        }
-    })?;
+    let res = state
+        .setup_download
+        .start_ffmpeg_download(body)
+        .await
+        .map_err(|e| {
+            let s = e.to_string();
+            if s.contains("ffmpeg_download_blocked:already_present") {
+                AppError::BadRequest("FFmpeg 已在本地就绪，无需下载".into())
+            } else {
+                AppError::Internal(e)
+            }
+        })?;
     Ok(Json(res))
 }
 

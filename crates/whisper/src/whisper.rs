@@ -4,11 +4,11 @@ use std::{
     time::Instant,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use ma_utils::config::get_models_dir;
 use whisper_rs::{
-    convert_integer_to_float_audio, get_lang_str, install_logging_hooks, FullParams,
-    SamplingStrategy, SegmentCallbackData, WhisperContext, WhisperContextParameters,
+    FullParams, SamplingStrategy, SegmentCallbackData, WhisperContext, WhisperContextParameters,
+    convert_integer_to_float_audio, get_lang_str, install_logging_hooks,
 };
 
 use crate::types::{

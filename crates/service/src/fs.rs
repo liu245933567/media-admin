@@ -3,7 +3,7 @@ use std::{
     time,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 #[typeshare::typeshare]
@@ -147,10 +147,7 @@ pub async fn read_text_file(path: String) -> Result<FsReadTextRes> {
 }
 
 fn subtitle_ext_allowed_for_delete(ext: &str) -> bool {
-    matches!(
-        ext,
-        "srt" | "ass" | "ssa" | "vtt" | "sub" | "smi"
-    )
+    matches!(ext, "srt" | "ass" | "ssa" | "vtt" | "sub" | "smi")
 }
 
 /// 删除字幕文件（与视频目录扫描识别的字幕扩展名一致）

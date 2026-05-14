@@ -60,7 +60,9 @@ fn resolve_translate_credentials(options: &SubtitleTranslateConfig) -> Result<(S
 }
 
 /// 创建 OpenAI 兼容客户端（硅基流动等），凭据来自任务配置或环境变量。
-pub fn build_translate_openai_client(options: &SubtitleTranslateConfig) -> Result<Client<OpenAIConfig>> {
+pub fn build_translate_openai_client(
+    options: &SubtitleTranslateConfig,
+) -> Result<Client<OpenAIConfig>> {
     let (base, key) = resolve_translate_credentials(options)?;
 
     tracing::info!("构建翻译 OpenAI 客户端: base={base}, key={key}");
@@ -231,8 +233,7 @@ fn openai_error_should_abort_whole_task(err: &OpenAIError) -> bool {
         OpenAIError::ApiError(api) => {
             let m = api.message.to_ascii_lowercase();
             let code = api.code.as_deref().unwrap_or("").to_ascii_lowercase();
-            m.contains("api key")
-                && (m.contains("invalid") || m.contains("incorrect"))
+            m.contains("api key") && (m.contains("invalid") || m.contains("incorrect"))
                 || m.contains("unauthorized")
                 || m.contains("invalid_api_key")
                 || m.contains("incorrect api key")
@@ -245,9 +246,7 @@ fn openai_error_should_abort_whole_task(err: &OpenAIError) -> bool {
 
 fn map_openai_translate_err(e: OpenAIError) -> anyhow::Error {
     if openai_error_should_abort_whole_task(&e) {
-        anyhow!(
-            "{TRANSLATE_TASK_FATAL_MARKER} 翻译 API 鉴权失败或密钥无效，已中止任务: {e:#}"
-        )
+        anyhow!("{TRANSLATE_TASK_FATAL_MARKER} 翻译 API 鉴权失败或密钥无效，已中止任务: {e:#}")
     } else {
         anyhow::Error::from(e)
     }
@@ -532,8 +531,8 @@ async fn run_batched(
     let batches: Vec<Vec<(usize, String)>> = items.chunks(batch_size).map(|c| c.to_vec()).collect();
     let total_batches = batches.len();
 
-    let per_batch: Vec<Result<Vec<(usize, Result<String>)>>> = stream::iter(
-        batches.into_iter().enumerate().map(|(bi, batch)| {
+    let per_batch: Vec<Result<Vec<(usize, Result<String>)>>> =
+        stream::iter(batches.into_iter().enumerate().map(|(bi, batch)| {
             let client = client.clone();
             let model = model.to_string();
             let lang = target_language.to_string();
@@ -582,11 +581,10 @@ async fn run_batched(
                     }
                 }
             }
-        }),
-    )
-    .buffer_unordered(concurrency)
-    .collect()
-    .await;
+        }))
+        .buffer_unordered(concurrency)
+        .collect()
+        .await;
 
     let mut out = Vec::new();
     for br in per_batch {

@@ -21,6 +21,8 @@ serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 sqlx.workspace = true
+taskmill.workspace = true
+tokio-util.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
 media-admin-subtitle = { path = "../../crates/subtitle" }

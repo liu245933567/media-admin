@@ -1,4 +1,5 @@
 use axum::Router;
+use ma_service::job::{TaskmillDemo, spawn_taskmill_demo_scheduler};
 use ma_service::setup_download::SetupDownloadState;
 use ma_service::subtitle_translate_worker::{
     SubtitleTranslateTaskQueue, spawn_subtitle_translate_task_worker,
@@ -50,18 +51,22 @@ pub async fn serve() -> anyhow::Result<()> {
 
     let setup_download = build_setup_download_state()?;
 
+    let taskmill_demo = TaskmillDemo::setup().await?;
+    spawn_taskmill_demo_scheduler(&taskmill_demo);
+
     let app_state = AppState {
         db,
         subtitle_task_queue,
         subtitle_translate_task_queue,
         setup_download,
+        taskmill_demo,
     };
 
     let app = build_router(app_state);
 
     tracing::info!("listening on {}", listen);
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service()).await?;
 
     Ok(())
 }
@@ -83,16 +88,20 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
 
     let setup_download = build_setup_download_state()?;
 
+    let taskmill_demo = TaskmillDemo::setup().await?;
+    spawn_taskmill_demo_scheduler(&taskmill_demo);
+
     let app_state = AppState {
         db,
         subtitle_task_queue,
         subtitle_translate_task_queue,
         setup_download,
+        taskmill_demo,
     };
     let app = build_router(app_state);
 
     tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, app).await {
+        if let Err(e) = axum::serve(listener, app.into_make_service()).await {
             tracing::error!(?e, "axum server stopped");
         }
     });
@@ -114,6 +123,7 @@ pub(crate) struct AppState {
     pub subtitle_task_queue: SubtitleTaskQueue,
     pub subtitle_translate_task_queue: SubtitleTranslateTaskQueue,
     pub setup_download: SetupDownloadState,
+    pub taskmill_demo: TaskmillDemo,
 }
 
 type StateRouter = Router<AppState>;

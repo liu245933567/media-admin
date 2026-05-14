@@ -69,8 +69,7 @@ pub async fn generate_subtitle_by_video(
             if all_segments.is_empty() {
                 tracing::info!("[subtitle] 无字幕条目，不加入翻译队列");
                 None
-            }
-            else {
+            } else {
                 tracing::info!(
                     "[subtitle] 已配置翻译，将由调用方加入翻译队列: {} -> {}",
                     detected_lang.as_deref().unwrap_or("auto"),
@@ -81,7 +80,7 @@ pub async fn generate_subtitle_by_video(
                     config: (*tc).clone(),
                 })
             }
-        },
+        }
     };
 
     Ok(SubtitleGenerateOutcome {

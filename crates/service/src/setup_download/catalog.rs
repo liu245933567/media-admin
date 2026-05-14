@@ -1,7 +1,6 @@
 use super::types::WhisperModelItem;
 
-const HF_BASE: &str =
-    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+const HF_BASE: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
 
 pub fn whisper_catalog() -> Vec<WhisperModelItem> {
     vec![

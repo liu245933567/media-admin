@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use ma_subtitle::{
-    generate::generate_subtitle_by_video,
-    types::SubtitleGenerateConfig,
-};
+use ma_subtitle::{generate::generate_subtitle_by_video, types::SubtitleGenerateConfig};
 use sqlx::SqlitePool;
 
 use crate::subtitle_task::{
@@ -64,15 +61,9 @@ async fn tick(
     let task_id = task.task_id;
     let outcome = process_task(db, task_id, translate_queue).await;
     if let Err(e) = outcome {
-        let _ = set_subtitle_task_status(db, task_id, &SubtitleTaskStatus::FAILED.to_string()).await;
-        let _ = append_task_record(
-            db,
-            task_id,
-            "ERROR",
-            "任务异常退出",
-            &format!("{e:#}"),
-        )
-        .await;
+        let _ =
+            set_subtitle_task_status(db, task_id, &SubtitleTaskStatus::FAILED.to_string()).await;
+        let _ = append_task_record(db, task_id, "ERROR", "任务异常退出", &format!("{e:#}")).await;
     }
     queue.mark_paused_if_pausing();
     Ok(())
@@ -127,8 +118,8 @@ async fn process_task(
     append_task_record(db, task_id, "INFO", "任务开始", "").await?;
 
     let task = get_subtitle_task(db, task_id).await?;
-    let cfg: SubtitleGenerateConfig = serde_json::from_str(&task.config_json)
-        .context("解析 config_json 失败")?;
+    let cfg: SubtitleGenerateConfig =
+        serde_json::from_str(&task.config_json).context("解析 config_json 失败")?;
 
     let gen_res = generate_subtitle_by_video(&cfg).await;
 

@@ -216,14 +216,13 @@ pub async fn retry_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<Subtit
         .await?;
 
     let now = Utc::now().to_rfc3339();
-    let res = sqlx::query(
-        "UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?",
-    )
-    .bind(SubtitleTaskStatus::PENDING.to_string())
-    .bind(&now)
-    .bind(task_id)
-    .execute(&mut *tx)
-    .await?;
+    let res =
+        sqlx::query("UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?")
+            .bind(SubtitleTaskStatus::PENDING.to_string())
+            .bind(&now)
+            .bind(task_id)
+            .execute(&mut *tx)
+            .await?;
 
     if res.rows_affected() == 0 {
         tx.rollback().await?;
@@ -234,10 +233,7 @@ pub async fn retry_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<Subtit
     Ok(SubtitleTaskRetryRes { ok: true })
 }
 
-pub async fn delete_subtitle_task(
-    db: &SqlitePool,
-    task_id: i32,
-) -> Result<SubtitleTaskDeleteRes> {
+pub async fn delete_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<SubtitleTaskDeleteRes> {
     let task: Option<SubtitleTask> = sqlx::query_as::<_, SubtitleTask>(
         r#"
         SELECT task_id, task_status, video_path, config_json, created_at, updated_at
@@ -292,20 +288,15 @@ pub async fn get_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<Subtitle
     task.ok_or_else(|| anyhow::anyhow!("任务不存在"))
 }
 
-pub async fn set_subtitle_task_status(
-    db: &SqlitePool,
-    task_id: i32,
-    status: &str,
-) -> Result<()> {
+pub async fn set_subtitle_task_status(db: &SqlitePool, task_id: i32, status: &str) -> Result<()> {
     let now = Utc::now().to_rfc3339();
-    let res = sqlx::query(
-        "UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?",
-    )
-    .bind(status)
-    .bind(&now)
-    .bind(task_id)
-    .execute(db)
-    .await?;
+    let res =
+        sqlx::query("UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?")
+            .bind(status)
+            .bind(&now)
+            .bind(task_id)
+            .execute(db)
+            .await?;
     if res.rows_affected() == 0 {
         bail!("任务不存在");
     }

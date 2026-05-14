@@ -1,5 +1,5 @@
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{fmt, layer::SubscriberExt, registry, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, registry, util::SubscriberInitExt};
 
 pub fn init_tracing() {
     // 未设置 RUST_LOG 时，`EnvFilter::from_default_env()` 等价于只放行 error，

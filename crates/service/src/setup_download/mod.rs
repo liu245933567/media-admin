@@ -9,5 +9,5 @@ pub use catalog::whisper_catalog;
 pub use state::{SetupDownloadState, parse_job_id};
 pub use types::{
     DownloadJobStartRes, DownloadProgressSnapshot, FfmpegDownloadStartReq, FfmpegSetupStatusRes,
-    WhisperDownloadStartReq, WhisperModelsListRes, WhisperModelItem,
+    WhisperDownloadStartReq, WhisperModelItem, WhisperModelsListRes,
 };

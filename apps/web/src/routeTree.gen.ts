@@ -15,6 +15,7 @@ import { Route as SubtitleTranslateTaskRouteImport } from './routes/subtitle-tra
 import { Route as SubtitleTaskRouteImport } from './routes/subtitle-task'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
+import { Route as JobDemoRouteImport } from './routes/job-demo'
 import { Route as FileSystemRouteImport } from './routes/file-system'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -48,6 +49,11 @@ const SettingRoute = SettingRouteImport.update({
   path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JobDemoRoute = JobDemoRouteImport.update({
+  id: '/job-demo',
+  path: '/job-demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FileSystemRoute = FileSystemRouteImport.update({
   id: '/file-system',
   path: '/file-system',
@@ -62,6 +68,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
+  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
+  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
+  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/file-system'
+    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/file-system'
+    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/file-system'
+    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FileSystemRoute: typeof FileSystemRoute
+  JobDemoRoute: typeof JobDemoRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   SubtitleTaskRoute: typeof SubtitleTaskRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/job-demo': {
+      id: '/job-demo'
+      path: '/job-demo'
+      fullPath: '/job-demo'
+      preLoaderRoute: typeof JobDemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/file-system': {
       id: '/file-system'
       path: '/file-system'
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FileSystemRoute: FileSystemRoute,
+  JobDemoRoute: JobDemoRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   SubtitleTaskRoute: SubtitleTaskRoute,

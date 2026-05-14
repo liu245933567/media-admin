@@ -51,13 +51,13 @@ fn pick_ffmpeg_asset(assets: &[GhAsset]) -> Result<&GhAsset> {
         let n = a.name.to_ascii_lowercase();
         match (os, arch) {
             ("windows", _) => n.contains("win64") && n.ends_with(".zip"),
-            ("linux", "x86_64") => n.contains("linux64") && !n.contains("arm") && n.ends_with(".tar.xz"),
+            ("linux", "x86_64") => {
+                n.contains("linux64") && !n.contains("arm") && n.ends_with(".tar.xz")
+            }
             ("linux", "aarch64") => n.contains("linuxarm64") && n.ends_with(".tar.xz"),
             ("macos", "aarch64") => n.contains("macosarm64") && n.ends_with(".zip"),
             ("macos", "x86_64") => {
-                n.contains("macos64")
-                    && !n.contains("macosarm64")
-                    && n.ends_with(".zip")
+                n.contains("macos64") && !n.contains("macosarm64") && n.ends_with(".zip")
             }
             _ => false,
         }
@@ -77,9 +77,7 @@ fn pick_ffmpeg_asset(assets: &[GhAsset]) -> Result<&GhAsset> {
             })
         })
         .ok_or_else(|| {
-            anyhow!(
-                "当前平台 {os}/{arch} 未找到匹配的 FFmpeg 构建，请手动安装并设置 FFMPEG_DIR"
-            )
+            anyhow!("当前平台 {os}/{arch} 未找到匹配的 FFmpeg 构建，请手动安装并设置 FFMPEG_DIR")
         })
 }
 
@@ -147,7 +145,11 @@ async fn download_to_file(
                 "downloading",
                 received,
                 total,
-                format!("已下载 FFmpeg 包 {} / {}", super::whisper::format_bytes(received), super::whisper::format_total(total)),
+                format!(
+                    "已下载 FFmpeg 包 {} / {}",
+                    super::whisper::format_bytes(received),
+                    super::whisper::format_total(total)
+                ),
             )
             .await;
         }
@@ -229,8 +231,7 @@ pub async fn run_ffmpeg_download(
     client: &reqwest::Client,
     progress: watch::Sender<DownloadProgressSnapshot>,
 ) -> Result<()> {
-    send_progress(&progress, "resolving", 0, None, "正在解析 FFmpeg 下载地址…")
-        .await;
+    send_progress(&progress, "resolving", 0, None, "正在解析 FFmpeg 下载地址…").await;
 
     let (download_url, asset_name) = resolve_ffmpeg_download_url(client).await?;
 
@@ -246,23 +247,9 @@ pub async fn run_ffmpeg_download(
     };
 
     let archive_path = staging.join(format!("ffmpeg-pack{ext}"));
-    download_to_file(
-        client,
-        &download_url,
-        &archive_path,
-        &progress,
-        &asset_name,
-    )
-    .await?;
+    download_to_file(client, &download_url, &archive_path, &progress, &asset_name).await?;
 
-    send_progress(
-        &progress,
-        "extracting",
-        0,
-        None,
-        "正在解压…",
-    )
-    .await;
+    send_progress(&progress, "extracting", 0, None, "正在解压…").await;
 
     let extract_dir = staging.join("unpack");
     if tokio::fs::try_exists(&extract_dir).await.unwrap_or(false) {
@@ -307,8 +294,7 @@ pub async fn run_ffmpeg_download(
         tokio::fs::remove_file(&dest_bin).await.ok();
     }
 
-    send_progress(&progress, "moving", 0, None, "正在安装到工具目录…")
-        .await;
+    send_progress(&progress, "moving", 0, None, "正在安装到工具目录…").await;
 
     tokio::fs::copy(&bin_src, &dest_bin)
         .await

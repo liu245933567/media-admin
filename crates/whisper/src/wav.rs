@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use ma_utils::config::{get_ffmpeg_bin_path, get_temp_wav_dir};
 use std::path::{Path, PathBuf};
 

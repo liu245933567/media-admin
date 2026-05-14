@@ -220,4 +220,37 @@ export function startFfmpegDownload(params: FfmpegDownloadStartReq = {}) {
   )
 }
 
+/** Taskmill 演示：视频流水线入队 */
+export interface TaskmillJobDemoPipelineReq {
+  video_path: string
+}
+
+/** Taskmill 演示：仅翻译字幕入队 */
+export interface TaskmillJobDemoTranslateReq {
+  subtitle_path: string
+  target_lang: string
+}
+
+export interface TaskmillJobDemoSnapshot {
+  scheduler: Record<string, unknown>
+  metrics: Record<string, unknown>
+}
+
+export const taskmillJobDemoSnapshotQueryKey = ['taskmill-job-demo-snapshot'] as const
+
+export function enqueueTaskmillPipeline(body: TaskmillJobDemoPipelineReq) {
+  return post<unknown, TaskmillJobDemoPipelineReq>('/job-demo/pipeline', body)
+}
+
+export function enqueueTaskmillTranslate(body: TaskmillJobDemoTranslateReq) {
+  return post<unknown, TaskmillJobDemoTranslateReq>(
+    '/job-demo/translate-subtitle',
+    body,
+  )
+}
+
+export function fetchTaskmillJobDemoSnapshot() {
+  return get<TaskmillJobDemoSnapshot>('/job-demo/snapshot')
+}
+
 export * from './subtitle'

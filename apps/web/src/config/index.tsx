@@ -1,4 +1,12 @@
-import { DatabaseOutlined, FileSearchOutlined, HomeOutlined, SettingOutlined, TranslationOutlined, VideoCameraOutlined } from '@ant-design/icons'
+import {
+  DatabaseOutlined,
+  ExperimentOutlined,
+  FileSearchOutlined,
+  HomeOutlined,
+  SettingOutlined,
+  TranslationOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons'
 
 export const menu = [
   {
@@ -36,6 +44,11 @@ export const menu = [
   //   path: '/stash-scenes',
   //   icon: <PlaySquareOutlined />,
   // },
+  {
+    name: 'Taskmill 演示',
+    path: '/job-demo',
+    icon: <ExperimentOutlined />,
+  },
   {
     name: '设置',
     path: '/setting',

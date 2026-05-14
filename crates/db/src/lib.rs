@@ -2,8 +2,8 @@ use std::{str::FromStr, time::Duration};
 
 use ma_utils::config::{get_app_data_dir, get_sqlite_connect_url, get_sqlx_logging};
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     ConnectOptions,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 
 pub mod entity;
@@ -31,9 +31,7 @@ pub async fn connect() -> anyhow::Result<SqlitePool> {
         .await?;
     tracing::info!("connected sqlite database");
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
     tracing::info!("sqlite database migrations completed");
 
     Ok(pool)
