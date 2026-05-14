@@ -104,7 +104,7 @@ pub fn get_app_data_dir() -> Result<PathBuf> {
     }
 }
 
-/// 供 sqlx / SeaORM 使用的 SQLite 连接 URL。
+/// 供 sqlx 使用的 SQLite 连接 URL。
 ///
 /// 由 `SQLITE_DB_FILE` 或 `get_app_data_dir()/media_admin.db` 解析路径，相对路径按 `cwd` 转为绝对路径；
 /// Windows 盘符与 Unix 根路径按 sqlx 0.8 的 URL 规则分别处理；附带 `mode=rwc` 以便库文件不存在时可创建。

@@ -1,35 +1,40 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use ma_utils::config::{get_app_data_dir, get_sqlite_connect_url, get_sqlx_logging};
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use sea_orm_migration::prelude::MigratorTrait;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    ConnectOptions,
+};
 
 pub mod entity;
-mod migration;
 
-use migration::Migrator;
+pub use sqlx::SqlitePool;
 
-pub async fn connect() -> anyhow::Result<DatabaseConnection> {
+pub async fn connect() -> anyhow::Result<SqlitePool> {
     tokio::fs::create_dir_all(get_app_data_dir()?).await?;
 
-    let mut options = ConnectOptions::new(get_sqlite_connect_url()?);
+    let url = get_sqlite_connect_url()?;
+    let mut opts = SqliteConnectOptions::from_str(&url).map_err(|e| anyhow::anyhow!("{e}"))?;
+    if get_sqlx_logging() {
+        opts = opts.log_statements(log::LevelFilter::Debug);
+    } else {
+        opts = opts.disable_statement_logging();
+    }
 
-    options
+    let pool = SqlitePoolOptions::new()
         .max_connections(10)
         .min_connections(1)
-        .connect_timeout(Duration::from_secs(8))
         .acquire_timeout(Duration::from_secs(8))
         .idle_timeout(Duration::from_secs(600))
         .max_lifetime(Duration::from_secs(1800))
-        .sqlx_logging(get_sqlx_logging());
-
-    let db = Database::connect(options).await?;
+        .connect_with(opts)
+        .await?;
     tracing::info!("connected sqlite database");
 
-    Migrator::up(&db, None).await?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await?;
     tracing::info!("sqlite database migrations completed");
 
-    Ok(db)
+    Ok(pool)
 }
-
-

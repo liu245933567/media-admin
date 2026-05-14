@@ -1,16 +1,9 @@
-use sea_orm::entity::prelude::*;
+use sqlx::FromRow;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "generated_subtitles")]
-pub struct Model {
-    #[sea_orm(primary_key)]
+#[derive(Clone, Debug, PartialEq, Eq, FromRow)]
+pub struct GeneratedSubtitle {
     pub subtitle_id: i32,
     pub task_id: Option<i32>,
     pub subtitle_path: String,
     pub created_at: String,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}

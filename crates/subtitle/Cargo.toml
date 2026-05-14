@@ -6,6 +6,9 @@ edition = "2024"
 [lib]
 name = "ma_subtitle"
 
+[features]
+cuda = ["media-admin-whisper/cuda"]
+
 [dependencies]
 serde.workspace = true
 tracing.workspace = true

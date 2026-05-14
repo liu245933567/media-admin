@@ -10,12 +10,8 @@ name = "ma_db"
 anyhow.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-serde.workspace = true
+log.workspace = true
+
+sqlx.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
-
-sea-orm.workspace = true
-sea-orm-migration = { version = "1.1.20", default-features = false, features = [
-  "sqlx-sqlite",
-  "runtime-tokio-rustls",
-] }

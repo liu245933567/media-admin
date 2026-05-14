@@ -7,7 +7,7 @@ use ma_service::subtitle_worker::{SubtitleTaskQueue, spawn_subtitle_task_worker}
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use sea_orm::DatabaseConnection;
+use ma_db::SqlitePool;
 
 mod error;
 mod routes;
@@ -110,7 +110,7 @@ pub async fn start() {
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub db: DatabaseConnection,
+    pub db: SqlitePool,
     pub subtitle_task_queue: SubtitleTaskQueue,
     pub subtitle_translate_task_queue: SubtitleTranslateTaskQueue,
     pub setup_download: SetupDownloadState,

@@ -1,21 +1,9 @@
 use anyhow::{Result, bail};
 use chrono::Utc;
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, NotSet, PaginatorTrait,
-    QueryFilter, QueryOrder, Set, TransactionTrait,
-};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 
-use ma_db::entity::subtitle_task::Column as SubtitleTaskColumn;
-use ma_db::entity::subtitle_task::Entity as SubtitleTaskEntity;
-use ma_db::entity::subtitle_task::Model as SubtitleTaskModel;
-
-use ma_db::entity::subtitle_task_record::Column as SubtitleTaskRecordColumn;
-use ma_db::entity::subtitle_task_record::Entity as SubtitleTaskRecordEntity;
-use ma_db::entity::subtitle_task_record::ActiveModel as SubtitleTaskRecordActiveModel;
-
-use ma_db::entity::generated_subtitles::Column as GeneratedSubtitlesColumn;
-use ma_db::entity::generated_subtitles::Entity as GeneratedSubtitlesEntity;
+use ma_db::entity::subtitle_task::SubtitleTask;
 
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
@@ -32,7 +20,7 @@ pub fn default_subtitle_generate_config() -> SubtitleTaskGenerateDefaultsRes {
 }
 
 pub async fn create_subtitle_task(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     req: SubtitleTaskCreateReq,
 ) -> Result<SubtitleTaskItem> {
     let video_path = req.config.video_path.trim().to_string();
@@ -44,22 +32,26 @@ pub async fn create_subtitle_task(
 
     let now = Utc::now().to_rfc3339();
 
-    let model = ma_db::entity::subtitle_task::ActiveModel {
-        task_id: NotSet,
-        task_status: Set(SubtitleTaskStatus::PENDING.to_string()),
-        video_path: Set(video_path.clone()),
-        config_json: Set(config_json),
-        created_at: Set(now.clone()),
-        updated_at: Set(now.clone()),
-    };
-
-    let inserted = model.insert(db).await?;
+    let inserted = sqlx::query_as::<_, SubtitleTask>(
+        r#"
+        INSERT INTO subtitle_task (task_status, video_path, config_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        RETURNING task_id, task_status, video_path, config_json, created_at, updated_at
+        "#,
+    )
+    .bind(SubtitleTaskStatus::PENDING.to_string())
+    .bind(&video_path)
+    .bind(&config_json)
+    .bind(&now)
+    .bind(&now)
+    .fetch_one(db)
+    .await?;
 
     Ok(row_from_model(inserted))
 }
 
 pub async fn bulk_create_subtitle_tasks(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     req: SubtitleTaskBulkCreateReq,
 ) -> Result<SubtitleTaskBulkCreateRes> {
     let SubtitleTaskBulkCreateReq {
@@ -87,14 +79,17 @@ pub async fn bulk_create_subtitle_tasks(
         }
 
         if skip_if_exists {
-            let existing = SubtitleTaskEntity::find()
-                .filter(SubtitleTaskColumn::VideoPath.eq(video_path.clone()))
-                .filter(SubtitleTaskColumn::TaskStatus.is_in([
-                    SubtitleTaskStatus::PENDING.to_string(),
-                    SubtitleTaskStatus::RUNNING.to_string(),
-                ]))
-                .one(db)
-                .await?;
+            let existing: Option<SubtitleTask> = sqlx::query_as::<_, SubtitleTask>(
+                r#"
+                SELECT task_id, task_status, video_path, config_json, created_at, updated_at
+                FROM subtitle_task
+                WHERE video_path = ? AND task_status IN ('PENDING', 'RUNNING')
+                LIMIT 1
+                "#,
+            )
+            .bind(&video_path)
+            .fetch_optional(db)
+            .await?;
             if existing.is_some() {
                 skipped.push(video_path);
                 continue;
@@ -117,7 +112,7 @@ pub async fn bulk_create_subtitle_tasks(
     })
 }
 
-fn row_from_model(m: SubtitleTaskModel) -> SubtitleTaskItem {
+fn row_from_model(m: SubtitleTask) -> SubtitleTaskItem {
     SubtitleTaskItem {
         task_id: m.task_id,
         task_status: m.task_status,
@@ -127,21 +122,15 @@ fn row_from_model(m: SubtitleTaskModel) -> SubtitleTaskItem {
     }
 }
 
-pub async fn list_subtitle_tasks(
-    db: &DatabaseConnection,
-    req: &SubtitleTaskListReq,
-) -> Result<SubtitleTaskListRes> {
-    let page = u64::from(req.current.max(1));
-    let page_size = u64::from(req.page_size.clamp(1, 100));
-
-    let mut q = SubtitleTaskEntity::find();
+fn push_subtitle_task_list_filters(qb: &mut QueryBuilder<'_, Sqlite>, req: &SubtitleTaskListReq) {
     if let Some(s) = req
         .task_status
         .as_ref()
         .map(|x| x.trim())
         .filter(|x| !x.is_empty())
     {
-        q = q.filter(SubtitleTaskColumn::TaskStatus.eq(s.to_string()));
+        qb.push(" AND task_status = ");
+        qb.push_bind(s.to_string());
     }
     if let Some(p) = req
         .video_path_contains
@@ -149,15 +138,36 @@ pub async fn list_subtitle_tasks(
         .map(|x| x.trim())
         .filter(|x| !x.is_empty())
     {
-        q = q.filter(SubtitleTaskColumn::VideoPath.contains(p));
+        qb.push(" AND video_path LIKE ");
+        qb.push_bind(format!("%{p}%"));
     }
+}
 
-    let paginator = q
-        .order_by_desc(SubtitleTaskColumn::TaskId)
-        .paginate(db, page_size);
+pub async fn list_subtitle_tasks(
+    db: &SqlitePool,
+    req: &SubtitleTaskListReq,
+) -> Result<SubtitleTaskListRes> {
+    let page = u64::from(req.current.max(1));
+    let page_size = u64::from(req.page_size.clamp(1, 100));
+    let limit_i = i64::try_from(page_size)?;
+    let offset_i = i64::try_from((page - 1).saturating_mul(page_size))?;
 
-    let total = paginator.num_items().await? as i32;
-    let models = paginator.fetch_page(page - 1).await?;
+    let total: i64 = {
+        let mut qb = QueryBuilder::new("SELECT COUNT(*) FROM subtitle_task WHERE 1=1");
+        push_subtitle_task_list_filters(&mut qb, req);
+        qb.build_query_scalar().fetch_one(db).await?
+    };
+
+    let mut qb = QueryBuilder::new(
+        "SELECT task_id, task_status, video_path, config_json, created_at, updated_at FROM subtitle_task WHERE 1=1",
+    );
+    push_subtitle_task_list_filters(&mut qb, req);
+    qb.push(" ORDER BY task_id DESC LIMIT ");
+    qb.push_bind(limit_i);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset_i);
+
+    let models: Vec<SubtitleTask> = qb.build_query_as::<SubtitleTask>().fetch_all(db).await?;
 
     let items = models
         .into_iter()
@@ -170,11 +180,22 @@ pub async fn list_subtitle_tasks(
         })
         .collect();
 
-    Ok(SubtitleTaskListRes { items, total })
+    Ok(SubtitleTaskListRes {
+        items,
+        total: i32::try_from(total)?,
+    })
 }
 
-pub async fn retry_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Result<SubtitleTaskRetryRes> {
-    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
+pub async fn retry_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<SubtitleTaskRetryRes> {
+    let task: Option<SubtitleTask> = sqlx::query_as::<_, SubtitleTask>(
+        r#"
+        SELECT task_id, task_status, video_path, config_json, created_at, updated_at
+        FROM subtitle_task WHERE task_id = ?
+        "#,
+    )
+    .bind(task_id)
+    .fetch_optional(db)
+    .await?;
     let Some(task) = task else {
         bail!("任务不存在");
     };
@@ -182,46 +203,50 @@ pub async fn retry_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Resul
         bail!("仅失败任务可重新开始");
     }
 
-    let txn = db.begin().await?;
+    let mut tx = db.begin().await?;
 
-    SubtitleTaskRecordEntity::delete_many()
-        .filter(SubtitleTaskRecordColumn::TaskId.eq(task_id))
-        .exec(&txn)
+    sqlx::query("DELETE FROM subtitle_task_record WHERE task_id = ?")
+        .bind(task_id)
+        .execute(&mut *tx)
         .await?;
 
-    GeneratedSubtitlesEntity::delete_many()
-        .filter(GeneratedSubtitlesColumn::TaskId.eq(task_id))
-        .exec(&txn)
+    sqlx::query("DELETE FROM generated_subtitles WHERE task_id = ?")
+        .bind(task_id)
+        .execute(&mut *tx)
         .await?;
 
     let now = Utc::now().to_rfc3339();
-    let res = SubtitleTaskEntity::update_many()
-        .col_expr(
-            SubtitleTaskColumn::TaskStatus,
-            sea_orm::sea_query::Expr::value(SubtitleTaskStatus::PENDING.to_string()),
-        )
-        .col_expr(
-            SubtitleTaskColumn::UpdatedAt,
-            sea_orm::sea_query::Expr::value(now),
-        )
-        .filter(SubtitleTaskColumn::TaskId.eq(task_id))
-        .exec(&txn)
-        .await?;
+    let res = sqlx::query(
+        "UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?",
+    )
+    .bind(SubtitleTaskStatus::PENDING.to_string())
+    .bind(&now)
+    .bind(task_id)
+    .execute(&mut *tx)
+    .await?;
 
-    if res.rows_affected == 0 {
-        txn.rollback().await?;
+    if res.rows_affected() == 0 {
+        tx.rollback().await?;
         bail!("任务不存在");
     }
 
-    txn.commit().await?;
+    tx.commit().await?;
     Ok(SubtitleTaskRetryRes { ok: true })
 }
 
 pub async fn delete_subtitle_task(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     task_id: i32,
 ) -> Result<SubtitleTaskDeleteRes> {
-    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
+    let task: Option<SubtitleTask> = sqlx::query_as::<_, SubtitleTask>(
+        r#"
+        SELECT task_id, task_status, video_path, config_json, created_at, updated_at
+        FROM subtitle_task WHERE task_id = ?
+        "#,
+    )
+    .bind(task_id)
+    .fetch_optional(db)
+    .await?;
     let Some(task) = task else {
         bail!("任务不存在");
     };
@@ -229,75 +254,87 @@ pub async fn delete_subtitle_task(
         bail!("处理中的任务不可删除");
     }
 
-    let txn = db.begin().await?;
+    let mut tx = db.begin().await?;
 
-    SubtitleTaskRecordEntity::delete_many()
-        .filter(SubtitleTaskRecordColumn::TaskId.eq(task_id))
-        .exec(&txn)
+    sqlx::query("DELETE FROM subtitle_task_record WHERE task_id = ?")
+        .bind(task_id)
+        .execute(&mut *tx)
         .await?;
 
-    GeneratedSubtitlesEntity::delete_many()
-        .filter(GeneratedSubtitlesColumn::TaskId.eq(task_id))
-        .exec(&txn)
+    sqlx::query("DELETE FROM generated_subtitles WHERE task_id = ?")
+        .bind(task_id)
+        .execute(&mut *tx)
         .await?;
 
-    let del = SubtitleTaskEntity::delete_by_id(task_id).exec(&txn).await?;
-    if del.rows_affected == 0 {
-        txn.rollback().await?;
+    let del = sqlx::query("DELETE FROM subtitle_task WHERE task_id = ?")
+        .bind(task_id)
+        .execute(&mut *tx)
+        .await?;
+    if del.rows_affected() == 0 {
+        tx.rollback().await?;
         bail!("任务不存在");
     }
 
-    txn.commit().await?;
+    tx.commit().await?;
     Ok(SubtitleTaskDeleteRes { ok: true })
 }
 
-pub async fn get_subtitle_task(db: &DatabaseConnection, task_id: i32) -> Result<SubtitleTaskModel> {
-    let task = SubtitleTaskEntity::find_by_id(task_id).one(db).await?;
+pub async fn get_subtitle_task(db: &SqlitePool, task_id: i32) -> Result<SubtitleTask> {
+    let task = sqlx::query_as::<_, SubtitleTask>(
+        r#"
+        SELECT task_id, task_status, video_path, config_json, created_at, updated_at
+        FROM subtitle_task WHERE task_id = ?
+        "#,
+    )
+    .bind(task_id)
+    .fetch_optional(db)
+    .await?;
     task.ok_or_else(|| anyhow::anyhow!("任务不存在"))
 }
 
 pub async fn set_subtitle_task_status(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     task_id: i32,
     status: &str,
 ) -> Result<()> {
     let now = Utc::now().to_rfc3339();
-    let res = SubtitleTaskEntity::update_many()
-        .col_expr(
-            SubtitleTaskColumn::TaskStatus,
-            sea_orm::sea_query::Expr::value(status.to_string()),
-        )
-        .col_expr(
-            SubtitleTaskColumn::UpdatedAt,
-            sea_orm::sea_query::Expr::value(now),
-        )
-        .filter(SubtitleTaskColumn::TaskId.eq(task_id))
-        .exec(db)
-        .await?;
-    if res.rows_affected == 0 {
+    let res = sqlx::query(
+        "UPDATE subtitle_task SET task_status = ?, updated_at = ? WHERE task_id = ?",
+    )
+    .bind(status)
+    .bind(&now)
+    .bind(task_id)
+    .execute(db)
+    .await?;
+    if res.rows_affected() == 0 {
         bail!("任务不存在");
     }
     Ok(())
 }
 
 pub async fn append_task_record(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     task_id: i32,
     record_status: &str,
     record_desc: &str,
     record_detail: &str,
 ) -> Result<()> {
     let now = Utc::now().to_rfc3339();
-    let model = SubtitleTaskRecordActiveModel {
-        record_id: NotSet,
-        task_id: Set(task_id),
-        record_status: Set(record_status.to_string()),
-        record_desc: Set(record_desc.to_string()),
-        record_detail: Set(record_detail.to_string()),
-        created_at: Set(now.clone()),
-        updated_at: Set(now),
-    };
-    model.insert(db).await?;
+    sqlx::query(
+        r#"
+        INSERT INTO subtitle_task_record
+            (task_id, record_status, record_desc, record_detail, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#,
+    )
+    .bind(task_id)
+    .bind(record_status)
+    .bind(record_desc)
+    .bind(record_detail)
+    .bind(&now)
+    .bind(&now)
+    .execute(db)
+    .await?;
     Ok(())
 }
 
@@ -322,9 +359,7 @@ pub struct SubtitleTaskQueueStatusRes {
     pub status: String,
 }
 
-pub async fn pause_subtitle_task_queue(
-    _db: &DatabaseConnection,
-) -> Result<SubtitleTaskQueuePauseRes> {
+pub async fn pause_subtitle_task_queue(_db: &SqlitePool) -> Result<SubtitleTaskQueuePauseRes> {
     // 仅用于队列暂停“意图”，不再中断当前 RUNNING 任务
     Ok(SubtitleTaskQueuePauseRes { ok: true })
 }
@@ -335,8 +370,6 @@ pub struct SubtitleTaskQueueResumeRes {
     pub ok: bool,
 }
 
-pub async fn resume_subtitle_task_queue(
-    _db: &DatabaseConnection,
-) -> Result<SubtitleTaskQueueResumeRes> {
+pub async fn resume_subtitle_task_queue(_db: &SqlitePool) -> Result<SubtitleTaskQueueResumeRes> {
     Ok(SubtitleTaskQueueResumeRes { ok: true })
 }

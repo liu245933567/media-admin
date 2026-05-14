@@ -6,10 +6,7 @@ use ma_subtitle::{
     generate::generate_subtitle_by_video,
     types::SubtitleGenerateConfig,
 };
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    QueryOrder, Set,
-};
+use sqlx::SqlitePool;
 
 use crate::subtitle_task::{
     append_task_record, get_subtitle_task, set_subtitle_task_status, types::SubtitleTaskStatus,
@@ -19,15 +16,12 @@ use crate::subtitle_translate_task::{
 };
 use crate::subtitle_translate_worker::SubtitleTranslateTaskQueue;
 use crate::task_queue::BackgroundTaskQueue;
-use ma_db::entity::generated_subtitles::ActiveModel as GeneratedSubtitlesActiveModel;
-use ma_db::entity::subtitle_task::Column as SubtitleTaskColumn;
-use ma_db::entity::subtitle_task::Entity as SubtitleTaskEntity;
-use ma_db::entity::subtitle_task::Model as SubtitleTaskModel;
+use ma_db::entity::subtitle_task::SubtitleTask;
 
 pub type SubtitleTaskQueue = BackgroundTaskQueue;
 
 pub fn spawn_subtitle_task_worker(
-    db: DatabaseConnection,
+    db: SqlitePool,
     queue: SubtitleTaskQueue,
     translate_queue: SubtitleTranslateTaskQueue,
 ) {
@@ -42,7 +36,7 @@ pub fn spawn_subtitle_task_worker(
 }
 
 async fn tick(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     queue: &SubtitleTaskQueue,
     translate_queue: &SubtitleTranslateTaskQueue,
 ) -> Result<()> {
@@ -84,33 +78,40 @@ async fn tick(
     Ok(())
 }
 
-async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<SubtitleTaskModel>> {
-    let task = SubtitleTaskEntity::find()
-        .filter(SubtitleTaskColumn::TaskStatus.eq(SubtitleTaskStatus::PENDING.to_string()))
-        .order_by_asc(SubtitleTaskColumn::TaskId)
-        .one(db)
-        .await?;
+async fn claim_next_pending_task(db: &SqlitePool) -> Result<Option<SubtitleTask>> {
+    let task: Option<SubtitleTask> = sqlx::query_as::<_, SubtitleTask>(
+        r#"
+        SELECT task_id, task_status, video_path, config_json, created_at, updated_at
+        FROM subtitle_task
+        WHERE task_status = ?
+        ORDER BY task_id ASC
+        LIMIT 1
+        "#,
+    )
+    .bind(SubtitleTaskStatus::PENDING.to_string())
+    .fetch_optional(db)
+    .await?;
 
     let Some(task) = task else {
         return Ok(None);
     };
 
     let now = Utc::now().to_rfc3339();
-    let res = SubtitleTaskEntity::update_many()
-        .col_expr(
-            SubtitleTaskColumn::TaskStatus,
-            sea_orm::sea_query::Expr::value(SubtitleTaskStatus::RUNNING.to_string()),
-        )
-        .col_expr(
-            SubtitleTaskColumn::UpdatedAt,
-            sea_orm::sea_query::Expr::value(now),
-        )
-        .filter(SubtitleTaskColumn::TaskId.eq(task.task_id))
-        .filter(SubtitleTaskColumn::TaskStatus.eq(SubtitleTaskStatus::PENDING.to_string()))
-        .exec(db)
-        .await?;
+    let res = sqlx::query(
+        r#"
+        UPDATE subtitle_task
+        SET task_status = ?, updated_at = ?
+        WHERE task_id = ? AND task_status = ?
+        "#,
+    )
+    .bind(SubtitleTaskStatus::RUNNING.to_string())
+    .bind(&now)
+    .bind(task.task_id)
+    .bind(SubtitleTaskStatus::PENDING.to_string())
+    .execute(db)
+    .await?;
 
-    if res.rows_affected == 0 {
+    if res.rows_affected() == 0 {
         return Ok(None);
     }
 
@@ -119,7 +120,7 @@ async fn claim_next_pending_task(db: &DatabaseConnection) -> Result<Option<Subti
 }
 
 async fn process_task(
-    db: &DatabaseConnection,
+    db: &SqlitePool,
     task_id: i32,
     translate_queue: &SubtitleTranslateTaskQueue,
 ) -> Result<()> {
@@ -135,13 +136,17 @@ async fn process_task(
         Ok(outcome) => {
             let now = Utc::now().to_rfc3339();
             for it in &outcome.items {
-                let model = GeneratedSubtitlesActiveModel {
-                    subtitle_id: ActiveValue::NotSet,
-                    task_id: Set(Some(task_id)),
-                    subtitle_path: Set(it.srt_path.clone()),
-                    created_at: Set(now.clone()),
-                };
-                model.insert(db).await?;
+                sqlx::query(
+                    r#"
+                    INSERT INTO generated_subtitles (task_id, subtitle_path, created_at)
+                    VALUES (?, ?, ?)
+                    "#,
+                )
+                .bind(task_id)
+                .bind(&it.srt_path)
+                .bind(&now)
+                .execute(db)
+                .await?;
             }
 
             if let Some(pending) = outcome.pending_translate {

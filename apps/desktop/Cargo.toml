@@ -12,6 +12,9 @@ rust-version = "1.95.0"
 name = "media_admin_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+cuda = ["media-admin-api/cuda"]
+
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
 

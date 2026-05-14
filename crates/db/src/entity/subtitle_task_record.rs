@@ -1,9 +1,7 @@
-use sea_orm::entity::prelude::*;
+use sqlx::FromRow;
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "subtitle_task_record")]
-pub struct Model {
-    #[sea_orm(primary_key)]
+#[derive(Clone, Debug, PartialEq, Eq, FromRow)]
+pub struct SubtitleTaskRecord {
     pub record_id: i32,
     pub task_id: i32,
     pub record_status: String,
@@ -12,8 +10,3 @@ pub struct Model {
     pub created_at: String,
     pub updated_at: String,
 }
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}

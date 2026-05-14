@@ -3,22 +3,21 @@ use std::{path::Path, time::Duration};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use ma_subtitle::{translate::translate_srt_file, types::SubtitleTranslateConfig};
-use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
-};
+use sqlx::SqlitePool;
 
 use crate::subtitle_translate_task::{
     append_translate_task_record, get_subtitle_translate_task,
     set_subtitle_translate_task_status, types::SubtitleTranslateTaskStatus,
 };
 use crate::task_queue::BackgroundTaskQueue;
-use ma_db::entity::subtitle_translate_task::Column as SubtitleTranslateTaskColumn;
-use ma_db::entity::subtitle_translate_task::Entity as SubtitleTranslateTaskEntity;
-use ma_db::entity::subtitle_translate_task::Model as SubtitleTranslateTaskModel;
+use ma_db::entity::subtitle_translate_task::SubtitleTranslateTask;
 
 pub type SubtitleTranslateTaskQueue = BackgroundTaskQueue;
 
-pub fn spawn_subtitle_translate_task_worker(db: DatabaseConnection, queue: SubtitleTranslateTaskQueue) {
+pub fn spawn_subtitle_translate_task_worker(
+    db: SqlitePool,
+    queue: SubtitleTranslateTaskQueue,
+) {
     tokio::spawn(async move {
         loop {
             if let Err(e) = tick(&db, &queue).await {
@@ -29,7 +28,7 @@ pub fn spawn_subtitle_translate_task_worker(db: DatabaseConnection, queue: Subti
     });
 }
 
-async fn tick(db: &DatabaseConnection, queue: &SubtitleTranslateTaskQueue) -> Result<()> {
+async fn tick(db: &SqlitePool, queue: &SubtitleTranslateTaskQueue) -> Result<()> {
     if queue.is_pausing() || queue.is_paused() {
         tokio::select! {
             _ = queue.notified() => {}
@@ -72,40 +71,41 @@ async fn tick(db: &DatabaseConnection, queue: &SubtitleTranslateTaskQueue) -> Re
 }
 
 async fn claim_next_pending_task(
-    db: &DatabaseConnection,
-) -> Result<Option<SubtitleTranslateTaskModel>> {
-    let task = SubtitleTranslateTaskEntity::find()
-        .filter(
-            SubtitleTranslateTaskColumn::TaskStatus
-                .eq(SubtitleTranslateTaskStatus::PENDING.to_string()),
-        )
-        .order_by_asc(SubtitleTranslateTaskColumn::TaskId)
-        .one(db)
-        .await?;
+    db: &SqlitePool,
+) -> Result<Option<SubtitleTranslateTask>> {
+    let task: Option<SubtitleTranslateTask> = sqlx::query_as::<_, SubtitleTranslateTask>(
+        r#"
+        SELECT task_id, task_status, source_srt_path, config_json, created_at, updated_at
+        FROM subtitle_translate_task
+        WHERE task_status = ?
+        ORDER BY task_id ASC
+        LIMIT 1
+        "#,
+    )
+    .bind(SubtitleTranslateTaskStatus::PENDING.to_string())
+    .fetch_optional(db)
+    .await?;
 
     let Some(task) = task else {
         return Ok(None);
     };
 
     let now = Utc::now().to_rfc3339();
-    let res = SubtitleTranslateTaskEntity::update_many()
-        .col_expr(
-            SubtitleTranslateTaskColumn::TaskStatus,
-            sea_orm::sea_query::Expr::value(SubtitleTranslateTaskStatus::RUNNING.to_string()),
-        )
-        .col_expr(
-            SubtitleTranslateTaskColumn::UpdatedAt,
-            sea_orm::sea_query::Expr::value(now),
-        )
-        .filter(SubtitleTranslateTaskColumn::TaskId.eq(task.task_id))
-        .filter(
-            SubtitleTranslateTaskColumn::TaskStatus
-                .eq(SubtitleTranslateTaskStatus::PENDING.to_string()),
-        )
-        .exec(db)
-        .await?;
+    let res = sqlx::query(
+        r#"
+        UPDATE subtitle_translate_task
+        SET task_status = ?, updated_at = ?
+        WHERE task_id = ? AND task_status = ?
+        "#,
+    )
+    .bind(SubtitleTranslateTaskStatus::RUNNING.to_string())
+    .bind(&now)
+    .bind(task.task_id)
+    .bind(SubtitleTranslateTaskStatus::PENDING.to_string())
+    .execute(db)
+    .await?;
 
-    if res.rows_affected == 0 {
+    if res.rows_affected() == 0 {
         return Ok(None);
     }
 
@@ -113,7 +113,7 @@ async fn claim_next_pending_task(
     Ok(Some(claimed))
 }
 
-async fn process_translate_task(db: &DatabaseConnection, task_id: i32) -> Result<()> {
+async fn process_translate_task(db: &SqlitePool, task_id: i32) -> Result<()> {
     append_translate_task_record(db, task_id, "INFO", "任务开始", "").await?;
 
     let task = get_subtitle_translate_task(db, task_id).await?;

@@ -6,11 +6,13 @@ edition = "2024"
 [lib]
 name = "ma_api"
 
+[features]
+cuda = ["media-admin-service/cuda"]
+
 [dependencies]
 anyhow.workspace = true
 reqwest.workspace = true
 futures.workspace = true
-sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

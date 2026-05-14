@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { Drawer, Modal, Result, Spin } from 'antd'
+import { Drawer, Result, Spin } from 'antd'
 import { useMemo, useState } from 'react'
 import { fetchFsReadText } from '@/request'
 import { deserializeSubtitleText } from '@/utils/subtitle'

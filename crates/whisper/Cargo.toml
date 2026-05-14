@@ -6,8 +6,12 @@ edition = "2024"
 [lib]
 name = "ma_whisper"
 
+[features]
+default = []
+cuda = ["whisper-rs/cuda"]
+
 [dependencies]
-whisper-rs = { version = "0.16", features = ["cuda"] }
+whisper-rs = { version = "0.16" }
 webrtc-vad = "0.4"
 hound = "3"
 

@@ -10,6 +10,7 @@
     "build:web": "pnpm --filter web build",
     "build:server": "cargo build -p media-admin-server",
     "build:desktop": "pnpm --filter @media-admin/desktop build",
+    "build:desktop:cuda": "pnpm --filter @media-admin/desktop build:cuda",
     "lint": "pnpm --filter web lint",
     "preview": "pnpm --filter web preview",
     "typeshare": "typeshare crates --lang=typescript --output-file=apps/web/src/types/api.ts"

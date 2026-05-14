@@ -6,6 +6,9 @@ edition = "2024"
 [lib]
 name = "ma_service"
 
+[features]
+cuda = ["media-admin-subtitle/cuda"]
+
 [dependencies]
 anyhow.workspace = true
 tracing.workspace = true
@@ -17,7 +20,7 @@ typeshare.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-sea-orm.workspace = true
+sqlx.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
 media-admin-subtitle = { path = "../../crates/subtitle" }
