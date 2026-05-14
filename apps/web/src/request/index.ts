@@ -59,7 +59,7 @@ export function scanVideoFolder(params: VideoFolderScanReq) {
   return post<VideoFolderScanRes, VideoFolderScanReq>('/video-folder/scan', params)
 }
 
-export * from './stash'
+export * from './job'
 
 /** React Query 与「字幕任务默认配置」接口共用的 queryKey */
 export const subtitleTaskGenerateDefaultsQueryKey = ['subtitle-task', 'generate-defaults'] as const
@@ -231,11 +231,6 @@ export interface TaskmillJobDemoTranslateReq {
   target_lang: string
 }
 
-export interface TaskmillJobDemoSnapshot {
-  scheduler: Record<string, unknown>
-  metrics: Record<string, unknown>
-}
-
 export const taskmillJobDemoSnapshotQueryKey = ['taskmill-job-demo-snapshot'] as const
 
 export function enqueueTaskmillPipeline(body: TaskmillJobDemoPipelineReq) {
@@ -249,8 +244,5 @@ export function enqueueTaskmillTranslate(body: TaskmillJobDemoTranslateReq) {
   )
 }
 
-export function fetchTaskmillJobDemoSnapshot() {
-  return get<TaskmillJobDemoSnapshot>('/job-demo/snapshot')
-}
-
+export * from './stash'
 export * from './subtitle'

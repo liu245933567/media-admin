@@ -1,12 +1,19 @@
 //! Taskmill SQLite 演示库与任务提交入口。
 
-use std::{path::PathBuf, time::Duration};
+use std::{
+    collections::VecDeque,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Context;
+use chrono::Utc;
 use ma_utils::config::get_app_data_dir;
 use serde::Serialize;
 use taskmill::{
-    Domain, DomainHandle, MetricsSnapshot, Scheduler, SchedulerSnapshot, SubmitOutcome,
+    Domain, DomainHandle, MetricsSnapshot, Scheduler, SchedulerEvent, SchedulerSnapshot,
+    SubmitOutcome, TaskHistoryRecord,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -19,11 +26,21 @@ pub struct TaskmillDemoSnapshot {
     pub metrics: MetricsSnapshot,
 }
 
+/// 一条带接收时间的调度器事件，供演示页展示「执行中」流式日志。
+#[derive(Debug, Clone, Serialize)]
+pub struct TimestampedSchedulerEvent {
+    pub received_at: chrono::DateTime<Utc>,
+    pub event: SchedulerEvent,
+}
+
+const EXEC_EVENT_LOG_CAP: usize = 400;
+
 #[derive(Clone)]
 pub struct TaskmillDemo {
     pub scheduler: Scheduler,
     pub domain: DomainHandle<TaskmillDemoDomain>,
     pub cancellation: CancellationToken,
+    exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
 impl TaskmillDemo {
@@ -56,10 +73,38 @@ impl TaskmillDemo {
         let domain = scheduler.domain::<TaskmillDemoDomain>();
         let cancellation = CancellationToken::new();
 
+        let exec_event_log = Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
+        {
+            let sched = scheduler.clone();
+            let log = exec_event_log.clone();
+            tokio::spawn(async move {
+                let mut rx = sched.subscribe();
+                loop {
+                    match rx.recv().await {
+                        Ok(ev) => {
+                            let mut g = log.lock().await;
+                            g.push_back(TimestampedSchedulerEvent {
+                                received_at: Utc::now(),
+                                event: ev,
+                            });
+                            while g.len() > EXEC_EVENT_LOG_CAP {
+                                g.pop_front();
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                            tracing::debug!("taskmill demo exec log: broadcast lagged, dropped samples");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+        }
+
         Ok(Self {
             scheduler,
             domain,
             cancellation,
+            exec_event_log,
         })
     }
 
@@ -91,6 +136,27 @@ impl TaskmillDemo {
             .context("读取 taskmill 演示快照失败")?;
         let metrics = self.scheduler.metrics_snapshot().await;
         Ok(TaskmillDemoSnapshot { scheduler, metrics })
+    }
+
+    /// 按 `completed_at` 倒序读取 `task_history`（含失败、取消等终态；标签列可能为空，见 taskmill 文档）。
+    pub async fn recent_history(
+        &self,
+        limit: i32,
+        offset: i32,
+    ) -> anyhow::Result<Vec<TaskHistoryRecord>> {
+        self.scheduler
+            .store()
+            .history(limit, offset)
+            .await
+            .context("读取 taskmill 任务历史失败")
+    }
+
+    /// 最近若干条调度器事件（时间正序），来自 `Scheduler::subscribe()`，含派发、进度文案、完成/失败等。
+    pub async fn recent_exec_events(&self, limit: usize) -> Vec<TimestampedSchedulerEvent> {
+        let limit = limit.clamp(1, 500);
+        let guard = self.exec_event_log.lock().await;
+        let skip = guard.len().saturating_sub(limit);
+        guard.iter().skip(skip).cloned().collect()
     }
 }
 

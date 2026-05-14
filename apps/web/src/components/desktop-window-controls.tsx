@@ -35,10 +35,6 @@ export function DesktopWindowControls() {
   const themeTriggerIcon
     = theme === 'dark' ? <MoonOutlined /> : theme === 'light' ? <SunOutlined /> : <DesktopOutlined />
 
-  if (!isTauri()) {
-    return null
-  }
-
   return (
     <div className="flex gap-2 pr-4">
       <Dropdown
@@ -56,26 +52,34 @@ export function DesktopWindowControls() {
         <Button type="text" icon={themeTriggerIcon} shape="circle" />
       </Dropdown>
 
-      <Tooltip title={maximized ? '还原' : '最大化'} key="s">
-        <Button
-          type="text"
-          shape="circle"
-          aria-label={maximized ? '还原窗口' : '最大化窗口'}
-          icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
-          onClick={() => void win?.toggleMaximize()}
-        />
-      </Tooltip>
+      {isTauri()
+        ? (
+            <Tooltip title={maximized ? '还原' : '最大化'} key="s">
+              <Button
+                type="text"
+                shape="circle"
+                aria-label={maximized ? '还原窗口' : '最大化窗口'}
+                icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={() => void win?.toggleMaximize()}
+              />
+            </Tooltip>
+          )
+        : null}
 
-      <Tooltip title="关闭" key="c">
-        <Button
-          type="text"
-          shape="circle"
-          danger
-          aria-label="关闭窗口"
-          icon={<PoweroffOutlined />}
-          onClick={() => void win?.close()}
-        />
-      </Tooltip>
+      {isTauri()
+        ? (
+            <Tooltip title="关闭" key="c">
+              <Button
+                type="text"
+                shape="circle"
+                danger
+                aria-label="关闭窗口"
+                icon={<PoweroffOutlined />}
+                onClick={() => void win?.close()}
+              />
+            </Tooltip>
+          )
+        : null}
     </div>
   )
 }

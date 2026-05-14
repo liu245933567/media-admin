@@ -10,7 +10,8 @@ mod types;
 mod video_pipeline;
 
 pub use spawn::spawn_taskmill_demo_scheduler;
-pub use storage::{TaskmillDemo, TaskmillDemoSnapshot};
+pub use storage::{TaskmillDemo, TaskmillDemoSnapshot, TimestampedSchedulerEvent};
+pub use taskmill::TaskHistoryRecord;
 pub use translate_only::TRANSLATE_ONLY_QUEUE;
 pub use types::{
     AfterExtractWav, AfterTranscribe, AfterTranslate, TaskmillDemoDomain,
