@@ -1,10 +1,6 @@
 use axum::Router;
-use ma_service::job::{TaskmillDemo, spawn_taskmill_demo_scheduler};
+use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
 use ma_service::setup_download::SetupDownloadState;
-use ma_service::subtitle_translate_worker::{
-    SubtitleTranslateTaskQueue, spawn_subtitle_translate_task_worker,
-};
-use ma_service::subtitle_worker::{SubtitleTaskQueue, spawn_subtitle_task_worker};
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -40,26 +36,15 @@ pub async fn serve() -> anyhow::Result<()> {
 
     let db = ma_db::connect().await?;
 
-    let subtitle_task_queue = SubtitleTaskQueue::new();
-    let subtitle_translate_task_queue = SubtitleTranslateTaskQueue::new();
-    spawn_subtitle_task_worker(
-        db.clone(),
-        subtitle_task_queue.clone(),
-        subtitle_translate_task_queue.clone(),
-    );
-    spawn_subtitle_translate_task_worker(db.clone(), subtitle_translate_task_queue.clone());
-
     let setup_download = build_setup_download_state()?;
 
-    let taskmill_demo = TaskmillDemo::setup().await?;
-    spawn_taskmill_demo_scheduler(&taskmill_demo);
+    let taskmill = TaskmillRuntime::setup().await?;
+    spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         db,
-        subtitle_task_queue,
-        subtitle_translate_task_queue,
         setup_download,
-        taskmill_demo,
+        taskmill,
     };
 
     let app = build_router(app_state);
@@ -77,26 +62,16 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
     let addr = listener.local_addr()?;
 
     let db = ma_db::connect().await?;
-    let subtitle_task_queue = SubtitleTaskQueue::new();
-    let subtitle_translate_task_queue = SubtitleTranslateTaskQueue::new();
-    spawn_subtitle_task_worker(
-        db.clone(),
-        subtitle_task_queue.clone(),
-        subtitle_translate_task_queue.clone(),
-    );
-    spawn_subtitle_translate_task_worker(db.clone(), subtitle_translate_task_queue.clone());
 
     let setup_download = build_setup_download_state()?;
 
-    let taskmill_demo = TaskmillDemo::setup().await?;
-    spawn_taskmill_demo_scheduler(&taskmill_demo);
+    let taskmill = TaskmillRuntime::setup().await?;
+    spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         db,
-        subtitle_task_queue,
-        subtitle_translate_task_queue,
         setup_download,
-        taskmill_demo,
+        taskmill,
     };
     let app = build_router(app_state);
 
@@ -120,10 +95,8 @@ pub async fn start() {
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub db: SqlitePool,
-    pub subtitle_task_queue: SubtitleTaskQueue,
-    pub subtitle_translate_task_queue: SubtitleTranslateTaskQueue,
     pub setup_download: SetupDownloadState,
-    pub taskmill_demo: TaskmillDemo,
+    pub taskmill: TaskmillRuntime,
 }
 
 type StateRouter = Router<AppState>;

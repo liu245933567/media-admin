@@ -1,4 +1,4 @@
-import type { TaskmillDemoExecLogEntry } from '@/types'
+import type { TaskmillExecLogEntry } from '@/types'
 import { Space, Switch, Typography } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -78,15 +78,15 @@ export function formatTaskmillExecLogSummary(event: Record<string, unknown>): st
   }
 }
 
-export interface TaskmillDemoExecLogPanelProps {
-  items: TaskmillDemoExecLogEntry[] | undefined
+export interface TaskmillExecLogPanelProps {
+  items: TaskmillExecLogEntry[] | undefined
   loading?: boolean
 }
 
-export function TaskmillDemoExecLogPanel({
+export function TaskmillExecLogPanel({
   items,
   loading,
-}: TaskmillDemoExecLogPanelProps) {
+}: TaskmillExecLogPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 

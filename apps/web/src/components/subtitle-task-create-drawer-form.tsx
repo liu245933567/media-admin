@@ -4,11 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Checkbox } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  createSubtitleTask,
-  createSubtitleTasksBulk,
-  fetchSubtitleTaskGenerateDefaults,
+  enqueueSubtitleGenerate,
+  enqueueSubtitleGenerateBulk,
+  fetchSubtitleGenerateDefaults,
   fetchWhisperModels,
-  subtitleTaskGenerateDefaultsQueryKey,
+  subtitleGenerateDefaultsQueryKey,
   whisperModelsQueryKey,
 } from '@/request'
 
@@ -36,8 +36,8 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   }, [props.bulkSourceRows, skipDiskSubtitle])
 
   const defaultsQuery = useQuery({
-    queryKey: subtitleTaskGenerateDefaultsQueryKey,
-    queryFn: fetchSubtitleTaskGenerateDefaults,
+    queryKey: subtitleGenerateDefaultsQueryKey,
+    queryFn: fetchSubtitleGenerateDefaults,
     staleTime: 60 * 60 * 1000,
   })
 
@@ -127,12 +127,12 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
               video_path: vp.trim(),
             }))
 
-            const res = await createSubtitleTasksBulk({
+            const res = await enqueueSubtitleGenerateBulk({
               configs,
               skip_if_exists: true,
             })
 
-            const ok = res.created?.length ?? 0
+            const ok = res.submitted?.length ?? 0
             const skipped = res.skipped?.length ?? 0
             const failed = res.failed ?? []
 
@@ -153,7 +153,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
           }
 
           const config = buildConfig(values)
-          await createSubtitleTask({ config })
+          await enqueueSubtitleGenerate(config)
           message.success('任务已添加')
           props.onCreated?.()
           return true

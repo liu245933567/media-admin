@@ -111,7 +111,7 @@ pub fn get_app_data_dir() -> Result<PathBuf> {
 pub fn get_sqlite_connect_url() -> Result<String> {
     let path = match std::env::var("SQLITE_DB_FILE") {
         Ok(file) => PathBuf::from(file.trim()),
-        Err(_) => get_app_data_dir()?.join("media_admin.db"),
+        Err(_) => get_app_data_dir()?.join("media_admin.sqlite"),
     };
     let absolute = if path.is_absolute() {
         path

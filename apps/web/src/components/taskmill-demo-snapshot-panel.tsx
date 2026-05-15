@@ -1,6 +1,6 @@
 import type { ColumnsType } from 'antd/es/table'
 import type {
-  TaskmillJobDemoSnapshot,
+  TaskmillJobSnapshot,
   TaskmillSerdeDuration,
   TaskmillTaskProgress,
   TaskmillTaskRecord,
@@ -47,15 +47,15 @@ function statusColor(status: TaskmillTaskStatus): string {
   return map[status]
 }
 
-export interface TaskmillDemoSnapshotPanelProps {
-  data: TaskmillJobDemoSnapshot | undefined
+export interface TaskmillSnapshotPanelProps {
+  data: TaskmillJobSnapshot | undefined
   loading?: boolean
 }
 
-export function TaskmillDemoSnapshotPanel({
+export function TaskmillSnapshotPanel({
   data,
   loading,
-}: TaskmillDemoSnapshotPanelProps) {
+}: TaskmillSnapshotPanelProps) {
   const runningColumns: ColumnsType<TaskmillTaskRecord> = useMemo(() => {
     if (!data)
       return []

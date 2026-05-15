@@ -1,80 +1,81 @@
-//! Taskmill 演示任务载荷（占位路径，无真实业务）。
+//! Taskmill 媒体任务域：视频字幕生成与字幕翻译。
 
 use std::collections::HashMap;
 
+use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use serde::{Deserialize, Serialize};
 use taskmill::{DomainKey, DuplicateStrategy, IoBudget, Priority, TaskTypeConfig, TypedTask};
+use typeshare::typeshare;
 
 #[derive(Debug, Clone, Copy)]
-pub struct TaskmillDemoDomain;
+pub struct MediaJobsDomain;
 
-impl DomainKey for TaskmillDemoDomain {
-    const NAME: &'static str = "taskmill-demo";
+impl DomainKey for MediaJobsDomain {
+    const NAME: &'static str = "media-jobs";
 }
 
-/// 视频字幕流水线入口：从视频路径开始。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VideoSubtitlePipelineInput {
-    pub video_path: String,
+/// 视频字幕生成任务载荷（包装 `SubtitleGenerateConfig` 以满足 TypedTask 孤儿规则）。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct VideoSubtitleGenerateTask(pub SubtitleGenerateConfig);
+
+impl std::fmt::Debug for VideoSubtitleGenerateTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VideoSubtitleGenerateTask")
+            .field("video_path", &self.0.video_path)
+            .finish()
+    }
 }
 
-impl TypedTask for VideoSubtitlePipelineInput {
-    type Domain = TaskmillDemoDomain;
+impl TypedTask for VideoSubtitleGenerateTask {
+    type Domain = MediaJobsDomain;
 
-    const TASK_TYPE: &'static str = "video-pipeline";
+    const TASK_TYPE: &'static str = "video-subtitle-generate";
 
     fn config() -> TaskTypeConfig {
         TaskTypeConfig::new()
             .priority(Priority::NORMAL)
-            .expected_io(IoBudget::disk(16 * 1024 * 1024, 8 * 1024 * 1024))
+            .expected_io(IoBudget::disk(32 * 1024 * 1024, 16 * 1024 * 1024))
             .on_duplicate(DuplicateStrategy::Skip)
     }
 
     fn key(&self) -> Option<String> {
-        Some(format!("video-pipeline:{}", self.video_path))
+        let path = self.0.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("video-subtitle-generate:{path}"))
+        }
     }
 
     fn label(&self) -> Option<String> {
-        Some(format!("视频流水线: {}", self.video_path))
+        let path = self.0.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("字幕生成: {path}"))
+        }
     }
 
     fn tags(&self) -> HashMap<String, String> {
-        HashMap::from([("demo.kind".to_string(), "video-pipeline".to_string())])
+        HashMap::from([(
+            "job.kind".to_string(),
+            "video-subtitle-generate".to_string(),
+        )])
     }
 }
 
+/// 字幕翻译任务（可独立提交，或由生成任务链式入队）。
+#[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AfterExtractWav {
-    pub video_path: String,
-    pub wav_path: String,
+pub struct SubtitleTranslateJob {
+    pub source_srt_path: String,
+    pub config: SubtitleTranslateConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AfterTranscribe {
-    pub video_path: String,
-    pub wav_path: String,
-    pub subtitle_path: String,
-}
+impl TypedTask for SubtitleTranslateJob {
+    type Domain = MediaJobsDomain;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AfterTranslate {
-    pub video_path: String,
-    pub wav_path: String,
-    pub subtitle_path: String,
-    pub translated_subtitle_path: String,
-}
-
-/// 仅「翻译字幕」任务入口。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TranslateSubtitleOnlyInput {
-    pub subtitle_path: String,
-    pub target_lang: String,
-}
-
-impl TypedTask for TranslateSubtitleOnlyInput {
-    type Domain = TaskmillDemoDomain;
-
-    const TASK_TYPE: &'static str = "translate-subtitle";
+    const TASK_TYPE: &'static str = "subtitle-translate";
 
     fn config() -> TaskTypeConfig {
         TaskTypeConfig::new()
@@ -84,23 +85,29 @@ impl TypedTask for TranslateSubtitleOnlyInput {
     }
 
     fn key(&self) -> Option<String> {
-        Some(format!(
-            "translate-subtitle:{}:{}",
-            self.subtitle_path, self.target_lang
-        ))
+        let path = self.source_srt_path.trim();
+        let lang = self.config.target_language.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("subtitle-translate:{path}:{lang}"))
+        }
     }
 
     fn label(&self) -> Option<String> {
         Some(format!(
-            "翻译字幕: {} -> {}",
-            self.subtitle_path, self.target_lang
+            "字幕翻译: {} -> {}",
+            self.source_srt_path, self.config.target_language
         ))
     }
 
     fn tags(&self) -> HashMap<String, String> {
         HashMap::from([
-            ("demo.kind".to_string(), "translate-subtitle".to_string()),
-            ("demo.target_lang".to_string(), self.target_lang.clone()),
+            ("job.kind".to_string(), "subtitle-translate".to_string()),
+            (
+                "job.target_language".to_string(),
+                self.config.target_language.clone(),
+            ),
         ])
     }
 }

@@ -1,4 +1,4 @@
-//! Taskmill SQLite 演示库与任务提交入口。
+//! Taskmill SQLite 持久化调度器（与业务 DB 分离）。
 
 use std::{
     collections::VecDeque,
@@ -17,16 +17,16 @@ use taskmill::{
 };
 use tokio_util::sync::CancellationToken;
 
-use super::spawn::{TranslateOnlyExecutor, VideoPipelineExecutor};
-use super::types::{TaskmillDemoDomain, TranslateSubtitleOnlyInput, VideoSubtitlePipelineInput};
+use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
+use super::types::{MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct TaskmillDemoSnapshot {
+pub struct TaskmillSnapshot {
     pub scheduler: SchedulerSnapshot,
     pub metrics: MetricsSnapshot,
 }
 
-/// 一条带接收时间的调度器事件，供演示页展示「执行中」流式日志。
+/// 一条带接收时间的调度器事件，供任务页展示「执行中」流式日志。
 #[derive(Debug, Clone, Serialize)]
 pub struct TimestampedSchedulerEvent {
     pub received_at: chrono::DateTime<Utc>,
@@ -36,18 +36,17 @@ pub struct TimestampedSchedulerEvent {
 const EXEC_EVENT_LOG_CAP: usize = 400;
 
 #[derive(Clone)]
-pub struct TaskmillDemo {
+pub struct TaskmillRuntime {
     pub scheduler: Scheduler,
-    pub domain: DomainHandle<TaskmillDemoDomain>,
+    pub domain: DomainHandle<MediaJobsDomain>,
     pub cancellation: CancellationToken,
     exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
-impl TaskmillDemo {
+impl TaskmillRuntime {
     /// 连接独立 SQLite，并构造 Taskmill 调度器与 typed domain。
     pub async fn setup() -> anyhow::Result<Self> {
-        let db_path =
-            taskmill_demo_sqlite_path().context("解析 TASKMILL_DEMO_SQLITE / 默认路径")?;
+        let db_path = taskmill_sqlite_path().context("解析 TASKMILL_SQLITE / 默认路径")?;
         if let Some(parent) = db_path.parent() {
             let parent_display = parent.display().to_string();
             tokio::fs::create_dir_all(&parent)
@@ -59,18 +58,18 @@ impl TaskmillDemo {
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
             .domain(
-                Domain::<TaskmillDemoDomain>::new()
-                    .task::<VideoSubtitlePipelineInput>(VideoPipelineExecutor)
-                    .task::<TranslateSubtitleOnlyInput>(TranslateOnlyExecutor)
-                    .max_concurrency(2),
+                Domain::<MediaJobsDomain>::new()
+                    .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
+                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
+                    .max_concurrency(1),
             )
-            .max_concurrency(4)
+            .max_concurrency(2)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()
             .await
-            .context("构建 taskmill 演示调度器失败")?;
-        let domain = scheduler.domain::<TaskmillDemoDomain>();
+            .context("构建 taskmill 调度器失败")?;
+        let domain = scheduler.domain::<MediaJobsDomain>();
         let cancellation = CancellationToken::new();
 
         let exec_event_log = Arc::new(tokio::sync::Mutex::new(VecDeque::new()));
@@ -92,7 +91,7 @@ impl TaskmillDemo {
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                            tracing::debug!("taskmill demo exec log: broadcast lagged, dropped samples");
+                            tracing::debug!("taskmill exec log: broadcast lagged, dropped samples");
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                     }
@@ -108,37 +107,39 @@ impl TaskmillDemo {
         })
     }
 
-    pub async fn enqueue_video_pipeline(
+    pub async fn enqueue_generate(
         &self,
-        input: VideoSubtitlePipelineInput,
+        input: VideoSubtitleGenerateTask,
     ) -> anyhow::Result<SubmitOutcome> {
         self.domain
             .submit(input)
             .await
-            .context("提交 taskmill 视频流水线任务失败")
+            .context("提交视频字幕生成任务失败")
     }
 
-    pub async fn enqueue_translate_only(
+    pub async fn enqueue_translate(
         &self,
-        input: TranslateSubtitleOnlyInput,
+        input: SubtitleTranslateJob,
     ) -> anyhow::Result<SubmitOutcome> {
         self.domain
             .submit(input)
             .await
-            .context("提交 taskmill 仅翻译字幕任务失败")
+            .context("提交字幕翻译任务失败")
     }
 
-    pub async fn snapshot(&self) -> anyhow::Result<TaskmillDemoSnapshot> {
+    pub async fn snapshot(&self) -> anyhow::Result<TaskmillSnapshot> {
         let scheduler = self
             .scheduler
             .snapshot()
             .await
-            .context("读取 taskmill 演示快照失败")?;
+            .context("读取 taskmill 快照失败")?;
         let metrics = self.scheduler.metrics_snapshot().await;
-        Ok(TaskmillDemoSnapshot { scheduler, metrics })
+        Ok(TaskmillSnapshot {
+            scheduler,
+            metrics,
+        })
     }
 
-    /// 按 `completed_at` 倒序读取 `task_history`（含失败、取消等终态；标签列可能为空，见 taskmill 文档）。
     pub async fn recent_history(
         &self,
         limit: i32,
@@ -151,7 +152,6 @@ impl TaskmillDemo {
             .context("读取 taskmill 任务历史失败")
     }
 
-    /// 最近若干条调度器事件（时间正序），来自 `Scheduler::subscribe()`，含派发、进度文案、完成/失败等。
     pub async fn recent_exec_events(&self, limit: usize) -> Vec<TimestampedSchedulerEvent> {
         let limit = limit.clamp(1, 500);
         let guard = self.exec_event_log.lock().await;
@@ -160,14 +160,10 @@ impl TaskmillDemo {
     }
 }
 
-/// 默认文件为 `get_app_data_dir()/taskmill_demo.sqlite`。
-fn taskmill_demo_sqlite_path() -> anyhow::Result<PathBuf> {
-    let path = match std::env::var("TASKMILL_DEMO_SQLITE") {
-        Ok(s) => {
-            let t = s.trim();
-            PathBuf::from(t)
-        }
-        Err(_) => get_app_data_dir()?.join("taskmill_demo.sqlite"),
+fn taskmill_sqlite_path() -> anyhow::Result<PathBuf> {
+    let path = match std::env::var("TASKMILL_SQLITE") {
+        Ok(s) => PathBuf::from(s.trim()),
+        Err(_) => get_app_data_dir()?.join("taskmill.sqlite"),
     };
 
     if path.is_absolute() {

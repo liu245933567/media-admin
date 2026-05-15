@@ -6,6 +6,7 @@
   "scripts": {
     "dev:web": "pnpm --filter web dev",
     "dev:server": "cargo run -p media-admin-server",
+    "dev:server:cuda": "cargo run -p media-admin-server --features cuda",
     "dev:desktop": "pnpm --filter @media-admin/desktop dev",
     "build:web": "pnpm --filter web build",
     "build:server": "cargo build -p media-admin-server",

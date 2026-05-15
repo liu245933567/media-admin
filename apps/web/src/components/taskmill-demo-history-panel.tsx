@@ -21,15 +21,15 @@ function historyStatusColor(s: TaskmillHistoryStatus): string {
 
 type HistoryViewFilter = 'completed' | 'all'
 
-export interface TaskmillDemoHistoryPanelProps {
+export interface TaskmillHistoryPanelProps {
   items: TaskmillTaskHistoryRecord[] | undefined
   loading?: boolean
 }
 
-export function TaskmillDemoHistoryPanel({
+export function TaskmillHistoryPanel({
   items,
   loading,
-}: TaskmillDemoHistoryPanelProps) {
+}: TaskmillHistoryPanelProps) {
   const [filter, setFilter] = useState<HistoryViewFilter>('completed')
 
   const filtered = useMemo(() => {
@@ -104,7 +104,7 @@ export function TaskmillDemoHistoryPanel({
   )
 
   return (
-    <Space direction="vertical" size="middle" className="w-full">
+    <Space orientation="vertical" size="middle" className="w-full">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Segmented<HistoryViewFilter>
           value={filter}

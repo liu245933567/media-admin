@@ -1,7 +1,7 @@
 /**
  * Taskmill 调度器快照相关的 TypeScript 类型，与后端 JSON 一一对应。
  *
- * - 后端结构：`ma_service::job::TaskmillDemoSnapshot`（`crates/service/src/job/storage.rs`）
+ * - 后端结构：`ma_service::job::TaskmillSnapshot`（`crates/service/src/job/storage.rs`）
  * - 内含：`scheduler: SchedulerSnapshot`、`metrics: MetricsSnapshot`（crate **taskmill 0.7.1**）
  * - 日期时间：chrono `DateTime<Utc>` → ISO 8601 字符串
  * - 时长：`std::time::Duration` → serde 默认结构 `{ secs, nanos }`
@@ -352,9 +352,9 @@ export interface TaskmillMetricsSnapshot {
 }
 
 /**
- * `/api/job-demo/snapshot` 返回体：调度器视图 + 指标视图。
+ * `/api/jobs/snapshot` 返回体：调度器视图 + 指标视图。
  */
-export interface TaskmillJobDemoSnapshot {
+export interface TaskmillJobSnapshot {
   scheduler: TaskmillSchedulerSnapshot
   metrics: TaskmillMetricsSnapshot
 }

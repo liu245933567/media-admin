@@ -5,15 +5,17 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
-    TaskHistoryRecord, TaskmillDemoSnapshot, TimestampedSchedulerEvent,
-    TranslateSubtitleOnlyInput, VideoSubtitlePipelineInput,
+    SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateConfig,
+    SubtitleGenerateDefaultsRes, SubtitleTranslateJob, TaskHistoryRecord, TaskmillSnapshot,
+    TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
+    subtitle_generate_defaults,
 };
 use serde::Deserialize;
 
 use crate::{AppState, StateRouter, error::AppError};
 
 #[derive(Debug, Deserialize)]
-pub struct JobDemoHistoryQuery {
+pub struct JobsHistoryQuery {
     #[serde(default = "default_history_limit")]
     limit: i32,
     #[serde(default)]
@@ -29,7 +31,7 @@ fn clamp_history_params(limit: i32, offset: i32) -> (i32, i32) {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct JobDemoExecLogQuery {
+pub struct JobsExecLogQuery {
     #[serde(default = "default_exec_log_limit")]
     limit: usize,
 }
@@ -44,32 +46,46 @@ fn clamp_exec_log_limit(limit: usize) -> usize {
 
 pub fn routes() -> StateRouter {
     Router::new()
-        .route("/pipeline", post(pipeline_handler))
-        .route("/translate-subtitle", post(translate_handler))
+        .route("/generate-defaults", get(generate_defaults_handler))
+        .route("/generate", post(generate_handler))
+        .route("/generate/bulk", post(generate_bulk_handler))
+        .route("/translate", post(translate_handler))
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
         .route("/exec-log", get(exec_log_handler))
 }
 
-async fn pipeline_handler(
+async fn generate_defaults_handler() -> Json<SubtitleGenerateDefaultsRes> {
+    Json(subtitle_generate_defaults())
+}
+
+async fn generate_handler(
     State(state): State<AppState>,
-    WithRejection(Json(body), _): WithRejection<Json<VideoSubtitlePipelineInput>, AppError>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateConfig>, AppError>,
 ) -> Result<Json<()>, AppError> {
-    state
-        .taskmill_demo
-        .enqueue_video_pipeline(body)
+    enqueue_subtitle_generate(&state.taskmill, body)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(()))
 }
 
+async fn generate_bulk_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateBulkReq>, AppError>,
+) -> Result<Json<SubtitleGenerateBulkRes>, AppError> {
+    let res = bulk_enqueue_subtitle_generate(&state.taskmill, body)
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(res))
+}
+
 async fn translate_handler(
     State(state): State<AppState>,
-    WithRejection(Json(body), _): WithRejection<Json<TranslateSubtitleOnlyInput>, AppError>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleTranslateJob>, AppError>,
 ) -> Result<Json<()>, AppError> {
     state
-        .taskmill_demo
-        .enqueue_translate_only(body)
+        .taskmill
+        .enqueue_translate(body)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(()))
@@ -77,9 +93,9 @@ async fn translate_handler(
 
 async fn snapshot_handler(
     State(state): State<AppState>,
-) -> Result<Json<TaskmillDemoSnapshot>, AppError> {
+) -> Result<Json<TaskmillSnapshot>, AppError> {
     let snapshot = state
-        .taskmill_demo
+        .taskmill
         .snapshot()
         .await
         .map_err(AppError::Internal)?;
@@ -88,11 +104,11 @@ async fn snapshot_handler(
 
 async fn history_handler(
     State(state): State<AppState>,
-    Query(q): Query<JobDemoHistoryQuery>,
+    Query(q): Query<JobsHistoryQuery>,
 ) -> Result<Json<Vec<TaskHistoryRecord>>, AppError> {
     let (limit, offset) = clamp_history_params(q.limit, q.offset);
     let rows = state
-        .taskmill_demo
+        .taskmill
         .recent_history(limit, offset)
         .await
         .map_err(AppError::Internal)?;
@@ -101,9 +117,9 @@ async fn history_handler(
 
 async fn exec_log_handler(
     State(state): State<AppState>,
-    Query(q): Query<JobDemoExecLogQuery>,
+    Query(q): Query<JobsExecLogQuery>,
 ) -> Result<Json<Vec<TimestampedSchedulerEvent>>, AppError> {
     let limit = clamp_exec_log_limit(q.limit);
-    let rows = state.taskmill_demo.recent_exec_events(limit).await;
+    let rows = state.taskmill.recent_exec_events(limit).await;
     Ok(Json(rows))
 }

@@ -62,6 +62,11 @@ export interface PageResult<T> {
 	total: number;
 }
 
+export interface SubtitleGenerateBulkFailedItem {
+	video_path: string;
+	error: string;
+}
+
 /** VAD 配置 */
 export interface VadConfig {
 	/** 帧长 10/20/30（默认 30） */
@@ -167,166 +172,27 @@ export interface SubtitleGenerateConfig {
 	translate_cfg?: SubtitleTranslateConfig;
 }
 
-export interface SubtitleTaskBulkCreateFailedItem {
-	video_path: string;
-	error: string;
-}
-
-export interface SubtitleTaskBulkCreateReq {
+export interface SubtitleGenerateBulkReq {
 	configs: SubtitleGenerateConfig[];
-	/** 若同 video_path 已存在 PENDING/RUNNING 任务则跳过（默认 true） */
+	/** 若同 video_path 已有 pending/running 生成任务则跳过（默认 true） */
 	skip_if_exists?: boolean;
 }
 
-/** 字幕任务列表 - 返回给前端 */
-export interface SubtitleTaskItem {
-	task_id: number;
-	task_status: string;
-	video_path: string;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface SubtitleTaskBulkCreateRes {
-	created: SubtitleTaskItem[];
+export interface SubtitleGenerateBulkRes {
+	submitted: string[];
 	skipped: string[];
-	failed: SubtitleTaskBulkCreateFailedItem[];
+	failed: SubtitleGenerateBulkFailedItem[];
 }
 
-export interface SubtitleTaskCreateReq {
+/** 新建任务表单的默认配置。 */
+export interface SubtitleGenerateDefaultsRes {
 	config: SubtitleGenerateConfig;
 }
 
-export interface SubtitleTaskDeleteReq {
-	task_id: number;
-}
-
-export interface SubtitleTaskDeleteRes {
-	ok: boolean;
-}
-
-export interface SubtitleTaskGenerateDefaultsRes {
-	config: SubtitleGenerateConfig;
-}
-
-export interface SubtitleTaskListReq {
-	current: number;
-	page_size: number;
-	task_status?: string;
-	video_path_contains?: string;
-}
-
-export interface SubtitleTaskRow {
-	task_id: number;
-	task_status: string;
-	video_path: string;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface SubtitleTaskListRes {
-	items: SubtitleTaskRow[];
-	total: number;
-}
-
-export interface SubtitleTaskQueuePauseReq {
-}
-
-export interface SubtitleTaskQueuePauseRes {
-	ok: boolean;
-}
-
-export interface SubtitleTaskQueueResumeReq {
-}
-
-export interface SubtitleTaskQueueResumeRes {
-	ok: boolean;
-}
-
-export interface SubtitleTaskQueueStatusReq {
-}
-
-export interface SubtitleTaskQueueStatusRes {
-	/** RUNNING / PAUSING / PAUSED */
-	status: string;
-}
-
-export interface SubtitleTaskRetryReq {
-	task_id: number;
-}
-
-export interface SubtitleTaskRetryRes {
-	ok: boolean;
-}
-
-export interface SubtitleTranslateTaskCreateReq {
+/** 字幕翻译任务（可独立提交，或由生成任务链式入队）。 */
+export interface SubtitleTranslateJob {
 	source_srt_path: string;
 	config: SubtitleTranslateConfig;
-}
-
-export interface SubtitleTranslateTaskDeleteReq {
-	task_id: number;
-}
-
-export interface SubtitleTranslateTaskDeleteRes {
-	ok: boolean;
-}
-
-export interface SubtitleTranslateTaskItem {
-	task_id: number;
-	task_status: string;
-	source_srt_path: string;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface SubtitleTranslateTaskListReq {
-	current: number;
-	page_size: number;
-	task_status?: string;
-	path_contains?: string;
-}
-
-export interface SubtitleTranslateTaskRow {
-	task_id: number;
-	task_status: string;
-	source_srt_path: string;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface SubtitleTranslateTaskListRes {
-	items: SubtitleTranslateTaskRow[];
-	total: number;
-}
-
-export interface SubtitleTranslateTaskQueuePauseReq {
-}
-
-export interface SubtitleTranslateTaskQueuePauseRes {
-	ok: boolean;
-}
-
-export interface SubtitleTranslateTaskQueueResumeReq {
-}
-
-export interface SubtitleTranslateTaskQueueResumeRes {
-	ok: boolean;
-}
-
-export interface SubtitleTranslateTaskQueueStatusReq {
-}
-
-export interface SubtitleTranslateTaskQueueStatusRes {
-	status: string;
-}
-
-export interface SubtitleTranslateTaskRetryReq {
-	task_id: number;
-}
-
-export interface SubtitleTranslateTaskRetryRes {
-	ok: boolean;
 }
 
 /** 搜索字幕结果 - 列表单项 */

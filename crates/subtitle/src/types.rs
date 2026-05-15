@@ -5,7 +5,7 @@ use typeshare::typeshare;
 
 /// 翻译选项
 #[typeshare]
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SubtitleTranslateConfig {
     /// 调用模型的基础 URL
     pub base_url: String,
@@ -45,7 +45,7 @@ pub struct SubtitleGenerateItem {
 }
 
 #[typeshare]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SubtitleGenerateConfig {
     pub video_path: String,
     pub vad_config: Option<VadConfig>,

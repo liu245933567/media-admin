@@ -11,11 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
 import { Route as SubtitleWebRouteImport } from './routes/subtitle-web'
-import { Route as SubtitleTranslateTaskRouteImport } from './routes/subtitle-translate-task'
 import { Route as SubtitleTaskRouteImport } from './routes/subtitle-task'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
-import { Route as JobDemoRouteImport } from './routes/job-demo'
 import { Route as FileSystemRouteImport } from './routes/file-system'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -27,11 +25,6 @@ const VideoFolderScanRoute = VideoFolderScanRouteImport.update({
 const SubtitleWebRoute = SubtitleWebRouteImport.update({
   id: '/subtitle-web',
   path: '/subtitle-web',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SubtitleTranslateTaskRoute = SubtitleTranslateTaskRouteImport.update({
-  id: '/subtitle-translate-task',
-  path: '/subtitle-translate-task',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SubtitleTaskRoute = SubtitleTaskRouteImport.update({
@@ -49,11 +42,6 @@ const SettingRoute = SettingRouteImport.update({
   path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
-const JobDemoRoute = JobDemoRouteImport.update({
-  id: '/job-demo',
-  path: '/job-demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FileSystemRoute = FileSystemRouteImport.update({
   id: '/file-system',
   path: '/file-system',
@@ -68,22 +56,18 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
-  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
-  '/subtitle-translate-task': typeof SubtitleTranslateTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
-  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
-  '/subtitle-translate-task': typeof SubtitleTranslateTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
@@ -91,11 +75,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/file-system': typeof FileSystemRoute
-  '/job-demo': typeof JobDemoRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/subtitle-task': typeof SubtitleTaskRoute
-  '/subtitle-translate-task': typeof SubtitleTranslateTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
@@ -104,33 +86,27 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/file-system'
-    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
-    | '/subtitle-translate-task'
     | '/subtitle-web'
     | '/video-folder-scan'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/file-system'
-    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
-    | '/subtitle-translate-task'
     | '/subtitle-web'
     | '/video-folder-scan'
   id:
     | '__root__'
     | '/'
     | '/file-system'
-    | '/job-demo'
     | '/setting'
     | '/stash-scenes'
     | '/subtitle-task'
-    | '/subtitle-translate-task'
     | '/subtitle-web'
     | '/video-folder-scan'
   fileRoutesById: FileRoutesById
@@ -138,11 +114,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FileSystemRoute: typeof FileSystemRoute
-  JobDemoRoute: typeof JobDemoRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   SubtitleTaskRoute: typeof SubtitleTaskRoute
-  SubtitleTranslateTaskRoute: typeof SubtitleTranslateTaskRoute
   SubtitleWebRoute: typeof SubtitleWebRoute
   VideoFolderScanRoute: typeof VideoFolderScanRoute
 }
@@ -161,13 +135,6 @@ declare module '@tanstack/react-router' {
       path: '/subtitle-web'
       fullPath: '/subtitle-web'
       preLoaderRoute: typeof SubtitleWebRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/subtitle-translate-task': {
-      id: '/subtitle-translate-task'
-      path: '/subtitle-translate-task'
-      fullPath: '/subtitle-translate-task'
-      preLoaderRoute: typeof SubtitleTranslateTaskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/subtitle-task': {
@@ -191,13 +158,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/job-demo': {
-      id: '/job-demo'
-      path: '/job-demo'
-      fullPath: '/job-demo'
-      preLoaderRoute: typeof JobDemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/file-system': {
       id: '/file-system'
       path: '/file-system'
@@ -218,11 +178,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FileSystemRoute: FileSystemRoute,
-  JobDemoRoute: JobDemoRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   SubtitleTaskRoute: SubtitleTaskRoute,
-  SubtitleTranslateTaskRoute: SubtitleTranslateTaskRoute,
   SubtitleWebRoute: SubtitleWebRoute,
   VideoFolderScanRoute: VideoFolderScanRoute,
 }

@@ -1,6 +1,6 @@
 /**
  * `task_history` 表行对应的 JSON 形态（与 taskmill `TaskHistoryRecord` 对齐，crate 0.7.1）。
- * 由 `GET /api/job-demo/history` 返回 `TaskHistoryRecord[]`。
+ * 由 `GET /api/jobs/history` 返回 `TaskHistoryRecord[]`。
  */
 
 import type { TaskmillIoBudget, TaskmillPriority, TaskmillTtlFrom } from './taskmill-snapshot'

@@ -1,4 +1,4 @@
-import type { SubtitleTranslateConfig, SubtitleTranslateTaskCreateReq } from '@/types/api'
+import type { SubtitleTranslateConfig, SubtitleTranslateJob } from '@/types/api'
 import {
   DrawerForm,
   ProFormDigit,
@@ -7,7 +7,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components'
 import { App } from 'antd'
-import { createSubtitleTranslateTask } from '@/request'
+import { enqueueSubtitleTranslate } from '@/request'
 
 const DEFAULT_TRANSLATE: SubtitleTranslateConfig = {
   base_url: 'https://api.siliconflow.com/v1',
@@ -31,7 +31,7 @@ export function SubtitleTranslateTaskCreateDrawerForm(
   const { message } = App.useApp()
 
   return (
-    <DrawerForm<SubtitleTranslateTaskCreateReq>
+    <DrawerForm<SubtitleTranslateJob>
       title="新增字幕翻译任务"
       open={props.open}
       onOpenChange={props.onOpenChange}
@@ -39,93 +39,32 @@ export function SubtitleTranslateTaskCreateDrawerForm(
       drawerProps={{ destroyOnClose: true }}
       initialValues={{
         source_srt_path: '',
-        config: { ...DEFAULT_TRANSLATE },
-      }}
-      submitter={{
-        searchConfig: { submitText: '提交' },
+        config: DEFAULT_TRANSLATE,
       }}
       onFinish={async (values) => {
-        try {
-          const body: SubtitleTranslateTaskCreateReq = {
-            source_srt_path: values.source_srt_path.trim(),
-            config: values.config,
-          }
-          await createSubtitleTranslateTask(body)
-          message.success('任务已添加')
-          props.onCreated?.()
-          return true
+        const body: SubtitleTranslateJob = {
+          source_srt_path: values.source_srt_path.trim(),
+          config: values.config,
         }
-        catch (e) {
-          message.error((e as Error).message || '创建失败')
-          return false
-        }
+        await enqueueSubtitleTranslate(body)
+        message.success('已提交翻译任务')
+        props.onCreated?.()
+        return true
       }}
     >
       <ProFormText
         name="source_srt_path"
         label="源 SRT 路径"
-        placeholder="请输入磁盘上的 .srt 文件路径"
-        rules={[
-          { required: true, message: '请输入源 SRT 路径' },
-          {
-            validator: async (_, v) => {
-              if (!v || !String(v).trim())
-                throw new Error('请输入源 SRT 路径')
-            },
-          },
-        ]}
+        rules={[{ required: true, message: '请输入字幕文件路径' }]}
       />
-
-      <ProFormGroup title="翻译设置">
-        <ProFormText
-          name={['config', 'base_url']}
-          label="API Base URL"
-          placeholder="留空则使用服务端 TRANSLATE_OPENAI_BASE"
-          extra="OpenAI 兼容接口根地址。"
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name={['config', 'api_key']}
-          label="API Key"
-          placeholder="留空则使用服务端 TRANSLATE_OPENAI_API_KEY"
-          fieldProps={{
-            type: 'password',
-            autoComplete: 'new-password',
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name={['config', 'target_language']}
-          label="目标语言"
-          placeholder="例如：Chinese / English / Japanese"
-          rules={[{ required: true, message: '请输入目标语言' }]}
-          colProps={{ span: 8 }}
-        />
-        <ProFormText
-          name={['config', 'model']}
-          label="翻译模型"
-          placeholder="例如：tencent/Hunyuan-MT-7B"
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['config', 'concurrency']}
-          label="并发数"
-          min={1}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['config', 'batch_size']}
-          label="批大小"
-          min={1}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSwitch
-          name={['config', 'remove_source_srt']}
-          label="翻译完成后删除原文 SRT"
-          colProps={{ span: 8 }}
-        />
+      <ProFormGroup title="翻译配置">
+        <ProFormText name={['config', 'base_url']} label="API Base URL" />
+        <ProFormText.Password name={['config', 'api_key']} label="API Key" />
+        <ProFormText name={['config', 'model']} label="模型" />
+        <ProFormText name={['config', 'target_language']} label="目标语言" />
+        <ProFormDigit name={['config', 'concurrency']} label="并发数" min={1} max={32} />
+        <ProFormDigit name={['config', 'batch_size']} label="批量条数" min={1} max={64} />
+        <ProFormSwitch name={['config', 'remove_source_srt']} label="完成后删除原文 SRT" />
       </ProFormGroup>
     </DrawerForm>
   )

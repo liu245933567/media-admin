@@ -1,28 +1,33 @@
 import type {
-  TaskmillDemoExecLogEntry,
-  TaskmillJobDemoSnapshot,
+  SubtitleGenerateBulkReq,
+  SubtitleGenerateBulkRes,
+  SubtitleGenerateConfig,
+  SubtitleGenerateDefaultsRes,
+  SubtitleTranslateJob,
+  TaskmillExecLogEntry,
+  TaskmillJobSnapshot,
   TaskmillTaskHistoryRecord,
 } from '@/types'
-import { get } from './utils'
+import { get, post } from './utils'
 
-export function fetchTaskmillJobDemoSnapshot() {
-  return get<TaskmillJobDemoSnapshot>('/job-demo/snapshot')
+export const taskmillSnapshotQueryKey = ['taskmill-snapshot'] as const
+
+export function fetchTaskmillSnapshot() {
+  return get<TaskmillJobSnapshot>('/jobs/snapshot')
 }
 
-export interface TaskmillJobDemoHistoryParams {
+export interface TaskmillHistoryParams {
   limit?: number
   offset?: number
 }
 
-export function taskmillJobDemoHistoryQueryKey(params: TaskmillJobDemoHistoryParams) {
-  return ['taskmill-job-demo-history', params] as const
+export function taskmillHistoryQueryKey(params: TaskmillHistoryParams) {
+  return ['taskmill-history', params] as const
 }
 
-export function fetchTaskmillJobDemoHistory(
-  params: TaskmillJobDemoHistoryParams = {},
-) {
-  return get<TaskmillTaskHistoryRecord[], TaskmillJobDemoHistoryParams>(
-    '/job-demo/history',
+export function fetchTaskmillHistory(params: TaskmillHistoryParams = {}) {
+  return get<TaskmillTaskHistoryRecord[], TaskmillHistoryParams>(
+    '/jobs/history',
     {
       limit: params.limit ?? 50,
       offset: params.offset ?? 0,
@@ -30,23 +35,40 @@ export function fetchTaskmillJobDemoHistory(
   )
 }
 
-export interface TaskmillJobDemoExecLogParams {
+export interface TaskmillExecLogParams {
   limit?: number
 }
 
-export function taskmillJobDemoExecLogQueryKey(
-  params: TaskmillJobDemoExecLogParams,
-) {
-  return ['taskmill-job-demo-exec-log', params] as const
+export function taskmillExecLogQueryKey(params: TaskmillExecLogParams) {
+  return ['taskmill-exec-log', params] as const
 }
 
-export function fetchTaskmillJobDemoExecLog(
-  params: TaskmillJobDemoExecLogParams = {},
-) {
-  return get<TaskmillDemoExecLogEntry[], TaskmillJobDemoExecLogParams>(
-    '/job-demo/exec-log',
+export function fetchTaskmillExecLog(params: TaskmillExecLogParams = {}) {
+  return get<TaskmillExecLogEntry[], TaskmillExecLogParams>(
+    '/jobs/exec-log',
     {
       limit: params.limit ?? 250,
     },
   )
+}
+
+export const subtitleGenerateDefaultsQueryKey = ['jobs', 'generate-defaults'] as const
+
+export function fetchSubtitleGenerateDefaults() {
+  return get<SubtitleGenerateDefaultsRes>('/jobs/generate-defaults')
+}
+
+export function enqueueSubtitleGenerate(config: SubtitleGenerateConfig) {
+  return post<unknown, SubtitleGenerateConfig>('/jobs/generate', config)
+}
+
+export function enqueueSubtitleGenerateBulk(params: SubtitleGenerateBulkReq) {
+  return post<SubtitleGenerateBulkRes, SubtitleGenerateBulkReq>(
+    '/jobs/generate/bulk',
+    params,
+  )
+}
+
+export function enqueueSubtitleTranslate(job: SubtitleTranslateJob) {
+  return post<unknown, SubtitleTranslateJob>('/jobs/translate', job)
 }
