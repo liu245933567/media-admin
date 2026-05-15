@@ -2792,6 +2792,7 @@ dependencies = [
  "media-admin-db",
  "media-admin-subtitle",
  "media-admin-utils",
+ "media-admin-whisper",
  "reqwest 0.13.3",
  "serde",
  "serde_json",

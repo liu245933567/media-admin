@@ -25,6 +25,7 @@ taskmill.workspace = true
 tokio-util.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
+media-admin-whisper = { path = "../../crates/whisper" }
 media-admin-subtitle = { path = "../../crates/subtitle" }
 media-admin-db = { path = "../../crates/db" }
 

@@ -22,7 +22,7 @@ fn samples_to_cs(samples: usize) -> i64 {
 }
 
 /// 读取 16kHz / mono / 16-bit PCM WAV 文件，并校验格式
-fn load_wav_i16_mono16k(path: &Path) -> Result<Vec<i16>> {
+pub fn load_wav_i16_mono16k(path: &Path) -> Result<Vec<i16>> {
     let mut reader = hound::WavReader::open(path)
         .with_context(|| format!("打开 WAV 失败: {}", path.display()))?;
     let spec = reader.spec();
@@ -66,23 +66,19 @@ fn dedupe_consecutive(items: Vec<WhisperTranscribeItem>) -> Vec<WhisperTranscrib
     out
 }
 
-/// 识别视频中的语音，并返回语音识别结果
-pub async fn recognize_video_voice(
-    video_path: &Path,
-    vad_config: Option<VadConfig>,
+/// 对已提取的 16kHz mono WAV 做 VAD 切分 + Whisper 识别（`vad_config` 必填）。
+pub fn recognize_wav_voice(
+    wav_path: &Path,
+    vad_config: VadConfig,
     whisper_engine_cfg: Option<WhisperEngineConfig>,
     whisper_transcribe_options: Option<WhisperTranscribeOptions>,
 ) -> Result<WhisperTranscribeOutput> {
-    let wav_path = extract_wav_16k_mono(video_path)
-        .await
-        .with_context(|| format!("提取 WAV 失败: {}", video_path.display()))?;
-
-    let samples_i16 = load_wav_i16_mono16k(&wav_path)?;
+    let samples_i16 = load_wav_i16_mono16k(wav_path)?;
     tracing::info!(
         wav = %wav_path.display(),
         samples = samples_i16.len(),
         dur_s = samples_i16.len() as f64 / SAMPLE_RATE as f64,
-        "[subtitle] 已加载 WAV"
+        "[whisper] 已加载 WAV"
     );
 
     let engine = match whisper_engine_cfg {
@@ -92,7 +88,6 @@ pub async fn recognize_video_voice(
     let options = whisper_transcribe_options.unwrap_or_default();
 
     let mut all_segments: Vec<WhisperTranscribeItem> = Vec::new();
-    // 多个 VAD 段可能各自被检测为不同语言，按"加权出现次数"聚合后取多数
     let mut lang_counts: HashMap<String, usize> = HashMap::new();
     let mut record_lang = |lang: Option<String>, weight: usize| {
         if let Some(l) = lang.filter(|s| !s.is_empty()) {
@@ -100,64 +95,72 @@ pub async fn recognize_video_voice(
         }
     };
 
-    match vad_config {
-        Some(vad_config) => {
-            let intervals = detect_vad_intervals_i16(&samples_i16, &vad_config)?;
+    let intervals = detect_vad_intervals_i16(&samples_i16, &vad_config)?;
 
-            if intervals.is_empty() {
-                tracing::warn!("VAD 未检出语音段，回退为整段转写");
-                let out = engine.transcribe(&samples_i16, 0, &options)?;
-                record_lang(out.lang, out.items.len());
-                all_segments.extend(out.items);
-            } else {
-                let total = intervals.len();
-                tracing::info!("VAD 检出 {total} 个语音段");
-                for (idx, (s, e)) in intervals.iter().enumerate() {
-                    let offset_cs = samples_to_cs(*s);
-                    let dur_cs = samples_to_cs(e.saturating_sub(*s));
-                    tracing::info!(
-                        "[VAD #{idx}/{total}] samples=[{s}, {e}) offset={offset_cs}cs dur={dur_cs}cs"
-                    );
-                    let out = engine
-                        .transcribe(&samples_i16[*s..*e], offset_cs, &options)
-                        .with_context(|| format!("VAD 段 #{idx} 解码失败"))?;
-                    record_lang(out.lang, out.items.len());
-                    all_segments.extend(out.items);
-                }
-            }
-        }
-        None => {
-            let out = engine.transcribe(&samples_i16, 0, &options)?;
+    if intervals.is_empty() {
+        tracing::warn!("VAD 未检出语音段，回退为整段转写");
+        let out = engine.transcribe(&samples_i16, 0, &options)?;
+        record_lang(out.lang, out.items.len());
+        all_segments.extend(out.items);
+    } else {
+        let total = intervals.len();
+        tracing::info!("VAD 检出 {total} 个语音段");
+        for (idx, (s, e)) in intervals.iter().enumerate() {
+            let offset_cs = samples_to_cs(*s);
+            let dur_cs = samples_to_cs(e.saturating_sub(*s));
+            tracing::info!(
+                "[VAD #{idx}/{total}] samples=[{s}, {e}) offset={offset_cs}cs dur={dur_cs}cs"
+            );
+            let out = engine
+                .transcribe(&samples_i16[*s..*e], offset_cs, &options)
+                .with_context(|| format!("VAD 段 #{idx} 解码失败"))?;
             record_lang(out.lang, out.items.len());
             all_segments.extend(out.items);
         }
     }
 
-    // 排序 + 连续重复合并
     all_segments.sort_by_key(|s| s.start_cs);
     let before = all_segments.len();
     let all_segments = dedupe_consecutive(all_segments);
     if before != all_segments.len() {
         tracing::info!(
-            "[subtitle] 合并连续重复段: {} → {}",
+            "[whisper] 合并连续重复段: {} → {}",
             before,
             all_segments.len()
         );
     }
 
-    // 取出现频次最高的语言代码作为整段音频的语种
     let detected_lang = lang_counts
         .iter()
         .max_by_key(|(_, n)| *n)
         .map(|(k, _)| k.clone());
     if let Some(ref l) = detected_lang {
-        tracing::info!("[subtitle] 识别到语种: {l} (各语种段数: {:?})", lang_counts);
+        tracing::info!("[whisper] 识别到语种: {l} (各语种段数: {:?})", lang_counts);
     } else {
-        tracing::warn!("[subtitle] 未能识别到语种");
+        tracing::warn!("[whisper] 未能识别到语种");
     }
 
     Ok(WhisperTranscribeOutput {
         items: all_segments,
         lang: detected_lang,
     })
+}
+
+/// 识别视频中的语音：先提取 WAV，再 [`recognize_wav_voice`]。
+pub async fn recognize_video_voice(
+    video_path: &Path,
+    vad_config: VadConfig,
+    whisper_engine_cfg: Option<WhisperEngineConfig>,
+    whisper_transcribe_options: Option<WhisperTranscribeOptions>,
+) -> Result<WhisperTranscribeOutput> {
+    let wav_path = extract_wav_16k_mono(video_path)
+        .await
+        .with_context(|| format!("提取 WAV 失败: {}", video_path.display()))?;
+
+    recognize_wav_voice(
+        &wav_path,
+        vad_config,
+        whisper_engine_cfg,
+        whisper_transcribe_options,
+    )
 }

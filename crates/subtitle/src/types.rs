@@ -39,7 +39,6 @@ impl Default for SubtitleTranslateConfig {
 
 /// 字幕生成结果项
 #[derive(Serialize)]
-
 pub struct SubtitleGenerateItem {
     pub srt_path: String,
 }
@@ -48,7 +47,7 @@ pub struct SubtitleGenerateItem {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SubtitleGenerateConfig {
     pub video_path: String,
-    pub vad_config: Option<VadConfig>,
+    pub vad_config: VadConfig,
     pub whisper_engine_cfg: Option<WhisperEngineConfig>,
     pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
     pub translate_cfg: Option<SubtitleTranslateConfig>,
@@ -58,7 +57,7 @@ impl Default for SubtitleGenerateConfig {
     fn default() -> Self {
         Self {
             video_path: "".to_string(),
-            vad_config: Some(VadConfig::default()),
+            vad_config: VadConfig::default(),
             whisper_engine_cfg: Some(WhisperEngineConfig::default()),
             whisper_transcribe_options: Some(WhisperTranscribeOptions::default()),
             translate_cfg: Some(SubtitleTranslateConfig::default()),

@@ -1,4 +1,4 @@
-import type { SubtitleGenerateConfig, VideoFolderScanItem } from '@/types/api'
+import type { SubtitleGenerateConfig, VadConfig, VideoFolderScanItem } from '@/types/api'
 import { DrawerForm, ProFormDependency, ProFormDigit, ProFormGroup, ProFormSelect, ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Checkbox } from 'antd'
@@ -20,6 +20,14 @@ export interface SubtitleTaskCreateDrawerFormProps {
   initialVideoPath?: string
   /** 非空时为批量创建：共用表单中的识别/翻译等配置，路径来自扫描结果 */
   bulkSourceRows?: VideoFolderScanItem[]
+}
+
+const DEFAULT_VAD_CONFIG: VadConfig = {
+  frame_ms: 30,
+  mode: 2,
+  padding_ms: 300,
+  min_speech_ms: 200,
+  max_segment_ms: 30_000,
 }
 
 export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerFormProps) {
@@ -68,11 +76,16 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   const initialValues = useMemo((): Partial<SubtitleGenerateConfig> => {
     const c = defaultsQuery.data?.config
     const path = props.initialVideoPath?.trim() ?? ''
-    if (!c)
-      return { video_path: path }
+    if (!c) {
+      return {
+        video_path: path,
+        vad_config: DEFAULT_VAD_CONFIG,
+      }
+    }
     return {
       ...c,
       video_path: path,
+      vad_config: c.vad_config ?? DEFAULT_VAD_CONFIG,
     }
   }, [defaultsQuery.data, props.initialVideoPath])
 
@@ -92,6 +105,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
     return {
       ...values,
       video_path: (values.video_path ?? '').trim(),
+      vad_config: values.vad_config ?? DEFAULT_VAD_CONFIG,
       translate_cfg: enableTranslate ? values.translate_cfg : undefined,
     }
   }, [enableTranslate])

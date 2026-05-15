@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
+use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeOptions};
 use serde::{Deserialize, Serialize};
 use taskmill::{DomainKey, DuplicateStrategy, IoBudget, Priority, TaskTypeConfig, TypedTask};
 use typeshare::typeshare;
@@ -61,6 +62,116 @@ impl TypedTask for VideoSubtitleGenerateTask {
             "job.kind".to_string(),
             "video-subtitle-generate".to_string(),
         )])
+    }
+}
+
+/// 从视频提取 16kHz mono WAV（流水线子任务 1）。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ExtractWavTask {
+    pub video_path: String,
+    pub vad_config: VadConfig,
+    pub whisper_engine_cfg: Option<WhisperEngineConfig>,
+    pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
+    pub translate_cfg: Option<SubtitleTranslateConfig>,
+}
+
+impl ExtractWavTask {
+    pub fn from_config(config: &SubtitleGenerateConfig) -> Self {
+        Self {
+            video_path: config.video_path.clone(),
+            vad_config: config.vad_config.clone(),
+            whisper_engine_cfg: config.whisper_engine_cfg.clone(),
+            whisper_transcribe_options: config.whisper_transcribe_options.clone(),
+            translate_cfg: config.translate_cfg.clone(),
+        }
+    }
+}
+
+impl std::fmt::Debug for ExtractWavTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExtractWavTask")
+            .field("video_path", &self.video_path)
+            .finish()
+    }
+}
+
+impl TypedTask for ExtractWavTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "extract-wav";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::NORMAL)
+            .expected_io(IoBudget::disk(24 * 1024 * 1024, 8 * 1024 * 1024))
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("extract-wav:{path}"))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        Some(format!("提取 WAV: {}", self.video_path))
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([("job.kind".to_string(), "extract-wav".to_string())])
+    }
+}
+
+/// VAD 切分 + Whisper 识别 + 写 SRT（流水线子任务 2）。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct WhisperVadSrtTask {
+    pub video_path: String,
+    pub wav_path: String,
+    pub vad_config: VadConfig,
+    pub whisper_engine_cfg: Option<WhisperEngineConfig>,
+    pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
+    pub translate_cfg: Option<SubtitleTranslateConfig>,
+}
+
+impl std::fmt::Debug for WhisperVadSrtTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhisperVadSrtTask")
+            .field("video_path", &self.video_path)
+            .field("wav_path", &self.wav_path)
+            .finish()
+    }
+}
+
+impl TypedTask for WhisperVadSrtTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "whisper-vad-srt";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::NORMAL)
+            .expected_io(IoBudget::disk(8 * 1024 * 1024, 4 * 1024 * 1024))
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("whisper-vad-srt:{path}"))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        Some(format!("识别字幕: {}", self.video_path))
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([("job.kind".to_string(), "whisper-vad-srt".to_string())])
     }
 }
 

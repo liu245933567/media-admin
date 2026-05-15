@@ -14,4 +14,7 @@ pub use submit::{
 };
 pub use ma_subtitle::types::SubtitleGenerateConfig;
 pub use taskmill::TaskHistoryRecord;
-pub use types::{MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask};
+pub use types::{
+    ExtractWavTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
+    WhisperVadSrtTask,
+};

@@ -17,8 +17,14 @@ use taskmill::{
 };
 use tokio_util::sync::CancellationToken;
 
-use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
-use super::types::{MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask};
+use super::spawn::{
+    ExtractWavExecutor, SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor,
+    WhisperVadSrtExecutor,
+};
+use super::types::{
+    ExtractWavTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
+    WhisperVadSrtTask,
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskmillSnapshot {
@@ -60,6 +66,8 @@ impl TaskmillRuntime {
             .domain(
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
+                    .task::<ExtractWavTask>(ExtractWavExecutor)
+                    .task::<WhisperVadSrtTask>(WhisperVadSrtExecutor)
                     .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
                     .max_concurrency(1),
             )

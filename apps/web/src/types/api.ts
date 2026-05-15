@@ -166,7 +166,7 @@ export interface SubtitleTranslateConfig {
 
 export interface SubtitleGenerateConfig {
 	video_path: string;
-	vad_config?: VadConfig;
+	vad_config: VadConfig;
 	whisper_engine_cfg?: WhisperEngineConfig;
 	whisper_transcribe_options?: WhisperTranscribeOptions;
 	translate_cfg?: SubtitleTranslateConfig;

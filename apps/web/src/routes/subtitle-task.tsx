@@ -136,6 +136,20 @@ function PageComponent() {
                     </Button>
                     <Button
                       size="small"
+                      type={taskTypeFilter === 'extract-wav' ? 'primary' : 'default'}
+                      onClick={() => setTaskTypeFilter('extract-wav')}
+                    >
+                      提取 WAV
+                    </Button>
+                    <Button
+                      size="small"
+                      type={taskTypeFilter === 'whisper-vad-srt' ? 'primary' : 'default'}
+                      onClick={() => setTaskTypeFilter('whisper-vad-srt')}
+                    >
+                      识别字幕
+                    </Button>
+                    <Button
+                      size="small"
                       type={taskTypeFilter === 'subtitle-translate' ? 'primary' : 'default'}
                       onClick={() => setTaskTypeFilter('subtitle-translate')}
                     >
