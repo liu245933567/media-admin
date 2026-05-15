@@ -3,6 +3,7 @@ import {
   ExperimentOutlined,
   FileSearchOutlined,
   HomeOutlined,
+  PlaySquareOutlined,
   SettingOutlined,
   TranslationOutlined,
   VideoCameraOutlined,
@@ -39,11 +40,11 @@ export const menu = [
   //   path: '/file-system',
   //   icon: <FileOutlined />,
   // },
-  // {
-  //   name: 'Stash 库',
-  //   path: '/stash-scenes',
-  //   icon: <PlaySquareOutlined />,
-  // },
+  {
+    name: 'Stash 库',
+    path: '/stash-scenes',
+    icon: <PlaySquareOutlined />,
+  },
   {
     name: 'Taskmill 演示',
     path: '/job-demo',

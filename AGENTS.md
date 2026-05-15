@@ -13,6 +13,7 @@
 - 需要写样式的时候，尽量用 tailwindcss 写
 - 不要去手动修改 src/types/api.ts 文件的内容，只能通过 typeshare 生成
 - 当组件中涉及到接口请求和数据展示，组件本身没有`request` `onFinish` 类似 props 时，优先使用 react-query 
+- 遇到 lint 错误的时候，先尝试使用 lint 指令修复，修完完还不好再手动改
 
 ## 后端规范
 

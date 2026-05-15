@@ -8,6 +8,11 @@ export function fetchStashGraphql<T>(body: Record<string, unknown>) {
   return post<StashGraphqlEnvelope<T>, Record<string, unknown>>('/stash/graphql', body)
 }
 
+/** 构建 Stash 媒体代理 URL（截图/预览视频等） */
+export function getStashMediaUrl(path: string): string {
+  return `/api/stash/media?path=${encodeURIComponent(path)}`
+}
+
 function toStashSortOrder(sort: Record<string, SortOrder>): Pick<StashFilter, 'sort' | 'direction'> {
   const firstKey = Object.keys(sort)[0]
   if (!firstKey) {
