@@ -16,5 +16,5 @@ pub use ma_subtitle::types::SubtitleGenerateConfig;
 pub use taskmill::TaskHistoryRecord;
 pub use types::{
     ExtractWavTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
-    WhisperVadSrtTask,
+    WhisperVadSrtTask, GROUP_FFMPEG, GROUP_TRANSLATE, GROUP_WHISPER,
 };

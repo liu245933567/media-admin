@@ -15,6 +15,13 @@ impl DomainKey for MediaJobsDomain {
     const NAME: &'static str = "media-jobs";
 }
 
+/// Taskmill 资源组：FFmpeg 提取 WAV（可并行多个视频）。
+pub const GROUP_FFMPEG: &str = "media:ffmpeg";
+/// Taskmill 资源组：Whisper 识别（GPU，全局互斥）。
+pub const GROUP_WHISPER: &str = "media:whisper";
+/// Taskmill 资源组：字幕翻译 API 调用。
+pub const GROUP_TRANSLATE: &str = "media:translate";
+
 /// 视频字幕生成任务载荷（包装 `SubtitleGenerateConfig` 以满足 TypedTask 孤儿规则）。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VideoSubtitleGenerateTask(pub SubtitleGenerateConfig);
@@ -104,6 +111,7 @@ impl TypedTask for ExtractWavTask {
         TaskTypeConfig::new()
             .priority(Priority::NORMAL)
             .expected_io(IoBudget::disk(24 * 1024 * 1024, 8 * 1024 * 1024))
+            .group(GROUP_FFMPEG)
             .on_duplicate(DuplicateStrategy::Skip)
     }
 
@@ -154,6 +162,7 @@ impl TypedTask for WhisperVadSrtTask {
         TaskTypeConfig::new()
             .priority(Priority::NORMAL)
             .expected_io(IoBudget::disk(8 * 1024 * 1024, 4 * 1024 * 1024))
+            .group(GROUP_WHISPER)
             .on_duplicate(DuplicateStrategy::Skip)
     }
 
@@ -192,6 +201,7 @@ impl TypedTask for SubtitleTranslateJob {
         TaskTypeConfig::new()
             .priority(Priority::NORMAL)
             .expected_io(IoBudget::disk(512 * 1024, 512 * 1024))
+            .group(GROUP_TRANSLATE)
             .on_duplicate(DuplicateStrategy::Skip)
     }
 

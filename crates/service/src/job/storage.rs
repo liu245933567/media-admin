@@ -23,7 +23,7 @@ use super::spawn::{
 };
 use super::types::{
     ExtractWavTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
-    WhisperVadSrtTask,
+    WhisperVadSrtTask, GROUP_FFMPEG, GROUP_TRANSLATE, GROUP_WHISPER,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +40,35 @@ pub struct TimestampedSchedulerEvent {
 }
 
 const EXEC_EVENT_LOG_CAP: usize = 400;
+
+const DEFAULT_MAX_CONCURRENCY: usize = 8;
+const DEFAULT_GROUP_FFMPEG: usize = 2;
+const DEFAULT_GROUP_WHISPER: usize = 1;
+const DEFAULT_GROUP_TRANSLATE: usize = 2;
+
+/// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
+struct SchedulerConcurrencyLimits {
+    max_concurrency: usize,
+    ffmpeg: usize,
+    whisper: usize,
+    translate: usize,
+}
+
+fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
+    SchedulerConcurrencyLimits {
+        max_concurrency: env_usize("TASKMILL_MAX_CONCURRENCY", DEFAULT_MAX_CONCURRENCY),
+        ffmpeg: env_usize("TASKMILL_GROUP_FFMPEG", DEFAULT_GROUP_FFMPEG),
+        whisper: env_usize("TASKMILL_GROUP_WHISPER", DEFAULT_GROUP_WHISPER),
+        translate: env_usize("TASKMILL_GROUP_TRANSLATE", DEFAULT_GROUP_TRANSLATE),
+    }
+}
+
+fn env_usize(name: &str, default: usize) -> usize {
+    match std::env::var(name) {
+        Ok(s) => s.trim().parse().unwrap_or(default).max(1),
+        Err(_) => default,
+    }
+}
 
 #[derive(Clone)]
 pub struct TaskmillRuntime {
@@ -61,6 +90,15 @@ impl TaskmillRuntime {
         }
 
         let store_path = db_path.to_string_lossy();
+        let limits = scheduler_concurrency_limits();
+        tracing::info!(
+            max_concurrency = limits.max_concurrency,
+            group_ffmpeg = limits.ffmpeg,
+            group_whisper = limits.whisper,
+            group_translate = limits.translate,
+            "taskmill 并发：全局与各资源组上限"
+        );
+
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
             .domain(
@@ -68,10 +106,12 @@ impl TaskmillRuntime {
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
                     .task::<ExtractWavTask>(ExtractWavExecutor)
                     .task::<WhisperVadSrtTask>(WhisperVadSrtExecutor)
-                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
-                    .max_concurrency(1),
+                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor),
             )
-            .max_concurrency(2)
+            .max_concurrency(limits.max_concurrency)
+            .group_concurrency(GROUP_FFMPEG, limits.ffmpeg)
+            .group_concurrency(GROUP_WHISPER, limits.whisper)
+            .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()

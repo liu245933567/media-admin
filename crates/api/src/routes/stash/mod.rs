@@ -1,12 +1,14 @@
 use crate::{StateRouter, error::AppError};
 use axum::{
     Json, Router,
+    body::Body,
     extract::Query,
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use axum_extra::extract::WithRejection;
+use futures_util::StreamExt;
 use ma_service::stash::{forward_graphql, proxy_media};
 use serde::Deserialize;
 use serde_json::Value;
@@ -22,19 +24,38 @@ struct MediaQuery {
     path: String,
 }
 
-async fn media_proxy_handler(Query(q): Query<MediaQuery>) -> Result<impl IntoResponse, AppError> {
-    let (headers, bytes, content_type) = proxy_media(&q.path)
+async fn media_proxy_handler(
+    Query(q): Query<MediaQuery>,
+    req_headers: HeaderMap,
+) -> Result<Response, AppError> {
+    let range = req_headers
+        .get(header::RANGE)
+        .and_then(|v| v.to_str().ok());
+
+    let proxied = proxy_media(&q.path, range)
         .await
         .map_err(|e| AppError::Upstream(e.to_string()))?;
 
     let mut resp_headers = HeaderMap::new();
-    resp_headers.insert("content-type", content_type.parse().unwrap());
-    // 转发缓存相关头
-    if let Some(v) = headers.get("cache-control") {
-        resp_headers.insert("cache-control", v.clone());
+    for (name, value) in proxied.headers.iter() {
+        resp_headers.insert(name.clone(), value.clone());
     }
 
-    Ok((StatusCode::OK, resp_headers, bytes))
+    if !resp_headers.contains_key(header::ACCEPT_RANGES) {
+        resp_headers.insert(
+            header::ACCEPT_RANGES,
+            HeaderValue::from_static("bytes"),
+        );
+    }
+
+    let status = StatusCode::from_u16(proxied.status.as_u16())
+        .unwrap_or(StatusCode::BAD_GATEWAY);
+
+    let body = Body::from_stream(proxied.body.map(|chunk| {
+        chunk.map_err(|e| std::io::Error::other(e))
+    }));
+
+    Ok((status, resp_headers, body).into_response())
 }
 
 async fn graphql_proxy_handler(

@@ -68,3 +68,15 @@ html[data-theme="dark"] {
     overflow-y: auto !important;
   }
 }
+
+/* Stash 封面预览：屏蔽浏览器在 video 悬停时注入的画中画 / 翻译等原生控件 */
+.stash-scene-cover-video::-webkit-media-controls,
+.stash-scene-cover-video::-webkit-media-controls-enclosure,
+.stash-scene-cover-video::-webkit-media-controls-panel,
+.stash-scene-cover-video::-webkit-media-controls-play-button,
+.stash-scene-cover-video::-webkit-media-controls-start-playback-button,
+.stash-scene-cover-video::-webkit-media-controls-overlay-play-button,
+.stash-scene-cover-video::-webkit-media-controls-picture-in-picture-button,
+.stash-scene-cover-video::-webkit-media-controls-toggle-closed-captions-button {
+  display: none !important;
+}
