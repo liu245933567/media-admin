@@ -1,10 +1,12 @@
+import { DownOutlined, PlusOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { App, Button, Card, Space, Switch, Tabs, Tag } from 'antd'
+import { App, Button, Card, Dropdown, Space, Switch, Tabs, Tag } from 'antd'
 import { useMemo, useState } from 'react'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
+import { TaskTypeFilter } from '@/components/task-type-filter'
 import { TaskmillExecLogPanel } from '@/components/taskmill-demo-exec-log-panel'
 import { TaskmillHistoryPanel } from '@/components/taskmill-demo-history-panel'
 import { TaskmillSnapshotPanel } from '@/components/taskmill-demo-snapshot-panel'
@@ -20,7 +22,7 @@ import {
 const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
 
-export const Route = createFileRoute('/subtitle-task')({
+export const Route = createFileRoute('/tasks')({
   component: PageComponent,
 })
 
@@ -49,6 +51,17 @@ function PageComponent() {
     refetchInterval: execLogAutoRefresh ? 1200 : false,
   })
 
+  const knownTaskTypes = useMemo(() => {
+    const types = new Set<string>()
+    for (const r of historyQuery.data ?? []) {
+      types.add(r.task_type)
+    }
+    for (const r of snapshotQuery.data?.scheduler.running ?? []) {
+      types.add(r.task_type)
+    }
+    return types
+  }, [historyQuery.data, snapshotQuery.data])
+
   const filteredHistory = useMemo(() => {
     const list = historyQuery.data ?? []
     if (!taskTypeFilter) {
@@ -68,17 +81,33 @@ function PageComponent() {
 
   return (
     <PageContainer
-      title="字幕任务"
-      subTitle="基于 Taskmill 调度：视频识别生成 SRT，并按配置链式入队翻译。"
+      title="任务管理"
+      subTitle="查看 Taskmill 调度队列、执行日志与任务历史；可按类型筛选。新建任务目前支持字幕流水线相关类型。"
     >
       <div className="flex flex-col gap-4">
         <Space wrap>
-          <Button type="primary" onClick={() => setCreateOpen(true)}>
-            新增生成任务
-          </Button>
-          <Button onClick={() => setTranslateOpen(true)}>
-            仅翻译字幕
-          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'subtitle-generate',
+                  label: '字幕生成（视频 → SRT）',
+                  onClick: () => setCreateOpen(true),
+                },
+                {
+                  key: 'subtitle-translate',
+                  label: '字幕翻译（SRT）',
+                  onClick: () => setTranslateOpen(true),
+                },
+              ],
+            }}
+          >
+            <Button type="primary" icon={<PlusOutlined />}>
+              新建任务
+              {' '}
+              <DownOutlined />
+            </Button>
+          </Dropdown>
           <Button loading={snapshotQuery.isFetching} onClick={refreshAll}>
             刷新
           </Button>
@@ -114,48 +143,27 @@ function PageComponent() {
         <Tabs
           items={[
             {
+              key: 'snapshot',
+              label: '队列与执行中',
+              children: (
+                <Card variant="borderless" className="shadow-sm">
+                  <TaskmillSnapshotPanel
+                    data={snapshotQuery.data}
+                    loading={snapshotQuery.isLoading || snapshotQuery.isFetching}
+                  />
+                </Card>
+              ),
+            },
+            {
               key: 'history',
               label: '任务历史',
               children: (
                 <Card variant="borderless" className="shadow-sm">
-                  <Space className="mb-3" wrap>
-                    <span className="text-sm text-neutral-500">任务类型</span>
-                    <Button
-                      size="small"
-                      type={taskTypeFilter === undefined ? 'primary' : 'default'}
-                      onClick={() => setTaskTypeFilter(undefined)}
-                    >
-                      全部
-                    </Button>
-                    <Button
-                      size="small"
-                      type={taskTypeFilter === 'video-subtitle-generate' ? 'primary' : 'default'}
-                      onClick={() => setTaskTypeFilter('video-subtitle-generate')}
-                    >
-                      生成
-                    </Button>
-                    <Button
-                      size="small"
-                      type={taskTypeFilter === 'extract-wav' ? 'primary' : 'default'}
-                      onClick={() => setTaskTypeFilter('extract-wav')}
-                    >
-                      提取 WAV
-                    </Button>
-                    <Button
-                      size="small"
-                      type={taskTypeFilter === 'whisper-vad-srt' ? 'primary' : 'default'}
-                      onClick={() => setTaskTypeFilter('whisper-vad-srt')}
-                    >
-                      识别字幕
-                    </Button>
-                    <Button
-                      size="small"
-                      type={taskTypeFilter === 'subtitle-translate' ? 'primary' : 'default'}
-                      onClick={() => setTaskTypeFilter('subtitle-translate')}
-                    >
-                      翻译
-                    </Button>
-                  </Space>
+                  <TaskTypeFilter
+                    taskTypes={knownTaskTypes}
+                    value={taskTypeFilter}
+                    onChange={setTaskTypeFilter}
+                  />
                   <TaskmillHistoryPanel
                     items={filteredHistory}
                     loading={historyQuery.isLoading || historyQuery.isFetching}
@@ -165,7 +173,7 @@ function PageComponent() {
             },
             {
               key: 'exec-log',
-              label: '执行日志',
+              label: '调度事件',
               children: (
                 <Card
                   variant="borderless"
@@ -183,18 +191,6 @@ function PageComponent() {
                   <TaskmillExecLogPanel
                     items={execLogQuery.data}
                     loading={execLogQuery.isLoading || execLogQuery.isFetching}
-                  />
-                </Card>
-              ),
-            },
-            {
-              key: 'snapshot',
-              label: '调度快照',
-              children: (
-                <Card variant="borderless" className="shadow-sm">
-                  <TaskmillSnapshotPanel
-                    data={snapshotQuery.data}
-                    loading={snapshotQuery.isLoading || snapshotQuery.isFetching}
                   />
                 </Card>
               ),

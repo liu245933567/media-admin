@@ -1,9 +1,9 @@
 import {
-  DatabaseOutlined,
   FileSearchOutlined,
   HomeOutlined,
   PlaySquareOutlined,
   SettingOutlined,
+  UnorderedListOutlined,
   VideoCameraOutlined,
 } from '@ant-design/icons'
 
@@ -19,9 +19,9 @@ export const menu = [
     icon: <FileSearchOutlined />,
   },
   {
-    name: '字幕任务',
-    path: '/subtitle-task',
-    icon: <DatabaseOutlined />,
+    name: '任务管理',
+    path: '/tasks',
+    icon: <UnorderedListOutlined />,
   },
   {
     name: '视频查询',

@@ -10,8 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
+import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as SubtitleWebRouteImport } from './routes/subtitle-web'
-import { Route as SubtitleTaskRouteImport } from './routes/subtitle-task'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
 import { Route as FileSystemRouteImport } from './routes/file-system'
@@ -22,14 +22,14 @@ const VideoFolderScanRoute = VideoFolderScanRouteImport.update({
   path: '/video-folder-scan',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SubtitleWebRoute = SubtitleWebRouteImport.update({
   id: '/subtitle-web',
   path: '/subtitle-web',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SubtitleTaskRoute = SubtitleTaskRouteImport.update({
-  id: '/subtitle-task',
-  path: '/subtitle-task',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StashScenesRoute = StashScenesRouteImport.update({
@@ -58,8 +58,8 @@ export interface FileRoutesByFullPath {
   '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-task': typeof SubtitleTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
+  '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRoutesByTo {
@@ -67,8 +67,8 @@ export interface FileRoutesByTo {
   '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-task': typeof SubtitleTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
+  '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRoutesById {
@@ -77,8 +77,8 @@ export interface FileRoutesById {
   '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-task': typeof SubtitleTaskRoute
   '/subtitle-web': typeof SubtitleWebRoute
+  '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRouteTypes {
@@ -88,8 +88,8 @@ export interface FileRouteTypes {
     | '/file-system'
     | '/setting'
     | '/stash-scenes'
-    | '/subtitle-task'
     | '/subtitle-web'
+    | '/tasks'
     | '/video-folder-scan'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -97,8 +97,8 @@ export interface FileRouteTypes {
     | '/file-system'
     | '/setting'
     | '/stash-scenes'
-    | '/subtitle-task'
     | '/subtitle-web'
+    | '/tasks'
     | '/video-folder-scan'
   id:
     | '__root__'
@@ -106,8 +106,8 @@ export interface FileRouteTypes {
     | '/file-system'
     | '/setting'
     | '/stash-scenes'
-    | '/subtitle-task'
     | '/subtitle-web'
+    | '/tasks'
     | '/video-folder-scan'
   fileRoutesById: FileRoutesById
 }
@@ -116,8 +116,8 @@ export interface RootRouteChildren {
   FileSystemRoute: typeof FileSystemRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
-  SubtitleTaskRoute: typeof SubtitleTaskRoute
   SubtitleWebRoute: typeof SubtitleWebRoute
+  TasksRoute: typeof TasksRoute
   VideoFolderScanRoute: typeof VideoFolderScanRoute
 }
 
@@ -130,18 +130,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VideoFolderScanRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/subtitle-web': {
       id: '/subtitle-web'
       path: '/subtitle-web'
       fullPath: '/subtitle-web'
       preLoaderRoute: typeof SubtitleWebRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/subtitle-task': {
-      id: '/subtitle-task'
-      path: '/subtitle-task'
-      fullPath: '/subtitle-task'
-      preLoaderRoute: typeof SubtitleTaskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/stash-scenes': {
@@ -180,8 +180,8 @@ const rootRouteChildren: RootRouteChildren = {
   FileSystemRoute: FileSystemRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
-  SubtitleTaskRoute: SubtitleTaskRoute,
   SubtitleWebRoute: SubtitleWebRoute,
+  TasksRoute: TasksRoute,
   VideoFolderScanRoute: VideoFolderScanRoute,
 }
 export const routeTree = rootRouteImport

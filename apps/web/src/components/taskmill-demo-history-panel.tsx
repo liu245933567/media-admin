@@ -115,7 +115,7 @@ export function TaskmillHistoryPanel({
           ]}
         />
         <Typography.Text type="secondary" className="text-xs">
-          展示最近 100 条历史；「已完成」为本地筛选。刷新快照时会同步刷新本表。
+          展示最近 100 条任务历史；「已完成」为本地筛选。
         </Typography.Text>
       </div>
       <Table<TaskmillTaskHistoryRecord>
