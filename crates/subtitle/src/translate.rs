@@ -63,13 +63,7 @@ impl TranslateCtx {
     }
 
     async fn translate_segments(&self, segments: &[&str]) -> Result<Vec<String>> {
-        chat_translate_with_retry(
-            &self.client,
-            &self.model,
-            &self.target_language,
-            segments,
-        )
-        .await
+        chat_translate_with_retry(&self.client, &self.model, &self.target_language, segments).await
     }
 }
 
@@ -431,16 +425,10 @@ pub async fn translate_srt_file(
         concurrency
     );
 
-    let translated =
-        run_translate_work(&ctx, work_items, batch_size, concurrency).await?;
+    let translated = run_translate_work(&ctx, work_items, batch_size, concurrency).await?;
 
     let (ok, fail) = apply_translation_results(&mut entries, translated)?;
-    tracing::info!(
-        "翻译完成: 成功 {}, 失败 {}, 共 {}",
-        ok,
-        fail,
-        entries.len()
-    );
+    tracing::info!("翻译完成: 成功 {}, 失败 {}, 共 {}", ok, fail, entries.len());
 
     let dst = match dst_srt {
         Some(p) => p.to_path_buf(),
@@ -449,6 +437,12 @@ pub async fn translate_srt_file(
     tokio::fs::write(&dst, build_srt(&entries))
         .await
         .with_context(|| format!("写出 SRT 失败: {}", dst.display()))?;
+
+    if options.remove_source_srt {
+        tokio::fs::remove_file(src_srt)
+            .await
+            .with_context(|| format!("删除源 SRT 失败: {}", src_srt.display()))?;
+    }
 
     Ok(dst)
 }
@@ -462,8 +456,7 @@ async fn run_translate_work(
 ) -> Result<Vec<(usize, Result<String>)>> {
     let total = items.len();
     let done = Arc::new(AtomicUsize::new(0));
-    let batches: Vec<Vec<(usize, String)>> =
-        items.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let batches: Vec<Vec<(usize, String)>> = items.chunks(batch_size).map(|c| c.to_vec()).collect();
     let total_batches = batches.len();
 
     let per_batch: Vec<Result<Vec<(usize, Result<String>)>>> =
@@ -496,10 +489,10 @@ async fn process_translate_batch(
 ) -> Result<Vec<(usize, Result<String>)>> {
     if batch.len() == 1 {
         let (i, text) = batch.into_iter().next().expect("len checked");
-        let res = ctx.translate_segments(&[&text]).await.and_then(|mut v| {
-            v.pop()
-                .ok_or_else(|| anyhow!("模型未返回翻译内容"))
-        });
+        let res = ctx
+            .translate_segments(&[&text])
+            .await
+            .and_then(|mut v| v.pop().ok_or_else(|| anyhow!("模型未返回翻译内容")));
         if let Err(ref e) = res {
             if is_fatal_translate_err(e) {
                 return Err(anyhow::anyhow!("{e:#}"));
@@ -539,10 +532,10 @@ async fn process_translate_batch(
             );
             let mut results = Vec::with_capacity(batch.len());
             for (i, text) in batch {
-                let res = ctx.translate_segments(&[&text]).await.and_then(|mut v| {
-                    v.pop()
-                        .ok_or_else(|| anyhow!("模型未返回翻译内容"))
-                });
+                let res = ctx
+                    .translate_segments(&[&text])
+                    .await
+                    .and_then(|mut v| v.pop().ok_or_else(|| anyhow!("模型未返回翻译内容")));
                 if let Err(ref re) = res {
                     if is_fatal_translate_err(re) {
                         return Err(anyhow::anyhow!("{re:#}"));
