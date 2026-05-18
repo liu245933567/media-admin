@@ -7,7 +7,6 @@ export interface FsListItem {
 }
 
 export * from './api'
-export * from './stash-graphql'
 export * from './taskmill-exec-log'
 export * from './taskmill-history'
 export * from './taskmill-snapshot'

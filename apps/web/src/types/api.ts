@@ -62,6 +62,237 @@ export interface PageResult<T> {
 	total: number;
 }
 
+/** Stash `CriterionModifier`（与 GraphQL 枚举值一致） */
+export enum StashCriterionModifier {
+	Eq = "=",
+	Equals = "Equals",
+	NotEq = "!=",
+	NotEquals = "NotEquals",
+	GreaterThanSymbol = ">",
+	GreaterThan = "GreaterThan",
+	LessThanSymbol = "<",
+	LessThan = "LessThan",
+	IsNull = "IS NULL",
+	NotNull = "IS NOT NULL",
+	IncludesAll = "INCLUDES ALL",
+	Includes = "Includes",
+	Excludes = "Excludes",
+	MatchesRegex = "MATCHES REGEX",
+	NotMatchesRegex = "NOT MATCHES REGEX",
+	Between = ">= AND <=",
+	NotBetween = "< OR >",
+}
+
+/** Stash `CustomFieldCriterionInput`（`value` 为 GraphQL `Any`，透传 JSON） */
+export interface StashCustomFieldCriterion {
+	field: string;
+	value: Value[];
+	modifier: StashCriterionModifier;
+}
+
+/** Stash `DateCriterionInput` / `TimestampCriterionInput` */
+export interface StashDateCriterion {
+	value: string;
+	value2?: string;
+	modifier: StashCriterionModifier;
+}
+
+/** Stash `DuplicationCriterionInput` */
+export interface StashDuplicationCriterion {
+	distance?: number;
+	phash?: boolean;
+	url?: boolean;
+	stash_id?: boolean;
+	title?: boolean;
+}
+
+/** Stash 场景列表查询（分页字段与 ProTable 对齐，服务端映射为 Stash `FindFilterType`） */
+export interface StashFilter {
+	page: number;
+	page_size: number;
+	q?: string;
+	sort?: string;
+	/** `ASC` 或 `DESC` */
+	direction?: string;
+}
+
+/** Stash `HierarchicalMultiCriterionInput` */
+export interface StashHierarchicalMultiCriterion {
+	value?: string[];
+	modifier: StashCriterionModifier;
+	depth?: number;
+	excludes?: string[];
+}
+
+/** Stash `StashIDCriterionInput` */
+export interface StashIdCriterion {
+	endpoint?: string;
+	stash_id?: string;
+	modifier: StashCriterionModifier;
+}
+
+/** Stash `StashIDsCriterionInput` */
+export interface StashIdsCriterion {
+	endpoint?: string;
+	stash_ids?: string[];
+	modifier: StashCriterionModifier;
+}
+
+/** Stash `IntCriterionInput` */
+export interface StashIntCriterion {
+	value: number;
+	value2?: number;
+	modifier: StashCriterionModifier;
+}
+
+/** Stash `MultiCriterionInput` */
+export interface StashMultiCriterion {
+	value?: string[];
+	modifier: StashCriterionModifier;
+	excludes?: string[];
+}
+
+/** Stash `OrientationEnum` */
+export enum StashOrientation {
+	Landscape = "LANDSCAPE",
+	Portrait = "PORTRAIT",
+	Square = "SQUARE",
+}
+
+/** Stash `OrientationCriterionInput` */
+export interface StashOrientationCriterion {
+	value: StashOrientation[];
+}
+
+/** Stash `PhashDistanceCriterionInput` */
+export interface StashPhashDistanceCriterion {
+	value: string;
+	modifier: StashCriterionModifier;
+	distance?: number;
+}
+
+/** Stash `ResolutionEnum` */
+export enum StashResolution {
+	VeryLow = "VERY_LOW",
+	Low = "LOW",
+	R360p = "R360P",
+	Standard = "STANDARD",
+	WebHd = "WEB_HD",
+	StandardHd = "STANDARD_HD",
+	FullHd = "FULL_HD",
+	QuadHd = "QUAD_HD",
+	FourK = "FOUR_K",
+	FiveK = "FIVE_K",
+	SixK = "SIX_K",
+	SevenK = "SEVEN_K",
+	EightK = "EIGHT_K",
+	Huge = "HUGE",
+}
+
+/** Stash `ResolutionCriterionInput` */
+export interface StashResolutionCriterion {
+	value: StashResolution;
+	modifier: StashCriterionModifier;
+}
+
+export interface StashSceneFile {
+	path: string;
+	basename: string;
+}
+
+/** Stash GraphQL `SceneFilterType`（字段与官方 schema 对齐，未建模的关联过滤器以 JSON 透传） */
+export interface StashSceneFilterType {
+	AND?: StashSceneFilterType;
+	OR?: StashSceneFilterType;
+	NOT?: StashSceneFilterType;
+	id?: StashIntCriterion;
+	title?: StashStringCriterion;
+	code?: StashStringCriterion;
+	details?: StashStringCriterion;
+	director?: StashStringCriterion;
+	oshash?: StashStringCriterion;
+	checksum?: StashStringCriterion;
+	phash?: StashStringCriterion;
+	phash_distance?: StashPhashDistanceCriterion;
+	path?: StashStringCriterion;
+	file_count?: StashIntCriterion;
+	rating100?: StashIntCriterion;
+	organized?: boolean;
+	o_counter?: StashIntCriterion;
+	duplicated?: StashDuplicationCriterion;
+	resolution?: StashResolutionCriterion;
+	orientation?: StashOrientationCriterion;
+	framerate?: StashIntCriterion;
+	bitrate?: StashIntCriterion;
+	video_codec?: StashStringCriterion;
+	audio_codec?: StashStringCriterion;
+	duration?: StashIntCriterion;
+	has_markers?: string;
+	is_missing?: string;
+	studios?: StashHierarchicalMultiCriterion;
+	movies?: StashMultiCriterion;
+	groups?: StashHierarchicalMultiCriterion;
+	galleries?: StashMultiCriterion;
+	tags?: StashHierarchicalMultiCriterion;
+	tag_count?: StashIntCriterion;
+	performer_tags?: StashHierarchicalMultiCriterion;
+	performer_favorite?: boolean;
+	performer_age?: StashIntCriterion;
+	performers?: StashMultiCriterion;
+	performer_count?: StashIntCriterion;
+	stash_id_endpoint?: StashIdCriterion;
+	stash_ids_endpoint?: StashIdsCriterion;
+	stash_id_count?: StashIntCriterion;
+	url?: StashStringCriterion;
+	interactive?: boolean;
+	interactive_speed?: StashIntCriterion;
+	captions?: StashStringCriterion;
+	resume_time?: StashIntCriterion;
+	play_count?: StashIntCriterion;
+	play_duration?: StashIntCriterion;
+	last_played_at?: StashDateCriterion;
+	date?: StashDateCriterion;
+	created_at?: StashDateCriterion;
+	updated_at?: StashDateCriterion;
+	/** 关联实体过滤器（结构体庞大，按需透传 Stash 原生 JSON） */
+	galleries_filter?: Value;
+	performers_filter?: Value;
+	studios_filter?: Value;
+	tags_filter?: Value;
+	movies_filter?: Value;
+	groups_filter?: Value;
+	markers_filter?: Value;
+	files_filter?: Value;
+	custom_fields?: StashCustomFieldCriterion[];
+}
+
+export interface StashSceneListReq {
+	filter: StashFilter;
+	/** 对应 GraphQL `SceneFilterType` */
+	scene_filter?: StashSceneFilterType;
+	/** 对应 GraphQL `scene_ids` */
+	scene_ids?: number[];
+}
+
+export interface StashScenePaths {
+	screenshot: string;
+	preview: string;
+}
+
+export interface StashSceneRow {
+	id: string;
+	title: string;
+	date?: string;
+	files: StashSceneFile[];
+	paths: StashScenePaths;
+}
+
+/** Stash `StringCriterionInput` */
+export interface StashStringCriterion {
+	value: string;
+	modifier: StashCriterionModifier;
+}
+
 export interface SubtitleGenerateBulkFailedItem {
 	video_path: string;
 	error: string;

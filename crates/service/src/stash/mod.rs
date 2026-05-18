@@ -1,9 +1,23 @@
+mod filter;
+mod scenes;
+mod types;
+
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use futures::Stream;
 use ma_utils::config::{get_stash_api_key, get_stash_base_url};
 use reqwest::header::{HeaderMap, HeaderName, CONTENT_TYPE, RANGE};
 use std::pin::Pin;
+
+pub use filter::{
+    StashCriterionModifier, StashCustomFieldCriterion, StashDateCriterion,
+    StashDuplicationCriterion, StashHierarchicalMultiCriterion, StashIdCriterion,
+    StashIdsCriterion, StashIntCriterion, StashMultiCriterion, StashOrientation,
+    StashOrientationCriterion, StashPhashDistanceCriterion, StashResolution,
+    StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
+};
+pub use scenes::list_scenes;
+pub use types::{StashSceneListReq, StashSceneFile, StashScenePaths, StashSceneRow};
 
 pub type MediaBodyStream =
     Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>;
