@@ -12,7 +12,7 @@ use whisper_rs::{
 };
 
 use crate::types::{
-    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeOptions, WhisperTranscribeOutput,
+    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeConfig, WhisperTranscribeOutput,
 };
 
 /// 确保 `install_logging_hooks` 只调用一次（whisper-rs 是全局副作用）
@@ -73,7 +73,7 @@ impl WhisperEngine {
         &self,
         samples_i16: &[i16],
         offset_cs: i64,
-        options: &WhisperTranscribeOptions,
+        options: &WhisperTranscribeConfig,
     ) -> Result<WhisperTranscribeOutput> {
         if samples_i16.is_empty() {
             return Ok(WhisperTranscribeOutput::default());

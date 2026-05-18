@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
-use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeOptions};
+use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use taskmill::{DomainKey, DuplicateStrategy, IoBudget, Priority, TaskTypeConfig, TypedTask};
 use typeshare::typeshare;
@@ -22,14 +22,17 @@ pub const GROUP_WHISPER: &str = "media:whisper";
 /// Taskmill 资源组：字幕翻译 API 调用。
 pub const GROUP_TRANSLATE: &str = "media:translate";
 
-/// 视频字幕生成任务载荷（包装 `SubtitleGenerateConfig` 以满足 TypedTask 孤儿规则）。
+/// 视频字幕生成任务载荷（`config` 为识别/翻译参数，`video_path` 单独携带）。
 #[derive(Clone, Serialize, Deserialize)]
-pub struct VideoSubtitleGenerateTask(pub SubtitleGenerateConfig);
+pub struct VideoSubtitleGenerateTask {
+    pub video_path: String,
+    pub config: SubtitleGenerateConfig,
+}
 
 impl std::fmt::Debug for VideoSubtitleGenerateTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VideoSubtitleGenerateTask")
-            .field("video_path", &self.0.video_path)
+            .field("video_path", &self.video_path)
             .finish()
     }
 }
@@ -47,7 +50,7 @@ impl TypedTask for VideoSubtitleGenerateTask {
     }
 
     fn key(&self) -> Option<String> {
-        let path = self.0.video_path.trim();
+        let path = self.video_path.trim();
         if path.is_empty() {
             None
         } else {
@@ -56,7 +59,7 @@ impl TypedTask for VideoSubtitleGenerateTask {
     }
 
     fn label(&self) -> Option<String> {
-        let path = self.0.video_path.trim();
+        let path = self.video_path.trim();
         if path.is_empty() {
             None
         } else {
@@ -76,20 +79,21 @@ impl TypedTask for VideoSubtitleGenerateTask {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ExtractWavTask {
     pub video_path: String,
-    pub vad_config: VadConfig,
-    pub whisper_engine_cfg: Option<WhisperEngineConfig>,
-    pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
-    pub translate_cfg: Option<SubtitleTranslateConfig>,
+    pub vad_config: Option<VadConfig>,
+    pub whisper_engine_config: Option<WhisperEngineConfig>,
+    pub whisper_transcribe_config: Option<WhisperTranscribeConfig>,
+    pub translate_config: Option<SubtitleTranslateConfig>,
 }
 
 impl ExtractWavTask {
-    pub fn from_config(config: &SubtitleGenerateConfig) -> Self {
+    /// 由根任务的视频路径与生成配置构造子任务载荷。
+    pub fn from_video_config(video_path: impl Into<String>, config: &SubtitleGenerateConfig) -> Self {
         Self {
-            video_path: config.video_path.clone(),
+            video_path: video_path.into(),
             vad_config: config.vad_config.clone(),
-            whisper_engine_cfg: config.whisper_engine_cfg.clone(),
-            whisper_transcribe_options: config.whisper_transcribe_options.clone(),
-            translate_cfg: config.translate_cfg.clone(),
+            whisper_engine_config: config.whisper_engine_config.clone(),
+            whisper_transcribe_config: config.whisper_transcribe_config.clone(),
+            translate_config: config.translate_config.clone(),
         }
     }
 }
@@ -138,10 +142,10 @@ impl TypedTask for ExtractWavTask {
 pub struct WhisperVadSrtTask {
     pub video_path: String,
     pub wav_path: String,
-    pub vad_config: VadConfig,
-    pub whisper_engine_cfg: Option<WhisperEngineConfig>,
-    pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
-    pub translate_cfg: Option<SubtitleTranslateConfig>,
+    pub vad_config: Option<VadConfig>,
+    pub whisper_engine_config: Option<WhisperEngineConfig>,
+    pub whisper_transcribe_config: Option<WhisperTranscribeConfig>,
+    pub translate_config: Option<SubtitleTranslateConfig>,
 }
 
 impl std::fmt::Debug for WhisperVadSrtTask {

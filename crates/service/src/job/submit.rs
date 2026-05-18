@@ -9,10 +9,19 @@ use typeshare::typeshare;
 use super::storage::TaskmillRuntime;
 use super::types::VideoSubtitleGenerateTask;
 
+/// 提交单条字幕生成任务（`video_path` 与识别/翻译配置分离）。
+#[typeshare]
+#[derive(Clone, Deserialize, Serialize)]
+pub struct SubtitleGenerateReq {
+    pub video_path: String,
+    pub config: Option<SubtitleGenerateConfig>,
+}
+
 #[typeshare]
 #[derive(Deserialize)]
 pub struct SubtitleGenerateBulkReq {
-    pub configs: Vec<SubtitleGenerateConfig>,
+    pub video_paths: Vec<String>,
+    pub config: Option<SubtitleGenerateConfig>,
     /// 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）
     pub skip_if_exists: Option<bool>,
 }
@@ -45,16 +54,23 @@ pub fn subtitle_generate_defaults() -> SubtitleGenerateDefaultsRes {
     }
 }
 
+fn resolve_generate_config(config: Option<SubtitleGenerateConfig>) -> SubtitleGenerateConfig {
+    config.unwrap_or_default()
+}
+
 pub async fn enqueue_subtitle_generate(
     runtime: &TaskmillRuntime,
-    config: SubtitleGenerateConfig,
+    req: SubtitleGenerateReq,
 ) -> Result<SubmitOutcome> {
-    let video_path = config.video_path.trim().to_string();
+    let video_path = req.video_path.trim().to_string();
     if video_path.is_empty() {
         bail!("video_path 不能为空");
     }
     runtime
-        .enqueue_generate(VideoSubtitleGenerateTask(config))
+        .enqueue_generate(VideoSubtitleGenerateTask {
+            video_path,
+            config: resolve_generate_config(req.config),
+        })
         .await
 }
 
@@ -62,10 +78,11 @@ pub async fn bulk_enqueue_subtitle_generate(
     runtime: &TaskmillRuntime,
     req: SubtitleGenerateBulkReq,
 ) -> Result<SubtitleGenerateBulkRes> {
-    if req.configs.is_empty() {
-        bail!("configs 不能为空");
+    if req.video_paths.is_empty() {
+        bail!("video_paths 不能为空");
     }
 
+    let shared_config = resolve_generate_config(req.config);
     let skip_if_exists = req.skip_if_exists.unwrap_or(true);
     let mut active_video_paths = active_generate_video_paths(runtime).await;
 
@@ -73,8 +90,8 @@ pub async fn bulk_enqueue_subtitle_generate(
     let mut skipped = Vec::new();
     let mut failed = Vec::new();
 
-    for cfg in req.configs {
-        let video_path = cfg.video_path.trim().to_string();
+    for raw in req.video_paths {
+        let video_path = raw.trim().to_string();
         if video_path.is_empty() {
             failed.push(SubtitleGenerateBulkFailedItem {
                 video_path,
@@ -89,7 +106,10 @@ pub async fn bulk_enqueue_subtitle_generate(
         }
 
         match runtime
-            .enqueue_generate(VideoSubtitleGenerateTask(cfg))
+            .enqueue_generate(VideoSubtitleGenerateTask {
+                video_path: video_path.clone(),
+                config: shared_config.clone(),
+            })
             .await
         {
             Ok(_) => {
@@ -128,7 +148,7 @@ async fn active_generate_video_paths(
             continue;
         };
         if let Ok(wrapped) = serde_json::from_slice::<VideoSubtitleGenerateTask>(payload) {
-            let p = wrapped.0.video_path.trim().to_string();
+            let p = wrapped.video_path.trim().to_string();
             if !p.is_empty() {
                 paths.insert(p);
             }

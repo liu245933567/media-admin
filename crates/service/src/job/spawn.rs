@@ -20,8 +20,7 @@ impl TypedExecutor<VideoSubtitleGenerateTask> for VideoSubtitleGenerateExecutor 
         job: VideoSubtitleGenerateTask,
         ctx: DomainTaskContext<'_, MediaJobsDomain>,
     ) -> Result<(), TaskError> {
-        let config = &job.0;
-        let video_path = config.video_path.trim().to_string();
+        let video_path = job.video_path.trim();
         if video_path.is_empty() {
             return Err(TaskError::permanent("video_path 不能为空"));
         }
@@ -30,7 +29,10 @@ impl TypedExecutor<VideoSubtitleGenerateTask> for VideoSubtitleGenerateExecutor 
             .report(0.05, Some(format!("入队提取 WAV: {video_path}")));
         ctx.check_cancelled()?;
 
-        ctx.spawn_child_with(ExtractWavTask::from_config(config))
+        ctx.spawn_child_with(ExtractWavTask::from_video_config(
+            job.video_path.clone(),
+            &job.config,
+        ))
             .await
             .map_err(|e| TaskError::retryable(format!("入队提取 WAV 失败: {e}")))?;
 
@@ -68,9 +70,9 @@ impl TypedExecutor<ExtractWavTask> for ExtractWavExecutor {
             video_path: job.video_path,
             wav_path: wav_path.display().to_string(),
             vad_config: job.vad_config,
-            whisper_engine_cfg: job.whisper_engine_cfg,
-            whisper_transcribe_options: job.whisper_transcribe_options,
-            translate_cfg: job.translate_cfg,
+            whisper_engine_config: job.whisper_engine_config,
+            whisper_transcribe_config: job.whisper_transcribe_config,
+            translate_config: job.translate_config,
         })
         .await
         .map_err(|e| TaskError::retryable(format!("入队识别字幕失败: {e}")))?;
@@ -105,8 +107,8 @@ impl TypedExecutor<WhisperVadSrtTask> for WhisperVadSrtExecutor {
         let recognize_result = recognize_wav_voice(
             Path::new(wav_path),
             job.vad_config,
-            job.whisper_engine_cfg,
-            job.whisper_transcribe_options,
+            job.whisper_engine_config,
+            job.whisper_transcribe_config,
         )
         .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
 
@@ -116,7 +118,7 @@ impl TypedExecutor<WhisperVadSrtTask> for WhisperVadSrtExecutor {
         let outcome = write_srt_from_recognize(
             &job.video_path,
             recognize_result,
-            job.translate_cfg.as_ref(),
+            job.translate_config.as_ref(),
         )
         .await
         .map_err(|e| TaskError::retryable(format!("{e:#}")))?;

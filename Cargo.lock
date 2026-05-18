@@ -2740,6 +2740,7 @@ dependencies = [
  "tokio-stream",
  "tower-http",
  "tracing",
+ "typeshare",
  "uuid",
  "zip 8.6.0",
 ]

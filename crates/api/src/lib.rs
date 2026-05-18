@@ -1,11 +1,11 @@
 use axum::Router;
+use ma_db::SqlitePool;
 use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
 use ma_service::setup_download::SetupDownloadState;
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-use ma_db::SqlitePool;
-
+mod config;
 mod error;
 mod routes;
 

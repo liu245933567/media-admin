@@ -28,9 +28,9 @@ pub fn pending_translate_from(
     srt_path: &Path,
     detected_lang: Option<&str>,
     segments: &[WhisperTranscribeItem],
-    translate_cfg: Option<&SubtitleTranslateConfig>,
+    translate_config: Option<&SubtitleTranslateConfig>,
 ) -> Option<PendingTranslateEnqueue> {
-    let tc = translate_cfg?;
+    let tc = translate_config?;
 
     if let Some(src) = detected_lang {
         if same_language(src, &tc.target_language) {
@@ -60,26 +60,30 @@ pub fn pending_translate_from(
 
 /// 兼容入口：单进程内完成「提取 WAV → VAD+Whisper → 写 SRT」。
 pub async fn generate_subtitle_by_video(
+    video_path: &Path,
     config: &SubtitleGenerateConfig,
 ) -> Result<SubtitleGenerateOutcome> {
-    let video_path = Path::new(&config.video_path);
-
     let recognize_result = recognize_video_voice(
         video_path,
         config.vad_config.clone(),
-        config.whisper_engine_cfg.clone(),
-        config.whisper_transcribe_options.clone(),
+        config.whisper_engine_config.clone(),
+        config.whisper_transcribe_config.clone(),
     )
     .await?;
 
-    write_subtitle_outcome(config, recognize_result).await
+    write_subtitle_outcome(
+        &video_path.display().to_string(),
+        config,
+        recognize_result,
+    )
+    .await
 }
 
 /// 将 Whisper 识别结果写入 SRT，并计算是否需翻译。
 pub async fn write_srt_from_recognize(
     video_path: &str,
     recognize_result: WhisperTranscribeOutput,
-    translate_cfg: Option<&SubtitleTranslateConfig>,
+    translate_config: Option<&SubtitleTranslateConfig>,
 ) -> Result<SubtitleGenerateOutcome> {
     let detected_lang = recognize_result.lang;
     let all_segments = recognize_result.items;
@@ -102,7 +106,7 @@ pub async fn write_srt_from_recognize(
         &srt_path,
         detected_lang.as_deref(),
         &all_segments,
-        translate_cfg,
+        translate_config,
     );
 
     Ok(SubtitleGenerateOutcome {
@@ -113,13 +117,9 @@ pub async fn write_srt_from_recognize(
 
 /// 将 Whisper 识别结果写入 SRT（使用完整生成配置）。
 pub async fn write_subtitle_outcome(
+    video_path: &str,
     config: &SubtitleGenerateConfig,
     recognize_result: WhisperTranscribeOutput,
 ) -> Result<SubtitleGenerateOutcome> {
-    write_srt_from_recognize(
-        &config.video_path,
-        recognize_result,
-        config.translate_cfg.as_ref(),
-    )
-    .await
+    write_srt_from_recognize(video_path, recognize_result, config.translate_config.as_ref()).await
 }

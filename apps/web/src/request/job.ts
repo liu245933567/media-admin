@@ -1,8 +1,8 @@
 import type {
   SubtitleGenerateBulkReq,
   SubtitleGenerateBulkRes,
-  SubtitleGenerateConfig,
   SubtitleGenerateDefaultsRes,
+  SubtitleGenerateReq,
   SubtitleTranslateJob,
   TaskmillExecLogEntry,
   TaskmillJobSnapshot,
@@ -58,8 +58,8 @@ export function fetchSubtitleGenerateDefaults() {
   return get<SubtitleGenerateDefaultsRes>('/jobs/generate-defaults')
 }
 
-export function enqueueSubtitleGenerate(config: SubtitleGenerateConfig) {
-  return post<unknown, SubtitleGenerateConfig>('/jobs/generate', config)
+export function enqueueSubtitleGenerate(req: SubtitleGenerateReq) {
+  return post<unknown, SubtitleGenerateReq>('/jobs/generate', req)
 }
 
 export function enqueueSubtitleGenerateBulk(params: SubtitleGenerateBulkReq) {

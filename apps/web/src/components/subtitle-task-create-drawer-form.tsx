@@ -1,4 +1,9 @@
-import type { SubtitleGenerateConfig, VadConfig, VideoFolderScanItem } from '@/types/api'
+import type {
+  SubtitleGenerateConfig,
+  SubtitleGenerateReq,
+  VadConfig,
+  VideoFolderScanItem,
+} from '@/types/api'
 import { DrawerForm, ProFormDependency, ProFormDigit, ProFormGroup, ProFormSelect, ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Checkbox } from 'antd'
@@ -20,6 +25,11 @@ export interface SubtitleTaskCreateDrawerFormProps {
   initialVideoPath?: string
   /** 非空时为批量创建：共用表单中的识别/翻译等配置，路径来自扫描结果 */
   bulkSourceRows?: VideoFolderScanItem[]
+}
+
+/** 表单字段：配置项 + 单条模式下的视频路径 */
+type SubtitleGenerateFormValues = SubtitleGenerateConfig & {
+  video_path?: string
 }
 
 const DEFAULT_VAD_CONFIG: VadConfig = {
@@ -73,7 +83,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   )
   const [enableTranslate, setEnableTranslate] = useState(true)
 
-  const initialValues = useMemo((): Partial<SubtitleGenerateConfig> => {
+  const initialValues = useMemo((): Partial<SubtitleGenerateFormValues> => {
     const c = defaultsQuery.data?.config
     const path = props.initialVideoPath?.trim() ?? ''
     if (!c) {
@@ -101,17 +111,17 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
   const drawerFormKey = `${formMountKey}|${props.initialVideoPath ?? ''}|${bulkSessionKey}`
 
-  const buildConfig = useCallback((values: SubtitleGenerateConfig): SubtitleGenerateConfig => {
+  const buildConfig = useCallback((values: SubtitleGenerateFormValues): SubtitleGenerateConfig => {
+    const { video_path: _vp, ...rest } = values
     return {
-      ...values,
-      video_path: (values.video_path ?? '').trim(),
-      vad_config: values.vad_config ?? DEFAULT_VAD_CONFIG,
-      translate_cfg: enableTranslate ? values.translate_cfg : undefined,
+      ...rest,
+      vad_config: rest.vad_config ?? DEFAULT_VAD_CONFIG,
+      translate_config: enableTranslate ? rest.translate_config : undefined,
     }
   }, [enableTranslate])
 
   return (
-    <DrawerForm<SubtitleGenerateConfig>
+    <DrawerForm<SubtitleGenerateFormValues>
       key={drawerFormKey}
       title={isBulk ? '批量新增字幕任务' : '新增字幕任务'}
       open={props.open}
@@ -135,14 +145,9 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
               return false
             }
 
-            const template = buildConfig({ ...values, video_path: '' })
-            const configs: SubtitleGenerateConfig[] = targetBulkPaths.map(vp => ({
-              ...template,
-              video_path: vp.trim(),
-            }))
-
             const res = await enqueueSubtitleGenerateBulk({
-              configs,
+              video_paths: targetBulkPaths.map(vp => vp.trim()),
+              config: buildConfig(values),
               skip_if_exists: true,
             })
 
@@ -166,8 +171,16 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
             return true
           }
 
-          const config = buildConfig(values)
-          await enqueueSubtitleGenerate(config)
+          const video_path = (values.video_path ?? '').trim()
+          if (!video_path) {
+            message.error('请输入视频路径')
+            return false
+          }
+          const req: SubtitleGenerateReq = {
+            video_path,
+            config: buildConfig(values),
+          }
+          await enqueueSubtitleGenerate(req)
           message.success('任务已添加')
           props.onCreated?.()
           return true
@@ -261,7 +274,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
       <ProFormGroup title="Whisper 引擎配置">
         <ProFormSelect
-          name={['whisper_engine_cfg', 'model_filename']}
+          name={['whisper_engine_config', 'model_filename']}
           label="模型文件"
           placeholder="请选择模型文件"
           rules={[{ required: true, message: '请选择模型文件' }]}
@@ -274,12 +287,12 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
           colProps={{ span: 12 }}
         />
         <ProFormSwitch
-          name={['whisper_engine_cfg', 'use_gpu']}
+          name={['whisper_engine_config', 'use_gpu']}
           label="使用 GPU"
           colProps={{ span: 6 }}
         />
         <ProFormSwitch
-          name={['whisper_engine_cfg', 'flash_attn']}
+          name={['whisper_engine_config', 'flash_attn']}
           label="启用 Flash Attention"
           colProps={{ span: 6 }}
         />
@@ -287,44 +300,44 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
       <ProFormGroup title="Whisper 识别参数">
         <ProFormText
-          name={['whisper_transcribe_options', 'language']}
+          name={['whisper_transcribe_config', 'language']}
           label="语言代码"
           placeholder="留空表示 None；可填 auto / zh / en ..."
           colProps={{ span: 8 }}
         />
         <ProFormDigit
-          name={['whisper_transcribe_options', 'beam_size']}
+          name={['whisper_transcribe_config', 'beam_size']}
           label="beam_size"
           min={1}
           fieldProps={{ precision: 0 }}
           colProps={{ span: 8 }}
         />
         <ProFormDigit
-          name={['whisper_transcribe_options', 'greedy_best_of']}
+          name={['whisper_transcribe_config', 'greedy_best_of']}
           label="greedy_best_of"
           min={1}
           fieldProps={{ precision: 0 }}
           colProps={{ span: 8 }}
         />
         <ProFormDigit
-          name={['whisper_transcribe_options', 'n_threads']}
+          name={['whisper_transcribe_config', 'n_threads']}
           label="CPU 线程数"
           min={0}
           fieldProps={{ precision: 0 }}
           colProps={{ span: 8 }}
         />
         <ProFormSwitch
-          name={['whisper_transcribe_options', 'auto_gain']}
+          name={['whisper_transcribe_config', 'auto_gain']}
           label="自动增益"
           colProps={{ span: 8 }}
         />
         <ProFormSwitch
-          name={['whisper_transcribe_options', 'anti_hallucination']}
+          name={['whisper_transcribe_config', 'anti_hallucination']}
           label="抗幻觉参数组合"
           colProps={{ span: 8 }}
         />
         <ProFormTextArea
-          name={['whisper_transcribe_options', 'initial_prompt']}
+          name={['whisper_transcribe_config', 'initial_prompt']}
           label="初始 Prompt"
           placeholder="可选：专有名词、人名、风格示例等"
           fieldProps={{ autoSize: { minRows: 2, maxRows: 6 } }}
@@ -341,7 +354,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
         colProps={{ span: 8 }}
       />
 
-      <ProFormDependency name={['translate_cfg']}>
+      <ProFormDependency name={['translate_config']}>
         {() => {
           if (!enableTranslate)
             return null
@@ -349,14 +362,14 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
           return (
             <ProFormGroup title="翻译设置">
               <ProFormText
-                name={['translate_cfg', 'base_url']}
+                name={['translate_config', 'base_url']}
                 label="API Base URL"
                 placeholder="留空则使用服务端 TRANSLATE_OPENAI_BASE"
                 extra="OpenAI 兼容接口根地址，默认与硅基流动一致时可保留表单默认值。"
                 colProps={{ span: 12 }}
               />
               <ProFormText
-                name={['translate_cfg', 'api_key']}
+                name={['translate_config', 'api_key']}
                 label="API Key"
                 placeholder="留空则使用服务端 TRANSLATE_OPENAI_API_KEY"
                 fieldProps={{
@@ -367,34 +380,34 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
                 colProps={{ span: 12 }}
               />
               <ProFormText
-                name={['translate_cfg', 'target_language']}
+                name={['translate_config', 'target_language']}
                 label="目标语言"
                 placeholder="例如：Chinese / English / Japanese"
                 rules={[{ required: true, message: '请输入目标语言' }]}
                 colProps={{ span: 8 }}
               />
               <ProFormText
-                name={['translate_cfg', 'model']}
+                name={['translate_config', 'model']}
                 label="翻译模型"
                 placeholder="例如：tencent/Hunyuan-MT-7B"
                 colProps={{ span: 8 }}
               />
               <ProFormDigit
-                name={['translate_cfg', 'concurrency']}
+                name={['translate_config', 'concurrency']}
                 label="并发数"
                 min={1}
                 fieldProps={{ precision: 0 }}
                 colProps={{ span: 8 }}
               />
               <ProFormDigit
-                name={['translate_cfg', 'batch_size']}
+                name={['translate_config', 'batch_size']}
                 label="批大小"
                 min={1}
                 fieldProps={{ precision: 0 }}
                 colProps={{ span: 8 }}
               />
               <ProFormSwitch
-                name={['translate_cfg', 'remove_source_srt']}
+                name={['translate_config', 'remove_source_srt']}
                 label="翻译完成后删除原文 SRT"
                 colProps={{ span: 8 }}
               />

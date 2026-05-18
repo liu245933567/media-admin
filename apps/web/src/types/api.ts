@@ -333,7 +333,7 @@ export interface WhisperEngineConfig {
 }
 
 /** whisper 解码可调参数（影响每次 transcribe 行为） */
-export interface WhisperTranscribeOptions {
+export interface WhisperTranscribeConfig {
 	/**
 	 * 语言代码：
 	 * - `None`：完全用 whisper.cpp 编译默认（通常是 "en"），不调用 `set_xxx`。
@@ -396,15 +396,15 @@ export interface SubtitleTranslateConfig {
 }
 
 export interface SubtitleGenerateConfig {
-	video_path: string;
-	vad_config: VadConfig;
-	whisper_engine_cfg?: WhisperEngineConfig;
-	whisper_transcribe_options?: WhisperTranscribeOptions;
-	translate_cfg?: SubtitleTranslateConfig;
+	vad_config?: VadConfig;
+	whisper_engine_config?: WhisperEngineConfig;
+	whisper_transcribe_config?: WhisperTranscribeConfig;
+	translate_config?: SubtitleTranslateConfig;
 }
 
 export interface SubtitleGenerateBulkReq {
-	configs: SubtitleGenerateConfig[];
+	video_paths: string[];
+	config?: SubtitleGenerateConfig;
 	/** 若同 video_path 已有 pending/running 生成任务则跳过（默认 true） */
 	skip_if_exists?: boolean;
 }
@@ -418,6 +418,12 @@ export interface SubtitleGenerateBulkRes {
 /** 新建任务表单的默认配置。 */
 export interface SubtitleGenerateDefaultsRes {
 	config: SubtitleGenerateConfig;
+}
+
+/** 提交单条字幕生成任务（`video_path` 与识别/翻译配置分离）。 */
+export interface SubtitleGenerateReq {
+	video_path: string;
+	config?: SubtitleGenerateConfig;
 }
 
 /** 字幕翻译任务（可独立提交，或由生成任务链式入队）。 */

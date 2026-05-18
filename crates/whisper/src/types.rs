@@ -52,7 +52,7 @@ impl Default for WhisperEngineConfig {
 /// whisper 解码可调参数（影响每次 transcribe 行为）
 #[typeshare]
 #[derive(Clone, Serialize, Deserialize)]
-pub struct WhisperTranscribeOptions {
+pub struct WhisperTranscribeConfig {
     /// 语言代码：
     /// - `None`：完全用 whisper.cpp 编译默认（通常是 "en"），不调用 `set_xxx`。
     ///   最稳，与本机验证可工作的旧版兼容。
@@ -86,7 +86,7 @@ pub struct WhisperTranscribeOptions {
     pub anti_hallucination: bool,
 }
 
-impl Default for WhisperTranscribeOptions {
+impl Default for WhisperTranscribeConfig {
     fn default() -> Self {
         Self {
             language: None,

@@ -5,7 +5,7 @@ use anyhow::{Context, Result, ensure};
 
 use crate::{
     types::{
-        VadConfig, WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeOptions,
+        VadConfig, WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeConfig,
         WhisperTranscribeOutput,
     },
     vad::detect_vad_intervals_i16,
@@ -69,9 +69,9 @@ fn dedupe_consecutive(items: Vec<WhisperTranscribeItem>) -> Vec<WhisperTranscrib
 /// 对已提取的 16kHz mono WAV 做 VAD 切分 + Whisper 识别（`vad_config` 必填）。
 pub fn recognize_wav_voice(
     wav_path: &Path,
-    vad_config: VadConfig,
-    whisper_engine_cfg: Option<WhisperEngineConfig>,
-    whisper_transcribe_options: Option<WhisperTranscribeOptions>,
+    vad_config: Option<VadConfig>,
+    whisper_engine_config: Option<WhisperEngineConfig>,
+    whisper_transcribe_config: Option<WhisperTranscribeConfig>,
 ) -> Result<WhisperTranscribeOutput> {
     let samples_i16 = load_wav_i16_mono16k(wav_path)?;
     tracing::info!(
@@ -81,11 +81,11 @@ pub fn recognize_wav_voice(
         "[whisper] 已加载 WAV"
     );
 
-    let engine = match whisper_engine_cfg {
+    let engine = match whisper_engine_config {
         Some(c) => WhisperEngine::with_config(c)?,
         None => WhisperEngine::new()?,
     };
-    let options = whisper_transcribe_options.unwrap_or_default();
+    let options = whisper_transcribe_config.unwrap_or_default();
 
     let mut all_segments: Vec<WhisperTranscribeItem> = Vec::new();
     let mut lang_counts: HashMap<String, usize> = HashMap::new();
@@ -94,6 +94,8 @@ pub fn recognize_wav_voice(
             *lang_counts.entry(l).or_default() += weight.max(1);
         }
     };
+
+    let vad_config = vad_config.unwrap_or_default();
 
     let intervals = detect_vad_intervals_i16(&samples_i16, &vad_config)?;
 
@@ -149,9 +151,9 @@ pub fn recognize_wav_voice(
 /// 识别视频中的语音：先提取 WAV，再 [`recognize_wav_voice`]。
 pub async fn recognize_video_voice(
     video_path: &Path,
-    vad_config: VadConfig,
-    whisper_engine_cfg: Option<WhisperEngineConfig>,
-    whisper_transcribe_options: Option<WhisperTranscribeOptions>,
+    vad_config: Option<VadConfig>,
+    whisper_engine_config: Option<WhisperEngineConfig>,
+    whisper_transcribe_config: Option<WhisperTranscribeConfig>,
 ) -> Result<WhisperTranscribeOutput> {
     let wav_path = extract_wav_16k_mono(video_path)
         .await
@@ -160,7 +162,7 @@ pub async fn recognize_video_voice(
     recognize_wav_voice(
         &wav_path,
         vad_config,
-        whisper_engine_cfg,
-        whisper_transcribe_options,
+        whisper_engine_config,
+        whisper_transcribe_config,
     )
 }

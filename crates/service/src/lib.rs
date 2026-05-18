@@ -5,3 +5,6 @@ pub mod stash;
 pub mod subtitles_web;
 pub mod video_folder_scan;
 pub mod xunlei;
+
+pub use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
+pub use ma_subtitle::types::SubtitleTranslateConfig;

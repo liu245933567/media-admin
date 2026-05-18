@@ -1,5 +1,5 @@
 use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
-use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeOptions};
+use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
@@ -46,21 +46,19 @@ pub struct SubtitleGenerateItem {
 #[typeshare]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SubtitleGenerateConfig {
-    pub video_path: String,
-    pub vad_config: VadConfig,
-    pub whisper_engine_cfg: Option<WhisperEngineConfig>,
-    pub whisper_transcribe_options: Option<WhisperTranscribeOptions>,
-    pub translate_cfg: Option<SubtitleTranslateConfig>,
+    pub vad_config: Option<VadConfig>,
+    pub whisper_engine_config: Option<WhisperEngineConfig>,
+    pub whisper_transcribe_config: Option<WhisperTranscribeConfig>,
+    pub translate_config: Option<SubtitleTranslateConfig>,
 }
 
 impl Default for SubtitleGenerateConfig {
     fn default() -> Self {
         Self {
-            video_path: "".to_string(),
-            vad_config: VadConfig::default(),
-            whisper_engine_cfg: Some(WhisperEngineConfig::default()),
-            whisper_transcribe_options: Some(WhisperTranscribeOptions::default()),
-            translate_cfg: Some(SubtitleTranslateConfig::default()),
+            vad_config: Some(VadConfig::default()),
+            whisper_engine_config: Some(WhisperEngineConfig::default()),
+            whisper_transcribe_config: Some(WhisperTranscribeConfig::default()),
+            translate_config: Some(SubtitleTranslateConfig::default()),
         }
     }
 }

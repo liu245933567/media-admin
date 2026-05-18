@@ -5,8 +5,8 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
-    SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateConfig,
-    SubtitleGenerateDefaultsRes, SubtitleTranslateJob, TaskHistoryRecord, TaskmillSnapshot,
+    SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes,
+    SubtitleGenerateReq, SubtitleTranslateJob, TaskHistoryRecord, TaskmillSnapshot,
     TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
     subtitle_generate_defaults,
 };
@@ -61,7 +61,7 @@ async fn generate_defaults_handler() -> Json<SubtitleGenerateDefaultsRes> {
 
 async fn generate_handler(
     State(state): State<AppState>,
-    WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateConfig>, AppError>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateReq>, AppError>,
 ) -> Result<Json<()>, AppError> {
     enqueue_subtitle_generate(&state.taskmill, body)
         .await
