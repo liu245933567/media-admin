@@ -1,7 +1,8 @@
 import type { RefObject } from 'react'
-import type { DownloadProgressSnapshot, WhisperModelItem } from '@/types'
+import type { AppConfig, DownloadProgressSnapshot, WhisperModelItem } from '@/types'
 import {
   PageContainer,
+  ProForm,
 } from '@ant-design/pro-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
@@ -18,12 +19,17 @@ import {
   Typography,
 } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
+  appConfigQueryKey,
+  fetchAppConfig,
   fetchFfmpegSetupStatus,
   fetchWhisperModels,
   ffmpegSetupStatusQueryKey,
   startFfmpegDownload,
   startWhisperDownload,
+  subtitleGenerateDefaultsQueryKey,
+  updateAppConfig,
   whisperModelsQueryKey,
 } from '@/request'
 
@@ -85,6 +91,21 @@ function progressPercent(p: DownloadProgressSnapshot | null): number | undefined
 function RouteComponent() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const appCfgQuery = useQuery({
+    queryKey: appConfigQueryKey,
+    queryFn: fetchAppConfig,
+  })
+
+  useEffect(() => {
+    if (appCfgQuery.isError) {
+      message.error(
+        appCfgQuery.error instanceof Error
+          ? appCfgQuery.error.message
+          : '加载全局默认参数失败',
+      )
+    }
+  }, [appCfgQuery.isError, appCfgQuery.error, message])
+
   const whisperModelsQuery = useQuery({
     queryKey: whisperModelsQueryKey,
     queryFn: fetchWhisperModels,
@@ -98,6 +119,15 @@ function RouteComponent() {
   const models = useMemo(
     () => whisperModelsQuery.data?.items ?? [],
     [whisperModelsQuery.data],
+  )
+
+  const whisperModelFilenameOptions = useMemo(
+    () =>
+      models.map(m => ({
+        label: `${m.label}（${m.filename}）${m.local_ready ? ' · 已就绪' : ''}`,
+        value: m.filename,
+      })),
+    [models],
   )
 
   const [selectedModelId, setSelectedModelId] = useState<string>('large-v3')
@@ -245,6 +275,12 @@ function RouteComponent() {
   const whisperDownloadBlocked = Boolean(selectedModel?.local_ready)
   const ffmpegDownloadBlocked = Boolean(ffmpegSetupQuery.data?.local_ready)
 
+  const appConfigFormKey = appCfgQuery.isSuccess
+    ? String(appCfgQuery.dataUpdatedAt)
+    : appCfgQuery.isError
+      ? 'err'
+      : 'pending'
+
   return (
     <PageContainer title="设置" subTitle="模型与工具下载">
       <Space orientation="vertical" size="large" className="w-full">
@@ -254,31 +290,55 @@ function RouteComponent() {
           title="下载目录与安装路径由服务端配置（环境变量 DOWNLOAD_DIR、MODELS_DIR、FFMPEG_DIR 或默认 ~/.media-admin 下子目录）。"
         />
 
-        <Card title="字幕翻译 API" variant="borderless" className="shadow-sm">
-          <Typography.Paragraph className="mb-2 text-neutral-600">
-            翻译走 OpenAI 兼容接口（如硅基流动）。服务端可配置全局凭据；在「新增字幕任务」里也可按任务填写
-            <code className="mx-1 rounded bg-neutral-100 px-1">base_url</code>
-            /
-            <code className="mx-1 rounded bg-neutral-100 px-1">api_key</code>
-            ，表单非空时优先于环境变量。
+        <Card title="字幕识别与翻译默认参数" variant="borderless" className="shadow-sm">
+          <Typography.Paragraph className="mb-4 text-sm text-neutral-600">
+            以下参数持久化在服务端数据库，作为新建字幕生成 / 翻译任务的全局默认值。翻译
+            <code className="mx-1 rounded bg-neutral-100 px-1">API Key</code>
+            留空保存时不覆盖已存密钥。未覆盖的项仍可由环境变量
+            <code className="mx-1 rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_BASE</code>
+            、
+            <code className="mx-1 rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_API_KEY</code>
+            等在运行时兜底。
           </Typography.Paragraph>
-          <ul className="list-inside list-disc space-y-1 text-sm text-neutral-600">
-            <li>
-              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_BASE</code>
-              {' '}
-              — API 根地址；未在任务中填写 base_url 时使用。
-            </li>
-            <li>
-              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_API_KEY</code>
-              {' '}
-              — 密钥；未在任务中填写 api_key 时使用。
-            </li>
-            <li>
-              <code className="rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_DEFAULT_MODEL</code>
-              {' '}
-              — 可选；部分部署用于默认模型名（任务表单里仍可单独指定模型）。
-            </li>
-          </ul>
+          <Spin spinning={appCfgQuery.isPending}>
+            {appCfgQuery.data
+              ? (
+                  <ProForm<AppConfig>
+                    key={appConfigFormKey}
+                    grid
+                    layout="vertical"
+                    initialValues={appCfgQuery.data}
+                    submitter={{
+                      searchConfig: { submitText: '保存默认参数' },
+                    }}
+                    onFinish={async (vals) => {
+                      try {
+                        await updateAppConfig(vals)
+                        message.success('已保存全局默认参数')
+                        void queryClient.invalidateQueries({ queryKey: appConfigQueryKey })
+                        void queryClient.invalidateQueries({ queryKey: subtitleGenerateDefaultsQueryKey })
+                        return true
+                      }
+                      catch (e) {
+                        message.error(e instanceof Error ? e.message : '保存失败')
+                        return false
+                      }
+                    }}
+                  >
+                    <SubtitlePipelineFormGroups
+                      whisperModelFilenameOptions={whisperModelFilenameOptions}
+                      whisperModelsLoading={whisperModelsQuery.isPending}
+                      showTranslateGroup
+                      variant="setting"
+                    />
+                  </ProForm>
+                )
+              : (
+                  !appCfgQuery.isPending && (
+                    <Typography.Text type="secondary">无法加载默认参数</Typography.Text>
+                  )
+                )}
+          </Spin>
         </Card>
 
         <Card title="Whisper 模型" variant="borderless" className="shadow-sm">

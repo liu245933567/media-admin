@@ -6,9 +6,9 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
     SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes,
-    SubtitleGenerateReq, SubtitleTranslateJob, TaskHistoryRecord, TaskmillSnapshot,
+    SubtitleGenerateReq, SubtitleTranslateJobReq, TaskHistoryRecord, TaskmillSnapshot,
     TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
-    subtitle_generate_defaults,
+    enqueue_subtitle_translate_req, subtitle_generate_defaults,
 };
 use serde::Deserialize;
 
@@ -55,15 +55,19 @@ pub fn routes() -> StateRouter {
         .route("/exec-log", get(exec_log_handler))
 }
 
-async fn generate_defaults_handler() -> Json<SubtitleGenerateDefaultsRes> {
-    Json(subtitle_generate_defaults())
+async fn generate_defaults_handler(
+    State(state): State<AppState>,
+) -> Json<SubtitleGenerateDefaultsRes> {
+    let global = state.app_config.read().await;
+    Json(subtitle_generate_defaults(&global))
 }
 
 async fn generate_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateReq>, AppError>,
 ) -> Result<Json<()>, AppError> {
-    enqueue_subtitle_generate(&state.taskmill, body)
+    let global = state.app_config.read().await;
+    enqueue_subtitle_generate(&state.taskmill, body, &global)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(()))
@@ -73,7 +77,8 @@ async fn generate_bulk_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateBulkReq>, AppError>,
 ) -> Result<Json<SubtitleGenerateBulkRes>, AppError> {
-    let res = bulk_enqueue_subtitle_generate(&state.taskmill, body)
+    let global = state.app_config.read().await;
+    let res = bulk_enqueue_subtitle_generate(&state.taskmill, body, &global)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(res))
@@ -81,11 +86,10 @@ async fn generate_bulk_handler(
 
 async fn translate_handler(
     State(state): State<AppState>,
-    WithRejection(Json(body), _): WithRejection<Json<SubtitleTranslateJob>, AppError>,
+    WithRejection(Json(body), _): WithRejection<Json<SubtitleTranslateJobReq>, AppError>,
 ) -> Result<Json<()>, AppError> {
-    state
-        .taskmill
-        .enqueue_translate(body)
+    let global = state.app_config.read().await;
+    enqueue_subtitle_translate_req(&state.taskmill, body, &global)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(()))

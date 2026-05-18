@@ -29,6 +29,7 @@ export function scanVideoFolder(params: VideoFolderScanReq) {
 }
 
 export * from './job'
+export * from './settings'
 export * from './stash'
 export * from './subtitle'
 

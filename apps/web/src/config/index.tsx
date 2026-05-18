@@ -1,5 +1,4 @@
 import {
-  FileSearchOutlined,
   HomeOutlined,
   PlaySquareOutlined,
   SettingOutlined,
@@ -12,11 +11,6 @@ export const menu = [
     name: '首页',
     path: '/',
     icon: <HomeOutlined />,
-  },
-  {
-    name: '字幕查询',
-    path: '/subtitle-web',
-    icon: <FileSearchOutlined />,
   },
   {
     name: '任务管理',

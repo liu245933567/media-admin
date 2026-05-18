@@ -4,10 +4,11 @@ import type {
   VadConfig,
   VideoFolderScanItem,
 } from '@/types/api'
-import { DrawerForm, ProFormDependency, ProFormDigit, ProFormGroup, ProFormSelect, ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components'
+import { DrawerForm, ProFormText } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Checkbox } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
   enqueueSubtitleGenerate,
   enqueueSubtitleGenerateBulk,
@@ -45,6 +46,10 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   const isBulk = Boolean(props.bulkSourceRows?.length)
 
   const [skipDiskSubtitle, setSkipDiskSubtitle] = useState(true)
+  const [inheritVad, setInheritVad] = useState(true)
+  const [inheritWhisperEngine, setInheritWhisperEngine] = useState(true)
+  const [inheritWhisperTranscribe, setInheritWhisperTranscribe] = useState(true)
+  const [inheritTranslate, setInheritTranslate] = useState(true)
 
   const targetBulkPaths = useMemo(() => {
     const rows = props.bulkSourceRows ?? []
@@ -111,14 +116,45 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
   const drawerFormKey = `${formMountKey}|${props.initialVideoPath ?? ''}|${bulkSessionKey}`
 
-  const buildConfig = useCallback((values: SubtitleGenerateFormValues): SubtitleGenerateConfig => {
-    const { video_path: _vp, ...rest } = values
-    return {
-      ...rest,
-      vad_config: rest.vad_config ?? DEFAULT_VAD_CONFIG,
-      translate_config: enableTranslate ? rest.translate_config : undefined,
-    }
-  }, [enableTranslate])
+  const buildConfig = useCallback(
+    (values: SubtitleGenerateFormValues): SubtitleGenerateConfig => {
+      const d = defaultsQuery.data?.config
+      const { video_path: _vp, ...rest } = values
+
+      const vad_config = inheritVad
+        ? undefined
+        : (rest.vad_config ?? d?.vad_config ?? DEFAULT_VAD_CONFIG)
+
+      const whisper_engine_config = inheritWhisperEngine
+        ? undefined
+        : rest.whisper_engine_config ?? d?.whisper_engine_config
+
+      const whisper_transcribe_config = inheritWhisperTranscribe
+        ? undefined
+        : rest.whisper_transcribe_config ?? d?.whisper_transcribe_config
+
+      const translate_config = !enableTranslate
+        ? undefined
+        : inheritTranslate
+          ? undefined
+          : rest.translate_config ?? d?.translate_config
+
+      return {
+        vad_config,
+        whisper_engine_config,
+        whisper_transcribe_config,
+        translate_config,
+      }
+    },
+    [
+      defaultsQuery.data?.config,
+      enableTranslate,
+      inheritTranslate,
+      inheritVad,
+      inheritWhisperEngine,
+      inheritWhisperTranscribe,
+    ],
+  )
 
   return (
     <DrawerForm<SubtitleGenerateFormValues>
@@ -128,6 +164,12 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
       onOpenChange={(open) => {
         if (open && props.bulkSourceRows?.length)
           setSkipDiskSubtitle(true)
+        if (open) {
+          setInheritVad(true)
+          setInheritWhisperEngine(true)
+          setInheritWhisperTranscribe(true)
+          setInheritTranslate(true)
+        }
         props.onOpenChange(open)
       }}
       grid
@@ -232,190 +274,32 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
         />
       )}
 
-      <ProFormGroup title="VAD 配置">
-        <ProFormDigit
-          name={['vad_config', 'frame_ms']}
-          label="帧长(ms)"
-          min={10}
-          max={30}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'mode']}
-          label="模式(0-3)"
-          min={0}
-          max={3}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'padding_ms']}
-          label="Padding(ms)"
-          min={0}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'min_speech_ms']}
-          label="最短语音段(ms)"
-          min={0}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'max_segment_ms']}
-          label="单段最大长度(ms)"
-          min={0}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-      </ProFormGroup>
-
-      <ProFormGroup title="Whisper 引擎配置">
-        <ProFormSelect
-          name={['whisper_engine_config', 'model_filename']}
-          label="模型文件"
-          placeholder="请选择模型文件"
-          rules={[{ required: true, message: '请选择模型文件' }]}
-          options={whisperModelFilenameOptions}
-          fieldProps={{
-            showSearch: true,
-            loading: whisperModelsQuery.isPending,
-            optionFilterProp: 'label',
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSwitch
-          name={['whisper_engine_config', 'use_gpu']}
-          label="使用 GPU"
-          colProps={{ span: 6 }}
-        />
-        <ProFormSwitch
-          name={['whisper_engine_config', 'flash_attn']}
-          label="启用 Flash Attention"
-          colProps={{ span: 6 }}
-        />
-      </ProFormGroup>
-
-      <ProFormGroup title="Whisper 识别参数">
-        <ProFormText
-          name={['whisper_transcribe_config', 'language']}
-          label="语言代码"
-          placeholder="留空表示 None；可填 auto / zh / en ..."
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'beam_size']}
-          label="beam_size"
-          min={1}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'greedy_best_of']}
-          label="greedy_best_of"
-          min={1}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'n_threads']}
-          label="CPU 线程数"
-          min={0}
-          fieldProps={{ precision: 0 }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSwitch
-          name={['whisper_transcribe_config', 'auto_gain']}
-          label="自动增益"
-          colProps={{ span: 8 }}
-        />
-        <ProFormSwitch
-          name={['whisper_transcribe_config', 'anti_hallucination']}
-          label="抗幻觉参数组合"
-          colProps={{ span: 8 }}
-        />
-        <ProFormTextArea
-          name={['whisper_transcribe_config', 'initial_prompt']}
-          label="初始 Prompt"
-          placeholder="可选：专有名词、人名、风格示例等"
-          fieldProps={{ autoSize: { minRows: 2, maxRows: 6 } }}
-        />
-
-      </ProFormGroup>
-
-      <ProFormSwitch
-        label="启用翻译"
-        fieldProps={{
-          checked: enableTranslate,
-          onChange: checked => setEnableTranslate(Boolean(checked)),
-        }}
-        colProps={{ span: 8 }}
+      <SubtitlePipelineFormGroups
+        whisperModelFilenameOptions={whisperModelFilenameOptions}
+        whisperModelsLoading={whisperModelsQuery.isPending}
+        showTranslateGroup={enableTranslate}
+        disabledVad={inheritVad}
+        disabledWhisperEngine={inheritWhisperEngine}
+        disabledWhisperTranscribe={inheritWhisperTranscribe}
+        disabledTranslate={inheritTranslate}
+        inheritVad={inheritVad}
+        onInheritVadChange={setInheritVad}
+        inheritWhisperEngine={inheritWhisperEngine}
+        onInheritWhisperEngineChange={setInheritWhisperEngine}
+        inheritWhisperTranscribe={inheritWhisperTranscribe}
+        onInheritWhisperTranscribeChange={setInheritWhisperTranscribe}
+        inheritTranslate={inheritTranslate}
+        onInheritTranslateChange={setInheritTranslate}
+        variant="task"
+        translateToggleSlot={(
+          <Checkbox
+            checked={enableTranslate}
+            onChange={e => setEnableTranslate(e.target.checked)}
+          >
+            启用翻译
+          </Checkbox>
+        )}
       />
-
-      <ProFormDependency name={['translate_config']}>
-        {() => {
-          if (!enableTranslate)
-            return null
-
-          return (
-            <ProFormGroup title="翻译设置">
-              <ProFormText
-                name={['translate_config', 'base_url']}
-                label="API Base URL"
-                placeholder="留空则使用服务端 TRANSLATE_OPENAI_BASE"
-                extra="OpenAI 兼容接口根地址，默认与硅基流动一致时可保留表单默认值。"
-                colProps={{ span: 12 }}
-              />
-              <ProFormText
-                name={['translate_config', 'api_key']}
-                label="API Key"
-                placeholder="留空则使用服务端 TRANSLATE_OPENAI_API_KEY"
-                fieldProps={{
-                  type: 'password',
-                  autoComplete: 'new-password',
-                }}
-                extra="仅在任务中填写；不会回显已保存的密钥，编辑任务时请按需重新填写。"
-                colProps={{ span: 12 }}
-              />
-              <ProFormText
-                name={['translate_config', 'target_language']}
-                label="目标语言"
-                placeholder="例如：Chinese / English / Japanese"
-                rules={[{ required: true, message: '请输入目标语言' }]}
-                colProps={{ span: 8 }}
-              />
-              <ProFormText
-                name={['translate_config', 'model']}
-                label="翻译模型"
-                placeholder="例如：tencent/Hunyuan-MT-7B"
-                colProps={{ span: 8 }}
-              />
-              <ProFormDigit
-                name={['translate_config', 'concurrency']}
-                label="并发数"
-                min={1}
-                fieldProps={{ precision: 0 }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormDigit
-                name={['translate_config', 'batch_size']}
-                label="批大小"
-                min={1}
-                fieldProps={{ precision: 0 }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormSwitch
-                name={['translate_config', 'remove_source_srt']}
-                label="翻译完成后删除原文 SRT"
-                colProps={{ span: 8 }}
-              />
-            </ProFormGroup>
-
-          )
-        }}
-      </ProFormDependency>
 
     </DrawerForm>
   )

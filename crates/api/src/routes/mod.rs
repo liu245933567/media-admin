@@ -2,6 +2,7 @@ use crate::StateRouter;
 use axum::{Router, routing::get};
 mod fs;
 mod jobs;
+mod settings;
 mod setup;
 mod sse;
 mod stash;
@@ -15,6 +16,7 @@ pub fn compose() -> StateRouter {
         .nest("/subtitle-web", subtitle_web::routes())
         .nest("/video-folder", video_folder_scan::routes())
         .nest("/stash", stash::routes())
+        .nest("/settings", settings::routes())
         .nest("/setup", setup::routes())
         .route("/sse", get(sse::sse_handler))
 }

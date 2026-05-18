@@ -11,10 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
 import { Route as TasksRouteImport } from './routes/tasks'
-import { Route as SubtitleWebRouteImport } from './routes/subtitle-web'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
-import { Route as FileSystemRouteImport } from './routes/file-system'
 import { Route as IndexRouteImport } from './routes/index'
 
 const VideoFolderScanRoute = VideoFolderScanRouteImport.update({
@@ -27,11 +25,6 @@ const TasksRoute = TasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SubtitleWebRoute = SubtitleWebRouteImport.update({
-  id: '/subtitle-web',
-  path: '/subtitle-web',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const StashScenesRoute = StashScenesRouteImport.update({
   id: '/stash-scenes',
   path: '/stash-scenes',
@@ -42,11 +35,6 @@ const SettingRoute = SettingRouteImport.update({
   path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FileSystemRoute = FileSystemRouteImport.update({
-  id: '/file-system',
-  path: '/file-system',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,29 +43,23 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-web': typeof SubtitleWebRoute
   '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-web': typeof SubtitleWebRoute
   '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/file-system': typeof FileSystemRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
-  '/subtitle-web': typeof SubtitleWebRoute
   '/tasks': typeof TasksRoute
   '/video-folder-scan': typeof VideoFolderScanRoute
 }
@@ -85,38 +67,25 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/file-system'
     | '/setting'
     | '/stash-scenes'
-    | '/subtitle-web'
     | '/tasks'
     | '/video-folder-scan'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/file-system'
-    | '/setting'
-    | '/stash-scenes'
-    | '/subtitle-web'
-    | '/tasks'
-    | '/video-folder-scan'
+  to: '/' | '/setting' | '/stash-scenes' | '/tasks' | '/video-folder-scan'
   id:
     | '__root__'
     | '/'
-    | '/file-system'
     | '/setting'
     | '/stash-scenes'
-    | '/subtitle-web'
     | '/tasks'
     | '/video-folder-scan'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  FileSystemRoute: typeof FileSystemRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
-  SubtitleWebRoute: typeof SubtitleWebRoute
   TasksRoute: typeof TasksRoute
   VideoFolderScanRoute: typeof VideoFolderScanRoute
 }
@@ -137,13 +106,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/subtitle-web': {
-      id: '/subtitle-web'
-      path: '/subtitle-web'
-      fullPath: '/subtitle-web'
-      preLoaderRoute: typeof SubtitleWebRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/stash-scenes': {
       id: '/stash-scenes'
       path: '/stash-scenes'
@@ -158,13 +120,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/file-system': {
-      id: '/file-system'
-      path: '/file-system'
-      fullPath: '/file-system'
-      preLoaderRoute: typeof FileSystemRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -177,10 +132,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  FileSystemRoute: FileSystemRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
-  SubtitleWebRoute: SubtitleWebRoute,
   TasksRoute: TasksRoute,
   VideoFolderScanRoute: VideoFolderScanRoute,
 }

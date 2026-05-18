@@ -3,7 +3,7 @@ import type {
   SubtitleGenerateBulkRes,
   SubtitleGenerateDefaultsRes,
   SubtitleGenerateReq,
-  SubtitleTranslateJob,
+  SubtitleTranslateJobReq,
   TaskmillExecLogEntry,
   TaskmillJobSnapshot,
   TaskmillTaskHistoryRecord,
@@ -69,6 +69,6 @@ export function enqueueSubtitleGenerateBulk(params: SubtitleGenerateBulkReq) {
   )
 }
 
-export function enqueueSubtitleTranslate(job: SubtitleTranslateJob) {
-  return post<unknown, SubtitleTranslateJob>('/jobs/translate', job)
+export function enqueueSubtitleTranslate(job: SubtitleTranslateJobReq) {
+  return post<unknown, SubtitleTranslateJobReq>('/jobs/translate', job)
 }

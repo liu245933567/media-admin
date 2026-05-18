@@ -6,6 +6,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
 
+pub mod app_settings;
 pub mod entity;
 
 pub use sqlx::SqlitePool;

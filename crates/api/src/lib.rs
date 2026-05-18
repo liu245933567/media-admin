@@ -2,10 +2,13 @@ use axum::Router;
 use ma_db::SqlitePool;
 use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
 use ma_service::setup_download::SetupDownloadState;
+use ma_service::AppConfig;
+use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tower_http::services::{ServeDir, ServeFile};
 
-mod config;
+mod app_config_store;
 mod error;
 mod routes;
 
@@ -36,6 +39,10 @@ pub async fn serve() -> anyhow::Result<()> {
 
     let db = ma_db::connect().await?;
 
+    let app_config = Arc::new(RwLock::new(
+        app_config_store::load_or_init_app_config(&db).await?,
+    ));
+
     let setup_download = build_setup_download_state()?;
 
     let taskmill = TaskmillRuntime::setup().await?;
@@ -45,6 +52,7 @@ pub async fn serve() -> anyhow::Result<()> {
         db,
         setup_download,
         taskmill,
+        app_config,
     };
 
     let app = build_router(app_state);
@@ -63,6 +71,10 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
 
     let db = ma_db::connect().await?;
 
+    let app_config = Arc::new(RwLock::new(
+        app_config_store::load_or_init_app_config(&db).await?,
+    ));
+
     let setup_download = build_setup_download_state()?;
 
     let taskmill = TaskmillRuntime::setup().await?;
@@ -72,6 +84,7 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
         db,
         setup_download,
         taskmill,
+        app_config,
     };
     let app = build_router(app_state);
 
@@ -97,6 +110,7 @@ pub(crate) struct AppState {
     pub db: SqlitePool,
     pub setup_download: SetupDownloadState,
     pub taskmill: TaskmillRuntime,
+    pub app_config: Arc<RwLock<AppConfig>>,
 }
 
 type StateRouter = Router<AppState>;
