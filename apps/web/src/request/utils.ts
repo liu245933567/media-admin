@@ -17,7 +17,7 @@ axiosIns.interceptors.response.use(
   },
 )
 
-export async function post<Res = unknown, Req = unknown>(url: string, data: Req) {
+export async function post<Res = unknown, Req = unknown>(url: string, data?: Req) {
   const res = await axiosIns.post<Res>(url, data)
   return res.data
 }
@@ -29,5 +29,10 @@ export async function put<Res = unknown, Req = unknown>(url: string, data: Req) 
 
 export async function get<Res = unknown, Req extends object = Record<string, unknown>>(url: string, params?: Req) {
   const res = await axiosIns.get<Res>(url, { params })
+  return res.data
+}
+
+export async function del<Res = unknown>(url: string) {
+  const res = await axiosIns.delete<Res>(url)
   return res.data
 }

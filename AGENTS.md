@@ -11,6 +11,7 @@
 - 写组件时，尽量与项目中其他相似逻辑组件撰写的风格相同
 - 对接 rust 服务 api 时，相关的类型从 rust 导出生成
 - 需要写样式的时候，尽量用 tailwindcss 写
+- 写样式的时候，注意应用主题的兼容
 - 不要去手动修改 src/types/api.ts 文件的内容，只能通过 typeshare 生成
 - 当组件中涉及到接口请求和数据展示，组件本身没有`request` `onFinish` 类似 props 时，优先使用 react-query 
 - 遇到 lint 错误的时候，先尝试使用 lint 指令修复，修完完还不好再手动改

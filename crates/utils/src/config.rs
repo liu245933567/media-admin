@@ -104,6 +104,14 @@ pub fn get_app_data_dir() -> Result<PathBuf> {
     }
 }
 
+/// 全局 [`AppConfig`] 本地 JSON 路径（`APP_CONFIG_FILE` 或 `get_app_data_dir()/app_config.json`）。
+pub fn get_app_config_file_path() -> Result<PathBuf> {
+    match std::env::var("APP_CONFIG_FILE") {
+        Ok(path) => Ok(PathBuf::from(path.trim())),
+        Err(_) => Ok(get_app_data_dir()?.join("app_config.json")),
+    }
+}
+
 /// 供 sqlx 使用的 SQLite 连接 URL。
 ///
 /// 由 `SQLITE_DB_FILE` 或 `get_app_data_dir()/media_admin.db` 解析路径，相对路径按 `cwd` 转为绝对路径；

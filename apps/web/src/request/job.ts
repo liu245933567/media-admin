@@ -7,8 +7,21 @@ import type {
   TaskmillExecLogEntry,
   TaskmillJobSnapshot,
   TaskmillTaskHistoryRecord,
+  TaskmillTaskRecord,
 } from '@/types'
-import { get, post } from './utils'
+import { del, get, post } from './utils'
+
+export interface TaskmillControlOk {
+  ok: boolean
+}
+
+export interface TaskmillCancelRes {
+  cancelled: boolean
+}
+
+export interface TaskmillDeleteHistoryRes {
+  deleted: boolean
+}
 
 export const taskmillSnapshotQueryKey = ['taskmill-snapshot'] as const
 
@@ -71,4 +84,42 @@ export function enqueueSubtitleGenerateBulk(params: SubtitleGenerateBulkReq) {
 
 export function enqueueSubtitleTranslate(job: SubtitleTranslateJobReq) {
   return post<unknown, SubtitleTranslateJobReq>('/jobs/translate', job)
+}
+
+export function taskmillActiveQueryKey(params: TaskmillActiveParams = {}) {
+  return ['taskmill-active', params] as const
+}
+
+export interface TaskmillActiveParams {
+  limit?: number
+}
+
+export function fetchTaskmillActiveTasks(params: TaskmillActiveParams = {}) {
+  return get<TaskmillTaskRecord[], TaskmillActiveParams>('/jobs/active', {
+    limit: params.limit ?? 200,
+  })
+}
+
+export function pauseTaskmillScheduler() {
+  return post<TaskmillControlOk>('/jobs/scheduler/pause')
+}
+
+export function resumeTaskmillScheduler() {
+  return post<TaskmillControlOk>('/jobs/scheduler/resume')
+}
+
+export function cancelTaskmillTask(taskId: number) {
+  return post<TaskmillCancelRes>(`/jobs/tasks/${taskId}/cancel`)
+}
+
+export function pauseTaskmillTask(taskId: number) {
+  return post<TaskmillControlOk>(`/jobs/tasks/${taskId}/pause`)
+}
+
+export function resumeTaskmillTask(taskId: number) {
+  return post<TaskmillControlOk>(`/jobs/tasks/${taskId}/resume`)
+}
+
+export function deleteTaskmillHistory(historyId: number) {
+  return del<TaskmillDeleteHistoryRes>(`/jobs/history/${historyId}`)
 }

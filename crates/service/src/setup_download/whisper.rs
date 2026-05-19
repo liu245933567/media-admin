@@ -3,46 +3,33 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, anyhow, bail};
 use futures_util::StreamExt;
 use ma_utils::config::{get_download_dir, get_models_dir};
+use taskmill::TaskError;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::watch;
 
 use super::catalog::{self, whisper_catalog};
+use super::progress::DownloadProgressHandle;
 use super::staging::staging_root;
-use super::types::DownloadProgressSnapshot;
-
-async fn send_progress(
-    tx: &watch::Sender<DownloadProgressSnapshot>,
-    phase: &str,
-    received: u64,
-    total: Option<u64>,
-    message: impl Into<String>,
-) {
-    let _ = tx.send(DownloadProgressSnapshot {
-        phase: phase.into(),
-        bytes_received: received as f64,
-        bytes_total: total.map(|t| t as f64),
-        message: message.into(),
-    });
-}
 
 pub async fn run_whisper_download(
     client: &reqwest::Client,
     model_id: String,
-    progress: watch::Sender<DownloadProgressSnapshot>,
+    progress: &DownloadProgressHandle<'_>,
+    mut check_cancelled: impl FnMut() -> Result<(), TaskError>,
 ) -> Result<()> {
     let item = whisper_catalog()
         .into_iter()
         .find(|m| m.id == model_id)
         .ok_or_else(|| anyhow!("未知模型 id: {model_id}"))?;
 
-    send_progress(
-        &progress,
-        "downloading",
-        0,
-        None,
-        format!("开始下载 {}", item.filename),
-    )
-    .await;
+    progress
+        .update(
+            "downloading",
+            0,
+            None,
+            format!("开始下载 {}", item.filename),
+        )
+        .await;
+    check_cancelled()?;
 
     let url = catalog::whisper_download_url(&item.filename);
     let res = client
@@ -72,29 +59,33 @@ pub async fn run_whisper_download(
     let mut stream = res.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
+        check_cancelled()?;
         let chunk = chunk.with_context(|| "读取下载流失败")?;
         file.write_all(&chunk).await?;
         received += chunk.len() as u64;
         if received % (2 * 1024 * 1024) < chunk.len() as u64 || total == Some(received) {
-            send_progress(
-                &progress,
-                "downloading",
-                received,
-                total,
-                format!(
-                    "已下载 {} / {}",
-                    format_bytes(received),
-                    format_total(total)
-                ),
-            )
-            .await;
+            progress
+                .update(
+                    "downloading",
+                    received,
+                    total,
+                    format!(
+                        "已下载 {} / {}",
+                        format_bytes(received),
+                        format_total(total)
+                    ),
+                )
+                .await;
         }
     }
 
     file.flush().await?;
     drop(file);
 
-    send_progress(&progress, "moving", received, total, "正在写入模型目录").await;
+    check_cancelled()?;
+    progress
+        .update("moving", received, total, "正在写入模型目录")
+        .await;
 
     let models_dir = get_models_dir();
     tokio::fs::create_dir_all(&models_dir).await?;
@@ -112,12 +103,14 @@ pub async fn run_whisper_download(
         tokio::fs::remove_file(&part_path).await.ok();
     }
 
-    let _ = progress.send(DownloadProgressSnapshot {
-        phase: "done".into(),
-        bytes_received: received as f64,
-        bytes_total: total.map(|t| t as f64),
-        message: format!("已保存到 {}", dest.display()),
-    });
+    progress
+        .update(
+            "done",
+            received,
+            total,
+            format!("已保存到 {}", dest.display()),
+        )
+        .await;
 
     Ok(())
 }
@@ -141,31 +134,14 @@ pub(super) fn format_total(total: Option<u64>) -> String {
     total.map(format_bytes).unwrap_or_else(|| "未知".into())
 }
 
-pub fn spawn_whisper_job(
-    client: reqwest::Client,
-    model_id: String,
-    progress: watch::Sender<DownloadProgressSnapshot>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        if let Err(e) = run_whisper_download(&client, model_id, progress.clone()).await {
-            let _ = progress.send(DownloadProgressSnapshot {
-                phase: "error".into(),
-                bytes_received: 0.0,
-                bytes_total: None,
-                message: e.to_string(),
-            });
-        }
-    })
-}
-
-/// 若模型已在 models 目录存在，供 UI 展示（可选，计划未强制 — 跳过或简单实现）
+/// 若模型已在 models 目录存在，供 UI 展示。
 #[allow(dead_code)]
 pub async fn model_file_exists(filename: &str) -> bool {
     let p = get_models_dir().join(filename);
     tokio::fs::try_exists(p).await.unwrap_or(false)
 }
 
-/// 确保 download 根目录存在（staging 的父级）
+/// 确保 download 根目录存在（staging 的父级）。
 pub async fn ensure_download_parent() -> Result<()> {
     tokio::fs::create_dir_all(get_download_dir()).await?;
     Ok(())

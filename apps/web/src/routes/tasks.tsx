@@ -7,13 +7,17 @@ import { useMemo, useState } from 'react'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
 import { TaskTypeFilter } from '@/components/task-type-filter'
+import { TaskmillActiveTasksPanel } from '@/components/taskmill-active-tasks-panel'
 import { TaskmillExecLogPanel } from '@/components/taskmill-demo-exec-log-panel'
 import { TaskmillHistoryPanel } from '@/components/taskmill-demo-history-panel'
 import { TaskmillSnapshotPanel } from '@/components/taskmill-demo-snapshot-panel'
+import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
 import {
+  fetchTaskmillActiveTasks,
   fetchTaskmillExecLog,
   fetchTaskmillHistory,
   fetchTaskmillSnapshot,
+  taskmillActiveQueryKey,
   taskmillExecLogQueryKey,
   taskmillHistoryQueryKey,
   taskmillSnapshotQueryKey,
@@ -21,6 +25,7 @@ import {
 
 const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
+const activeQueryParams = { limit: 200 } as const
 
 export const Route = createFileRoute('/tasks')({
   component: PageComponent,
@@ -36,6 +41,12 @@ function PageComponent() {
   const snapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
     queryFn: fetchTaskmillSnapshot,
+    refetchInterval: 3000,
+  })
+
+  const activeQuery = useQuery({
+    queryKey: taskmillActiveQueryKey(activeQueryParams),
+    queryFn: () => fetchTaskmillActiveTasks(activeQueryParams),
     refetchInterval: 3000,
   })
 
@@ -59,8 +70,11 @@ function PageComponent() {
     for (const r of snapshotQuery.data?.scheduler.running ?? []) {
       types.add(r.task_type)
     }
+    for (const r of activeQuery.data ?? []) {
+      types.add(r.task_type)
+    }
     return types
-  }, [historyQuery.data, snapshotQuery.data])
+  }, [historyQuery.data, snapshotQuery.data, activeQuery.data])
 
   const filteredHistory = useMemo(() => {
     const list = historyQuery.data ?? []
@@ -70,11 +84,21 @@ function PageComponent() {
     return list.filter(r => r.task_type === taskTypeFilter)
   }, [historyQuery.data, taskTypeFilter])
 
+  const filteredActive = useMemo(() => {
+    const list = activeQuery.data ?? []
+    if (!taskTypeFilter) {
+      return list
+    }
+    return list.filter(r => r.task_type === taskTypeFilter)
+  }, [activeQuery.data, taskTypeFilter])
+
   const runningCount = snapshotQuery.data?.scheduler.running.length ?? 0
   const pendingCount = snapshotQuery.data?.scheduler.pending_count ?? 0
+  const activeCount = activeQuery.data?.length ?? 0
 
   function refreshAll() {
     void snapshotQuery.refetch()
+    void activeQuery.refetch()
     void historyQuery.refetch()
     void execLogQuery.refetch()
   }
@@ -82,7 +106,7 @@ function PageComponent() {
   return (
     <PageContainer
       title="任务管理"
-      subTitle="查看 Taskmill 调度队列、执行日志与任务历史；可按类型筛选。新建任务目前支持字幕流水线相关类型。"
+      subTitle="查看 Taskmill 调度队列、控制任务生命周期；可按类型筛选。"
     >
       <div className="flex flex-col gap-4">
         <Space wrap>
@@ -108,6 +132,7 @@ function PageComponent() {
               <DownOutlined />
             </Button>
           </Dropdown>
+          <TaskmillQueueControls onChanged={refreshAll} />
           <Button loading={snapshotQuery.isFetching} onClick={refreshAll}>
             刷新
           </Button>
@@ -121,6 +146,16 @@ function PageComponent() {
             {' '}
             {pendingCount}
           </Tag>
+          <Tag color={activeCount > 0 ? 'blue' : 'default'}>
+            活跃
+            {' '}
+            {activeCount}
+          </Tag>
+          {snapshotQuery.data?.scheduler.is_paused
+            ? (
+                <Tag color="red">调度已暂停</Tag>
+              )
+            : null}
         </Space>
 
         <SubtitleTaskCreateDrawerForm
@@ -150,6 +185,25 @@ function PageComponent() {
                   <TaskmillSnapshotPanel
                     data={snapshotQuery.data}
                     loading={snapshotQuery.isLoading || snapshotQuery.isFetching}
+                    onChanged={refreshAll}
+                  />
+                </Card>
+              ),
+            },
+            {
+              key: 'active',
+              label: '活跃任务',
+              children: (
+                <Card variant="borderless" className="shadow-sm">
+                  <TaskTypeFilter
+                    taskTypes={knownTaskTypes}
+                    value={taskTypeFilter}
+                    onChange={setTaskTypeFilter}
+                  />
+                  <TaskmillActiveTasksPanel
+                    items={filteredActive}
+                    loading={activeQuery.isLoading || activeQuery.isFetching}
+                    onChanged={refreshAll}
                   />
                 </Card>
               ),
@@ -167,6 +221,7 @@ function PageComponent() {
                   <TaskmillHistoryPanel
                     items={filteredHistory}
                     loading={historyQuery.isLoading || historyQuery.isFetching}
+                    onChanged={refreshAll}
                   />
                 </Card>
               ),

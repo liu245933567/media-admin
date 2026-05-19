@@ -6,12 +6,16 @@ import type {
   TaskmillTaskRecord,
   TaskmillTaskStatus,
 } from '@/types/taskmill-snapshot'
+import { useMutation } from '@tanstack/react-query'
 import {
+  App,
+  Button,
   Card,
   Col,
   Collapse,
   Descriptions,
   Empty,
+  Popconfirm,
   Progress,
   Row,
   Space,
@@ -21,6 +25,7 @@ import {
   Typography,
 } from 'antd'
 import { useMemo } from 'react'
+import { cancelTaskmillTask } from '@/request'
 
 function formatDuration(d: TaskmillSerdeDuration | null | undefined): string {
   if (!d)
@@ -50,12 +55,32 @@ function statusColor(status: TaskmillTaskStatus): string {
 export interface TaskmillSnapshotPanelProps {
   data: TaskmillJobSnapshot | undefined
   loading?: boolean
+  onChanged?: () => void
 }
 
 export function TaskmillSnapshotPanel({
   data,
   loading,
+  onChanged,
 }: TaskmillSnapshotPanelProps) {
+  const { message } = App.useApp()
+
+  const cancelMutation = useMutation({
+    mutationFn: cancelTaskmillTask,
+    onSuccess: (res) => {
+      if (res.cancelled) {
+        message.success('已取消任务')
+      }
+      else {
+        message.warning('未找到可取消的任务')
+      }
+      onChanged?.()
+    },
+    onError: (e) => {
+      message.error((e as Error).message || '取消失败')
+    },
+  })
+
   const runningColumns: ColumnsType<TaskmillTaskRecord> = useMemo(() => {
     if (!data)
       return []
@@ -128,8 +153,29 @@ export function TaskmillSnapshotPanel({
           return <Typography.Text type="secondary">—</Typography.Text>
         },
       },
+      {
+        title: '操作',
+        key: 'action',
+        width: 88,
+        fixed: 'right' as const,
+        render: (_: unknown, row: TaskmillTaskRecord) => (
+          <Popconfirm
+            title="取消此任务？"
+            onConfirm={() => cancelMutation.mutate(row.id)}
+          >
+            <Button
+              type="link"
+              size="small"
+              danger
+              disabled={cancelMutation.isPending}
+            >
+              取消
+            </Button>
+          </Popconfirm>
+        ),
+      },
     ]
-  }, [data])
+  }, [data, cancelMutation])
 
   if (loading && !data) {
     return <Typography.Paragraph type="secondary">加载中…</Typography.Paragraph>

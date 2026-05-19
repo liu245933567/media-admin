@@ -3,8 +3,10 @@ import type {
   TaskmillHistoryStatus,
   TaskmillTaskHistoryRecord,
 } from '@/types'
-import { Segmented, Space, Table, Tag, Typography } from 'antd'
+import { useMutation } from '@tanstack/react-query'
+import { App, Button, Popconfirm, Segmented, Space, Table, Tag, Typography } from 'antd'
 import { useMemo, useState } from 'react'
+import { deleteTaskmillHistory } from '@/request'
 
 function historyStatusColor(s: TaskmillHistoryStatus): string {
   const map: Record<TaskmillHistoryStatus, string> = {
@@ -24,13 +26,32 @@ type HistoryViewFilter = 'completed' | 'all'
 export interface TaskmillHistoryPanelProps {
   items: TaskmillTaskHistoryRecord[] | undefined
   loading?: boolean
+  onChanged?: () => void
 }
 
 export function TaskmillHistoryPanel({
   items,
   loading,
+  onChanged,
 }: TaskmillHistoryPanelProps) {
+  const { message } = App.useApp()
   const [filter, setFilter] = useState<HistoryViewFilter>('completed')
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteTaskmillHistory,
+    onSuccess: (res) => {
+      if (res.deleted) {
+        message.success('已删除历史记录')
+      }
+      else {
+        message.warning('记录不存在或已删除')
+      }
+      onChanged?.()
+    },
+    onError: (e) => {
+      message.error((e as Error).message || '删除失败')
+    },
+  })
 
   const filtered = useMemo(() => {
     const list = items ?? []
@@ -99,8 +120,32 @@ export function TaskmillHistoryPanel({
                 <Typography.Text type="secondary">—</Typography.Text>
               ),
       },
+      ...(filter === 'all'
+        ? [{
+            title: '操作',
+            key: 'action',
+            width: 100,
+            fixed: 'right' as const,
+            render: (_: unknown, row: TaskmillTaskHistoryRecord) => (
+              <Popconfirm
+                title="删除此历史记录？"
+                description="仅从数据库移除记录，不可恢复。"
+                onConfirm={() => deleteMutation.mutate(row.id)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  disabled={deleteMutation.isPending}
+                >
+                  删除
+                </Button>
+              </Popconfirm>
+            ),
+          }]
+        : []),
     ],
-    [],
+    [filter, deleteMutation],
   )
 
   return (

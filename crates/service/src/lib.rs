@@ -10,7 +10,7 @@ pub mod xunlei;
 pub use app_config::{
     AppConfig, app_config_to_generate_defaults, merge_app_config_on_put_translate_api_key,
     merge_subtitle_generate_config, merge_subtitle_translate_fields,
-    merge_subtitle_translate_job_config, redact_translate_api_key_for_display,
+    merge_subtitle_translate_job_config,
 };
 pub use ma_subtitle::types::SubtitleTranslateConfig;
 pub use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};

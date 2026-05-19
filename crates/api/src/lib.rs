@@ -1,8 +1,6 @@
 use axum::Router;
-use ma_db::SqlitePool;
-use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
-use ma_service::setup_download::SetupDownloadState;
 use ma_service::AppConfig;
+use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -21,14 +19,6 @@ fn build_router(app_state: AppState) -> Router<()> {
         .with_state(app_state)
 }
 
-fn build_setup_download_state() -> anyhow::Result<SetupDownloadState> {
-    let client = reqwest::Client::builder()
-        .user_agent("media-admin/0.1")
-        .build()
-        .map_err(|e| anyhow::anyhow!("构建 HTTP 客户端失败: {e}"))?;
-    Ok(SetupDownloadState::new(client))
-}
-
 /// 启动 Axum（阻塞当前 async 上下文直至进程退出）。
 pub async fn serve() -> anyhow::Result<()> {
     ma_utils::log::init_tracing();
@@ -37,20 +27,14 @@ pub async fn serve() -> anyhow::Result<()> {
 
     let listener = TcpListener::bind(&listen).await?;
 
-    let db = ma_db::connect().await?;
-
     let app_config = Arc::new(RwLock::new(
-        app_config_store::load_or_init_app_config(&db).await?,
+        app_config_store::load_or_init_app_config().await?,
     ));
-
-    let setup_download = build_setup_download_state()?;
 
     let taskmill = TaskmillRuntime::setup().await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
-        db,
-        setup_download,
         taskmill,
         app_config,
     };
@@ -69,20 +53,14 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
     let listener = TcpListener::bind(listen.as_ref()).await?;
     let addr = listener.local_addr()?;
 
-    let db = ma_db::connect().await?;
-
     let app_config = Arc::new(RwLock::new(
-        app_config_store::load_or_init_app_config(&db).await?,
+        app_config_store::load_or_init_app_config().await?,
     ));
-
-    let setup_download = build_setup_download_state()?;
 
     let taskmill = TaskmillRuntime::setup().await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
-        db,
-        setup_download,
         taskmill,
         app_config,
     };
@@ -107,8 +85,6 @@ pub async fn start() {
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub db: SqlitePool,
-    pub setup_download: SetupDownloadState,
     pub taskmill: TaskmillRuntime,
     pub app_config: Arc<RwLock<AppConfig>>,
 }

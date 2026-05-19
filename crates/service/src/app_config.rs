@@ -121,12 +121,6 @@ pub fn merge_subtitle_translate_job_config(
     }
 }
 
-/// GET 接口返回：不暴露翻译 API Key。
-pub fn redact_translate_api_key_for_display(mut c: AppConfig) -> AppConfig {
-    c.translate_config.api_key.clear();
-    c
-}
-
 /// 设置页保存：`incoming` 中 api_key 为空时不覆盖已保存密钥。
 pub fn merge_app_config_on_put_translate_api_key(
     previous: &AppConfig,

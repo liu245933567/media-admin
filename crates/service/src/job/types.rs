@@ -21,6 +21,8 @@ pub const GROUP_FFMPEG: &str = "media:ffmpeg";
 pub const GROUP_WHISPER: &str = "media:whisper";
 /// Taskmill 资源组：字幕翻译 API 调用。
 pub const GROUP_TRANSLATE: &str = "media:translate";
+/// Taskmill 资源组：设置页下载（模型 / FFmpeg，全局串行）。
+pub const GROUP_SETUP_DOWNLOAD: &str = "media:setup-download";
 
 /// 视频字幕生成任务载荷（`config` 为识别/翻译参数，`video_path` 单独携带）。
 #[derive(Clone, Serialize, Deserialize)]
@@ -234,5 +236,83 @@ impl TypedTask for SubtitleTranslateJob {
                 self.config.target_language.clone(),
             ),
         ])
+    }
+}
+
+/// 下载 Whisper 模型到本地模型目录。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct WhisperModelDownloadTask {
+    pub model_id: String,
+}
+
+impl std::fmt::Debug for WhisperModelDownloadTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhisperModelDownloadTask")
+            .field("model_id", &self.model_id)
+            .finish()
+    }
+}
+
+impl TypedTask for WhisperModelDownloadTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "whisper-model-download";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::HIGH)
+            .expected_io(IoBudget::disk(512 * 1024 * 1024, 512 * 1024 * 1024))
+            .group(GROUP_SETUP_DOWNLOAD)
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        let id = self.model_id.trim();
+        if id.is_empty() {
+            None
+        } else {
+            Some(format!("whisper-model-download:{id}"))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        Some(format!("下载 Whisper 模型: {}", self.model_id))
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([(
+            "job.kind".to_string(),
+            "whisper-model-download".to_string(),
+        )])
+    }
+}
+
+/// 下载并安装 FFmpeg 到工具目录。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfmpegSetupDownloadTask;
+
+impl TypedTask for FfmpegSetupDownloadTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "ffmpeg-setup-download";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::HIGH)
+            .expected_io(IoBudget::disk(256 * 1024 * 1024, 128 * 1024 * 1024))
+            .group(GROUP_SETUP_DOWNLOAD)
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        Some("ffmpeg-setup-download".to_string())
+    }
+
+    fn label(&self) -> Option<String> {
+        Some("下载 FFmpeg".to_string())
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([("job.kind".to_string(), "ffmpeg-setup-download".to_string())])
     }
 }

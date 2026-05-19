@@ -1,5 +1,5 @@
-import type { RefObject } from 'react'
-import type { AppConfig, DownloadProgressSnapshot, WhisperModelItem } from '@/types'
+import type { SetupDownloadUiProgress } from '@/lib/setup-download-taskmill'
+import type { AppConfig } from '@/types'
 import {
   PageContainer,
   ProForm,
@@ -13,84 +13,45 @@ import {
   Card,
   Modal,
   Progress,
-  Radio,
   Space,
   Spin,
   Typography,
 } from 'antd'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
+import {
+  useWhisperModelFilenameOptions,
+  WhisperModelsSetupCard,
+} from '@/components/whisper-models-setup-card'
+import {
+  mapSetupDownloadFromHistory,
+  mapSetupDownloadFromSnapshot,
+  uiProgressPercent,
+} from '@/lib/setup-download-taskmill'
 import {
   appConfigQueryKey,
   fetchAppConfig,
   fetchFfmpegSetupStatus,
-  fetchWhisperModels,
+  fetchTaskmillHistory,
+  fetchTaskmillSnapshot,
   ffmpegSetupStatusQueryKey,
   startFfmpegDownload,
-  startWhisperDownload,
   subtitleGenerateDefaultsQueryKey,
+  taskmillHistoryQueryKey,
+  taskmillSnapshotQueryKey,
   updateAppConfig,
-  whisperModelsQueryKey,
 } from '@/request'
 
 export const Route = createFileRoute('/setting')({
   component: RouteComponent,
 })
 
-function closeEventSource(r: RefObject <EventSource | null>) {
-  if (r.current) {
-    r.current.close()
-    r.current = null
-  }
-}
-
-function subscribeDownloadJob(
-  jobId: string,
-  ref: RefObject <EventSource | null>,
-  onProgress: (p: DownloadProgressSnapshot | null) => void,
-  onTerminal: (p: DownloadProgressSnapshot) => void,
-  onTransportError: () => void,
-) {
-  closeEventSource(ref)
-  const es = new EventSource(
-    `/api/setup/download-jobs/${encodeURIComponent(jobId)}/stream`,
-  )
-  ref.current = es
-  es.addEventListener('progress', (ev) => {
-    try {
-      const raw = (ev as MessageEvent<string>).data
-      const d = JSON.parse(raw) as DownloadProgressSnapshot
-      onProgress(d)
-      if (d.phase === 'done' || d.phase === 'error') {
-        onTerminal(d)
-        setTimeout(() => {
-          if (ref.current === es) {
-            es.close()
-            onProgress(null)
-            ref.current = null
-          }
-        }, 500)
-      }
-    }
-    catch {
-      onTransportError()
-    }
-  })
-  es.onerror = () => {
-    onTransportError()
-    closeEventSource(ref)
-  }
-}
-
-function progressPercent(p: DownloadProgressSnapshot | null): number | undefined {
-  if (!p?.bytes_total || p.bytes_total <= 0)
-    return undefined
-  return Math.min(100, Math.round((100 * p.bytes_received) / p.bytes_total))
-}
-
 function RouteComponent() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const { options: whisperModelFilenameOptions, loading: whisperModelsLoading }
+    = useWhisperModelFilenameOptions()
+
   const appCfgQuery = useQuery({
     queryKey: appConfigQueryKey,
     queryFn: fetchAppConfig,
@@ -106,53 +67,27 @@ function RouteComponent() {
     }
   }, [appCfgQuery.isError, appCfgQuery.error, message])
 
-  const whisperModelsQuery = useQuery({
-    queryKey: whisperModelsQueryKey,
-    queryFn: fetchWhisperModels,
-  })
-
   const ffmpegSetupQuery = useQuery({
     queryKey: ffmpegSetupStatusQueryKey,
     queryFn: fetchFfmpegSetupStatus,
   })
 
-  const models = useMemo(
-    () => whisperModelsQuery.data?.items ?? [],
-    [whisperModelsQuery.data],
-  )
-
-  const whisperModelFilenameOptions = useMemo(
-    () =>
-      models.map(m => ({
-        label: `${m.label}（${m.filename}）${m.local_ready ? ' · 已就绪' : ''}`,
-        value: m.filename,
-      })),
-    [models],
-  )
-
-  const [selectedModelId, setSelectedModelId] = useState<string>('large-v3')
-
-  const effectiveModelId = useMemo(() => {
-    if (models.length === 0)
-      return selectedModelId
-    return models.some(m => m.id === selectedModelId) ? selectedModelId : models[0].id
-  }, [models, selectedModelId])
-  const [whisperProgress, setWhisperProgress] = useState<DownloadProgressSnapshot | null>(null)
-  const [ffmpegProgress, setFfmpegProgress] = useState<DownloadProgressSnapshot | null>(null)
-  const whisperEsRef = useRef<EventSource | null>(null)
-  const ffmpegEsRef = useRef<EventSource | null>(null)
-  const [whisperBusy, setWhisperBusy] = useState(false)
+  const [ffmpegTaskId, setFfmpegTaskId] = useState<number | null>(null)
+  const [ffmpegProgress, setFfmpegProgress] = useState<SetupDownloadUiProgress | null>(null)
   const [ffmpegBusy, setFfmpegBusy] = useState(false)
 
-  useEffect(() => {
-    if (whisperModelsQuery.isError) {
-      message.error(
-        whisperModelsQuery.error instanceof Error
-          ? whisperModelsQuery.error.message
-          : '加载模型列表失败',
-      )
-    }
-  }, [whisperModelsQuery.isError, whisperModelsQuery.error, message])
+  const taskmillSnapshotQuery = useQuery({
+    queryKey: taskmillSnapshotQueryKey,
+    queryFn: fetchTaskmillSnapshot,
+    refetchInterval: ffmpegTaskId != null ? 500 : false,
+  })
+
+  const taskmillHistoryQuery = useQuery({
+    queryKey: taskmillHistoryQueryKey({ limit: 40, offset: 0 }),
+    queryFn: () => fetchTaskmillHistory({ limit: 40, offset: 0 }),
+    enabled: ffmpegTaskId != null,
+    refetchInterval: ffmpegTaskId != null ? 1000 : false,
+  })
 
   useEffect(() => {
     if (ffmpegSetupQuery.isError) {
@@ -165,61 +100,42 @@ function RouteComponent() {
   }, [ffmpegSetupQuery.isError, ffmpegSetupQuery.error, message])
 
   useEffect(() => {
-    return () => {
-      closeEventSource(whisperEsRef)
-      closeEventSource(ffmpegEsRef)
+    const snapshot = taskmillSnapshotQuery.data
+    const history = taskmillHistoryQuery.data
+    if (!snapshot || ffmpegTaskId == null) {
+      return
     }
-  }, [])
 
-  function openWhisperDownloadModal() {
-    const item = models.find(m => m.id === effectiveModelId)
-    Modal.confirm({
-      title: '下载 Whisper 模型',
-      content: (
-        <div className="space-y-2 text-neutral-700">
-          <p>
-            将清理未完成下载后，从暂存目录下载并写入模型目录。当前选择：
-            <strong>{item ? ` ${item.label}（${item.filename}）` : ''}</strong>
-          </p>
-          <p className="text-sm text-neutral-500">
-            下载过程中请勿关闭页面；同一时间仅建议进行一项下载任务。
-          </p>
-        </div>
-      ),
-      okText: '开始下载',
-      cancelText: '取消',
-      onOk: async () => {
-        setWhisperBusy(true)
-        setWhisperProgress(null)
-        try {
-          const { job_id } = await startWhisperDownload({ model_id: effectiveModelId })
-          subscribeDownloadJob(
-            job_id,
-            whisperEsRef,
-            setWhisperProgress,
-            (d) => {
-              setWhisperBusy(false)
-              if (d.phase === 'done') {
-                message.success(d.message || '模型已就绪')
-                void queryClient.invalidateQueries({ queryKey: whisperModelsQueryKey })
-              }
-              else {
-                message.error(d.message || '下载失败')
-              }
-            },
-            () => {
-              setWhisperBusy(false)
-              message.error('进度连接中断')
-            },
-          )
-        }
-        catch (e) {
-          setWhisperBusy(false)
-          message.error(e instanceof Error ? e.message : '启动下载失败')
-        }
-      },
-    })
-  }
+    const fromSnap = mapSetupDownloadFromSnapshot(snapshot, ffmpegTaskId)
+    if (fromSnap) {
+      setFfmpegProgress(fromSnap)
+      return
+    }
+
+    const record = history?.find(h => h.id === ffmpegTaskId)
+    if (!record) {
+      return
+    }
+
+    const terminal = mapSetupDownloadFromHistory(record)
+    setFfmpegProgress(terminal)
+    setFfmpegTaskId(null)
+    setFfmpegBusy(false)
+    if (terminal.status === 'done') {
+      message.success(terminal.message || '下载完成')
+      void queryClient.invalidateQueries({ queryKey: ffmpegSetupStatusQueryKey })
+    }
+    else {
+      message.error(terminal.message || '下载失败')
+    }
+    setTimeout(setFfmpegProgress, 800, null)
+  }, [
+    ffmpegTaskId,
+    taskmillSnapshotQuery.data,
+    taskmillHistoryQuery.data,
+    message,
+    queryClient,
+  ])
 
   function openFfmpegDownloadModal() {
     Modal.confirm({
@@ -243,25 +159,15 @@ function RouteComponent() {
         setFfmpegProgress(null)
         try {
           const { job_id } = await startFfmpegDownload({})
-          subscribeDownloadJob(
-            job_id,
-            ffmpegEsRef,
-            setFfmpegProgress,
-            (d) => {
-              setFfmpegBusy(false)
-              if (d.phase === 'done') {
-                message.success(d.message || 'FFmpeg 已就绪')
-                void queryClient.invalidateQueries({ queryKey: ffmpegSetupStatusQueryKey })
-              }
-              else {
-                message.error(d.message || '下载失败')
-              }
-            },
-            () => {
-              setFfmpegBusy(false)
-              message.error('进度连接中断')
-            },
-          )
+          const taskId = Number.parseInt(job_id, 10)
+          if (!Number.isFinite(taskId)) {
+            throw new TypeError('无效的任务 ID')
+          }
+          setFfmpegTaskId(taskId)
+          setFfmpegProgress({
+            status: 'running',
+            message: '任务已入队，等待执行…',
+          })
         }
         catch (e) {
           setFfmpegBusy(false)
@@ -271,8 +177,6 @@ function RouteComponent() {
     })
   }
 
-  const selectedModel: WhisperModelItem | undefined = models.find(m => m.id === effectiveModelId)
-  const whisperDownloadBlocked = Boolean(selectedModel?.local_ready)
   const ffmpegDownloadBlocked = Boolean(ffmpegSetupQuery.data?.local_ready)
 
   const appConfigFormKey = appCfgQuery.isSuccess
@@ -327,7 +231,7 @@ function RouteComponent() {
                   >
                     <SubtitlePipelineFormGroups
                       whisperModelFilenameOptions={whisperModelFilenameOptions}
-                      whisperModelsLoading={whisperModelsQuery.isPending}
+                      whisperModelsLoading={whisperModelsLoading}
                       showTranslateGroup
                       variant="setting"
                     />
@@ -341,73 +245,10 @@ function RouteComponent() {
           </Spin>
         </Card>
 
-        <Card title="Whisper 模型" variant="borderless" className="shadow-sm">
-          <Space direction="vertical" size="middle" className="w-full">
-            <Spin spinning={whisperModelsQuery.isPending}>
-              <Radio.Group
-                value={effectiveModelId}
-                onChange={e => setSelectedModelId(e.target.value)}
-                disabled={whisperBusy}
-              >
-                <Space direction="vertical" className="w-full">
-                  {models.map(m => (
-                    <Radio key={m.id} value={m.id} className="w-full">
-                      <span className="font-medium">{m.label}</span>
-                      <Typography.Text type="secondary" className="ml-2 text-sm">
-                        {m.filename}
-                        {' · '}
-                        {m.size_hint}
-                      </Typography.Text>
-                      {m.local_ready
-                        ? (
-                            <Typography.Text type="success" className="ml-2 text-sm">
-                              已就绪
-                            </Typography.Text>
-                          )
-                        : null}
-                      <div className="text-xs text-neutral-500">{m.description}</div>
-                    </Radio>
-                  ))}
-                </Space>
-              </Radio.Group>
-            </Spin>
-            <Button
-              type="primary"
-              onClick={openWhisperDownloadModal}
-              disabled={whisperBusy || models.length === 0 || whisperDownloadBlocked}
-              loading={whisperBusy}
-            >
-              确认下载所选模型
-            </Button>
-            {whisperDownloadBlocked
-              ? (
-                  <Typography.Text type="secondary" className="text-sm">
-                    当前所选模型已在服务器模型目录中存在，无需重复下载。
-                  </Typography.Text>
-                )
-              : null}
-            {whisperProgress
-              ? (
-                  <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
-                    <div className="mb-1 text-sm text-neutral-600">
-                      阶段：
-                      {whisperProgress.phase}
-                    </div>
-                    <Progress
-                      percent={progressPercent(whisperProgress)}
-                      status={whisperProgress.phase === 'error' ? 'exception' : 'active'}
-                    />
-                    <Typography.Paragraph className="mb-0 mt-2 text-xs text-neutral-600">
-                      {whisperProgress.message}
-                    </Typography.Paragraph>
-                  </div>
-                )
-              : null}
-          </Space>
-        </Card>
+        <WhisperModelsSetupCard />
 
         <Card title="FFmpeg" variant="borderless" className="shadow-sm">
-          <Space direction="vertical" size="middle" className="w-full">
+          <Space orientation="vertical" size="middle" className="w-full">
             <Spin spinning={ffmpegSetupQuery.isPending}>
               <Typography.Paragraph className="mb-0 text-neutral-600">
                 为字幕流水线下载与当前系统匹配的静态构建，并写入 ffmpeg 工具目录。
@@ -438,13 +279,9 @@ function RouteComponent() {
             {ffmpegProgress
               ? (
                   <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
-                    <div className="mb-1 text-sm text-neutral-600">
-                      阶段：
-                      {ffmpegProgress.phase}
-                    </div>
                     <Progress
-                      percent={progressPercent(ffmpegProgress)}
-                      status={ffmpegProgress.phase === 'error' ? 'exception' : 'active'}
+                      percent={uiProgressPercent(ffmpegProgress)}
+                      status={ffmpegProgress.status === 'error' ? 'exception' : 'active'}
                     />
                     <Typography.Paragraph className="mb-0 mt-2 text-xs text-neutral-600">
                       {ffmpegProgress.message}

@@ -1,12 +1,13 @@
 use axum::{
     Json, Router,
-    extract::{Query, State},
-    routing::{get, post},
+    extract::{Path, Query, State},
+    routing::{delete, get, post},
 };
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
     SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes,
-    SubtitleGenerateReq, SubtitleTranslateJobReq, TaskHistoryRecord, TaskmillSnapshot,
+    SubtitleGenerateReq, SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord,
+    TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes, TaskmillSnapshot,
     TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
     enqueue_subtitle_translate_req, subtitle_generate_defaults,
 };
@@ -44,6 +45,16 @@ fn clamp_exec_log_limit(limit: usize) -> usize {
     limit.clamp(1, 500)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct JobsActiveQuery {
+    #[serde(default = "default_active_limit")]
+    limit: i32,
+}
+
+fn default_active_limit() -> i32 {
+    200
+}
+
 pub fn routes() -> StateRouter {
     Router::new()
         .route("/generate-defaults", get(generate_defaults_handler))
@@ -52,7 +63,14 @@ pub fn routes() -> StateRouter {
         .route("/translate", post(translate_handler))
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
+        .route("/history/{id}", delete(delete_history_handler))
         .route("/exec-log", get(exec_log_handler))
+        .route("/active", get(active_tasks_handler))
+        .route("/scheduler/pause", post(scheduler_pause_handler))
+        .route("/scheduler/resume", post(scheduler_resume_handler))
+        .route("/tasks/{id}/cancel", post(task_cancel_handler))
+        .route("/tasks/{id}/pause", post(task_pause_handler))
+        .route("/tasks/{id}/resume", post(task_resume_handler))
 }
 
 async fn generate_defaults_handler(
@@ -126,4 +144,78 @@ async fn exec_log_handler(
     let limit = clamp_exec_log_limit(q.limit);
     let rows = state.taskmill.recent_exec_events(limit).await;
     Ok(Json(rows))
+}
+
+async fn active_tasks_handler(
+    State(state): State<AppState>,
+    Query(q): Query<JobsActiveQuery>,
+) -> Result<Json<Vec<TaskRecord>>, AppError> {
+    let rows = state
+        .taskmill
+        .list_active_tasks(q.limit)
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(rows))
+}
+
+async fn scheduler_pause_handler(
+    State(state): State<AppState>,
+) -> Json<TaskmillControlOk> {
+    state.taskmill.pause_scheduler().await;
+    Json(TaskmillControlOk { ok: true })
+}
+
+async fn scheduler_resume_handler(
+    State(state): State<AppState>,
+) -> Json<TaskmillControlOk> {
+    state.taskmill.resume_scheduler().await;
+    Json(TaskmillControlOk { ok: true })
+}
+
+async fn task_cancel_handler(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<TaskmillCancelRes>, AppError> {
+    let cancelled = state
+        .taskmill
+        .cancel_task(id)
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(TaskmillCancelRes { cancelled }))
+}
+
+async fn task_pause_handler(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<TaskmillControlOk>, AppError> {
+    state
+        .taskmill
+        .pause_task(id)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    Ok(Json(TaskmillControlOk { ok: true }))
+}
+
+async fn task_resume_handler(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<TaskmillControlOk>, AppError> {
+    state
+        .taskmill
+        .resume_task(id)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    Ok(Json(TaskmillControlOk { ok: true }))
+}
+
+async fn delete_history_handler(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<TaskmillDeleteHistoryRes>, AppError> {
+    let deleted = state
+        .taskmill
+        .delete_history(id)
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(TaskmillDeleteHistoryRes { deleted }))
 }

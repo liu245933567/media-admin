@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use tokio::sync::Mutex;
+
 use anyhow::Context;
 use chrono::Utc;
 use ma_utils::config::get_app_data_dir;
@@ -17,13 +19,17 @@ use taskmill::{
 };
 use tokio_util::sync::CancellationToken;
 
+use super::setup_download_exec::{
+    FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor,
+};
 use super::spawn::{
     ExtractWavExecutor, SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor,
     WhisperVadSrtExecutor,
 };
 use super::types::{
-    ExtractWavTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
-    WhisperVadSrtTask, GROUP_FFMPEG, GROUP_TRANSLATE, GROUP_WHISPER,
+    ExtractWavTask, FfmpegSetupDownloadTask, MediaJobsDomain, SubtitleTranslateJob,
+    VideoSubtitleGenerateTask, WhisperModelDownloadTask, WhisperVadSrtTask, GROUP_FFMPEG,
+    GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -45,6 +51,7 @@ const DEFAULT_MAX_CONCURRENCY: usize = 8;
 const DEFAULT_GROUP_FFMPEG: usize = 2;
 const DEFAULT_GROUP_WHISPER: usize = 1;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
+const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
 
 /// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
 struct SchedulerConcurrencyLimits {
@@ -52,6 +59,7 @@ struct SchedulerConcurrencyLimits {
     ffmpeg: usize,
     whisper: usize,
     translate: usize,
+    setup_download: usize,
 }
 
 fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
@@ -60,7 +68,18 @@ fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
         ffmpeg: env_usize("TASKMILL_GROUP_FFMPEG", DEFAULT_GROUP_FFMPEG),
         whisper: env_usize("TASKMILL_GROUP_WHISPER", DEFAULT_GROUP_WHISPER),
         translate: env_usize("TASKMILL_GROUP_TRANSLATE", DEFAULT_GROUP_TRANSLATE),
+        setup_download: env_usize(
+            "TASKMILL_GROUP_SETUP_DOWNLOAD",
+            DEFAULT_GROUP_SETUP_DOWNLOAD,
+        ),
     }
+}
+
+/// 设置页下载 executor 共享依赖。
+#[derive(Clone)]
+pub struct SetupDownloadDeps {
+    pub http_client: reqwest::Client,
+    pub staging_lock: Arc<Mutex<()>>,
 }
 
 fn env_usize(name: &str, default: usize) -> usize {
@@ -75,6 +94,7 @@ pub struct TaskmillRuntime {
     pub scheduler: Scheduler,
     pub domain: DomainHandle<MediaJobsDomain>,
     pub cancellation: CancellationToken,
+    pub setup_download_deps: SetupDownloadDeps,
     exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
@@ -96,8 +116,20 @@ impl TaskmillRuntime {
             group_ffmpeg = limits.ffmpeg,
             group_whisper = limits.whisper,
             group_translate = limits.translate,
+            group_setup_download = limits.setup_download,
             "taskmill 并发：全局与各资源组上限"
         );
+
+        let http_client = reqwest::Client::builder()
+            .user_agent("media-admin/0.1")
+            .build()
+            .context("构建设置页下载 HTTP 客户端失败")?;
+        let setup_download_deps = SetupDownloadDeps {
+            http_client,
+            staging_lock: Arc::new(Mutex::new(())),
+        };
+        let whisper_dl_exec = WhisperModelDownloadExecutor::new(setup_download_deps.clone());
+        let ffmpeg_dl_exec = FfmpegSetupDownloadExecutor::new(setup_download_deps.clone());
 
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
@@ -106,12 +138,15 @@ impl TaskmillRuntime {
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
                     .task::<ExtractWavTask>(ExtractWavExecutor)
                     .task::<WhisperVadSrtTask>(WhisperVadSrtExecutor)
-                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor),
+                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
+                    .task::<WhisperModelDownloadTask>(whisper_dl_exec)
+                    .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
             )
             .max_concurrency(limits.max_concurrency)
             .group_concurrency(GROUP_FFMPEG, limits.ffmpeg)
             .group_concurrency(GROUP_WHISPER, limits.whisper)
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
+            .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()
@@ -151,6 +186,7 @@ impl TaskmillRuntime {
             scheduler,
             domain,
             cancellation,
+            setup_download_deps,
             exec_event_log,
         })
     }
@@ -173,6 +209,28 @@ impl TaskmillRuntime {
             .submit(input)
             .await
             .context("提交字幕翻译任务失败")
+    }
+
+    /// 入队 Whisper 模型下载。
+    pub async fn enqueue_whisper_model_download(
+        &self,
+        input: WhisperModelDownloadTask,
+    ) -> anyhow::Result<SubmitOutcome> {
+        self.domain
+            .submit(input)
+            .await
+            .context("提交 Whisper 模型下载任务失败")
+    }
+
+    /// 入队 FFmpeg 下载安装。
+    pub async fn enqueue_ffmpeg_setup_download(
+        &self,
+        input: FfmpegSetupDownloadTask,
+    ) -> anyhow::Result<SubmitOutcome> {
+        self.domain
+            .submit(input)
+            .await
+            .context("提交 FFmpeg 下载任务失败")
     }
 
     pub async fn snapshot(&self) -> anyhow::Result<TaskmillSnapshot> {
