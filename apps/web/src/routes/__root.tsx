@@ -15,7 +15,7 @@ function RootLayout() {
   return (
     <ProLayout
       title="Media Admin"
-      logo="/favicon.svg"
+      logo="/favicon.ico"
       layout="top"
       location={{ pathname }}
       route={{

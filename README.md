@@ -4,65 +4,52 @@
 
 ### 后台
 
-语言: rust
-数据库: sqlite
-所用库: axum
+语言: `rust`
+数据库: `sqlite`
+所用库: `axum`
 
 ### 前端
 
-语言: typescript
-所用库: react tanstack-router tanstack-query tailwindcss antd @antd/pro-components
+语言: `typescript`
+所用库: `react` `tanstack-router` `tanstack-query` `tailwindcss` `antd` `@antd/pro-components`
 
 ## 功能
 
-### 字幕下载
-
-实现思路:
-通过文本框输入视频路径，根据文件信息调用迅雷字幕api查询字幕;
-查出后将字幕列表显示在页面上让用户选择，用户选择完毕后，将字幕下载到本地，并重命名成与视频文件同名;
-下载到本地完毕后，在数据库中生成一条记录
-
-## 本地运行
-
-### 前提
-
-- 输入的「视频路径」必须是**运行后端的机器**上可访问的**绝对路径**（后端会读取该文件以计算迅雷 CID，并将字幕保存到与视频同一路径下的同名主文件名）。
-
-### 后端
-
-```bash
-cd backend
-cargo run
-```
-
-默认监听 `127.0.0.1:3000`，SQLite 文件为工作目录下的 `subtitle_admin.db`（若不存在会自动创建并执行迁移）。
-
-### 前端
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-开发环境将 `http://127.0.0.1:5173` 的 `/api`、`/health` 代理到后端 `http://127.0.0.1:3000`。
-
-### 常用环境变量（可选）
-
-| 变量            | 说明                | 默认 |
-| --------------- | ------------------- | ---- |
-| `STASH_API_KEY` | stash 应用的api key |      |
+- 网络字幕下载
+- 本地模型生成字幕
+- 本地视频播放
 
 ## 开发插件
 
-CUDA Toolkit
-https://developer.nvidia.com/cuda-downloads
+[CUDA Toolkit 下载](https://developer.nvidia.com/cuda-downloads)
 
-## 类型生成
+## 项目命令
 
-`cargo install typeshare-cli`
-`typeshare . --lang=typescript --output-file=./src/types/api.ts`
+在仓库根目录执行（需先 `pnpm install`）。后端依赖 `.env` 等配置，见项目内说明。
 
-## 待完成
+### 开发
 
-- [ ] 执行任务的实时日志查看功能
+| 命令                    | 描述                                                |
+| ----------------------- | --------------------------------------------------- |
+| `pnpm dev:web`          | 仅启动前端 Vite 开发服务（`http://localhost:5173`） |
+| `pnpm dev:server`       | 启动 Rust HTTP 服务（`media-admin-server`）         |
+| `pnpm dev:server:cuda`  | 同上，启用 CUDA feature（本地 GPU 推理等）          |
+| `pnpm dev:desktop`      | 启动 Tauri 桌面端（含前端 + 内嵌服务）              |
+| `pnpm dev:desktop:cuda` | 桌面端开发，启用 CUDA feature                       |
+
+### 构建
+
+| 命令                      | 描述                          |
+| ------------------------- | ----------------------------- |
+| `pnpm build:web`          | 构建前端静态资源到 `dist/`    |
+| `pnpm build:server`       | 编译 Rust 服务端可执行文件    |
+| `pnpm build:desktop`      | 打包 Tauri 桌面安装包         |
+| `pnpm build:desktop:cuda` | 桌面端打包，启用 CUDA feature |
+
+### 其它
+
+| 命令             | 描述                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| `pnpm lint`      | 前端 ESLint 检查                                             |
+| `pnpm preview`   | 预览已构建的前端产物                                         |
+| `pnpm typeshare` | 从 Rust 类型生成 `apps/web/src/types/api.ts`（勿手改该文件） |
