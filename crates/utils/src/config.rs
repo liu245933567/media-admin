@@ -83,20 +83,6 @@ pub fn get_translate_openai_default_model() -> Result<String> {
     }
 }
 
-pub fn get_stash_base_url() -> Result<String> {
-    match std::env::var("STASH_BASE_URL") {
-        Ok(url) => Ok(url.trim().to_string()),
-        Err(_) => bail!("未设置 STASH_BASE_URL 环境变量"),
-    }
-}
-
-pub fn get_stash_api_key() -> Result<String> {
-    match std::env::var("STASH_API_KEY") {
-        Ok(key) => Ok(key.trim().to_string()),
-        Err(_) => bail!("未设置 STASH_API_KEY 环境变量"),
-    }
-}
-
 pub fn get_app_data_dir() -> Result<PathBuf> {
     match std::env::var("APP_DATA_DIR") {
         Ok(path) => Ok(PathBuf::from(path.trim().to_string())),

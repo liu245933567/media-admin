@@ -13,12 +13,7 @@ export const menu = [
     icon: <HomeOutlined />,
   },
   {
-    name: '任务管理',
-    path: '/tasks',
-    icon: <UnorderedListOutlined />,
-  },
-  {
-    name: '视频查询',
+    name: '本地视频',
     path: '/video-folder-scan',
     icon: <VideoCameraOutlined />,
   },
@@ -26,6 +21,11 @@ export const menu = [
     name: 'Stash 库',
     path: '/stash-scenes',
     icon: <PlaySquareOutlined />,
+  },
+  {
+    name: '任务管理',
+    path: '/tasks',
+    icon: <UnorderedListOutlined />,
   },
   {
     name: '设置',

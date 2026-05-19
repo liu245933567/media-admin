@@ -5,7 +5,6 @@ mod types;
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use futures::Stream;
-use ma_utils::config::{get_stash_api_key, get_stash_base_url};
 use reqwest::header::{HeaderMap, HeaderName, CONTENT_TYPE, RANGE};
 use std::pin::Pin;
 
@@ -17,7 +16,9 @@ pub use filter::{
     StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
 };
 pub use scenes::list_scenes;
-pub use types::{StashSceneListReq, StashSceneFile, StashScenePaths, StashSceneRow};
+pub use types::{
+    StashConnectConfig, StashSceneListReq, StashSceneFile, StashScenePaths, StashSceneRow,
+};
 
 pub type MediaBodyStream =
     Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>;
@@ -28,29 +29,45 @@ pub struct ProxiedMedia {
     pub body: MediaBodyStream,
 }
 
-/// 解析 `STASH_BASE_URL` 为 GraphQL 端点 URL（兼容是否带 `/graphql` 后缀）。
-pub fn stash_graphql_url() -> Result<String> {
-    let base_url = get_stash_base_url()?;
+/// 校验 Stash 连接配置是否可用于请求。
+pub fn ensure_stash_config(cfg: &StashConnectConfig) -> Result<()> {
+    if cfg.base_url.trim().is_empty() {
+        return Err(anyhow!(
+            "未配置 Stash 服务地址，请在设置页填写 Stash Base URL"
+        ));
+    }
+    Ok(())
+}
 
-    let gql_url = if base_url.trim_end_matches('/').ends_with("/graphql") {
-        base_url.trim_end_matches('/').to_string()
+fn normalized_base_url(cfg: &StashConnectConfig) -> Result<String> {
+    ensure_stash_config(cfg)?;
+    Ok(cfg.base_url.trim().trim_end_matches('/').to_string())
+}
+
+/// 解析 Stash 根地址为 GraphQL 端点 URL（兼容是否带 `/graphql` 后缀）。
+pub fn stash_graphql_url(cfg: &StashConnectConfig) -> Result<String> {
+    let base_url = normalized_base_url(cfg)?;
+    let gql_url = if base_url.ends_with("/graphql") {
+        base_url
     } else {
-        format!("{}/graphql", base_url.trim_end_matches('/'))
+        format!("{base_url}/graphql")
     };
     Ok(gql_url)
 }
 
 /// 将完整 GraphQL body（含 `query` / `variables` / `operationName` 等）转发到 Stash，返回响应文本。
-pub async fn forward_graphql(payload: serde_json::Value) -> Result<String> {
-    let gql_url = stash_graphql_url()?;
-    let api_key = get_stash_api_key()?;
+pub async fn forward_graphql(cfg: &StashConnectConfig, payload: serde_json::Value) -> Result<String> {
+    let gql_url = stash_graphql_url(cfg)?;
+    let api_key = cfg.api_key.trim();
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
     let mut req = client.post(&gql_url).json(&payload);
-    req = req.header("ApiKey", api_key);
+    if !api_key.is_empty() {
+        req = req.header("ApiKey", api_key);
+    }
 
     let resp = req.send().await?;
     let status = resp.status();
@@ -62,7 +79,7 @@ pub async fn forward_graphql(payload: serde_json::Value) -> Result<String> {
 }
 
 /// 将 GraphQL 返回的 path（相对或绝对 URL）解析为可请求的 Stash 媒体地址。
-fn resolve_stash_media_url(path: &str) -> Result<String> {
+pub fn resolve_stash_media_url(cfg: &StashConnectConfig, path: &str) -> Result<String> {
     let path = path.trim();
     if path.is_empty() {
         return Err(anyhow!("stash media path 为空"));
@@ -73,10 +90,9 @@ fn resolve_stash_media_url(path: &str) -> Result<String> {
         return Ok(path.to_string());
     }
 
-    let base_url = get_stash_base_url()?;
+    let base_url = normalized_base_url(cfg)?;
     Ok(format!(
-        "{}/{}",
-        base_url.trim_end_matches('/'),
+        "{base_url}/{}",
         path.trim_start_matches('/')
     ))
 }
@@ -95,15 +111,23 @@ fn forward_response_header(name: &HeaderName) -> bool {
 }
 
 /// 流式代理 Stash 媒体，转发客户端 `Range` 以支持视频 seek。
-pub async fn proxy_media(path: &str, request_range: Option<&str>) -> Result<ProxiedMedia> {
-    let api_key = get_stash_api_key()?;
-    let url = resolve_stash_media_url(path)?;
+pub async fn proxy_media(
+    cfg: &StashConnectConfig,
+    path: &str,
+    request_range: Option<&str>,
+) -> Result<ProxiedMedia> {
+    ensure_stash_config(cfg)?;
+    let api_key = cfg.api_key.trim();
+    let url = resolve_stash_media_url(cfg, path)?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
 
-    let mut req = client.get(&url).header("ApiKey", api_key);
+    let mut req = client.get(&url);
+    if !api_key.is_empty() {
+        req = req.header("ApiKey", api_key);
+    }
     if let Some(range) = request_range {
         req = req.header(RANGE, range);
     }
@@ -119,7 +143,7 @@ pub async fn proxy_media(path: &str, request_range: Option<&str>) -> Result<Prox
     if let Some(ct) = resp.headers().get(CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
         if ct.starts_with("text/html") {
             return Err(anyhow!(
-                "stash 返回了 HTML 而非媒体文件，请检查 path 与 STASH_BASE_URL 是否一致: {url}"
+                "stash 返回了 HTML 而非媒体文件，请检查 path 与 Stash Base URL 是否一致: {url}"
             ));
         }
     }
@@ -142,11 +166,18 @@ pub async fn proxy_media(path: &str, request_range: Option<&str>) -> Result<Prox
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_stash_media_url;
+    use super::*;
+
+    fn test_cfg() -> StashConnectConfig {
+        StashConnectConfig {
+            base_url: "https://stash.example.com:55001".to_string(),
+            api_key: String::new(),
+        }
+    }
 
     #[test]
     fn resolve_absolute_url_unchanged() {
         let url = "https://stash.example.com:55001/scene/224/preview";
-        assert_eq!(resolve_stash_media_url(url).unwrap(), url);
+        assert_eq!(resolve_stash_media_url(&test_cfg(), url).unwrap(), url);
     }
 }

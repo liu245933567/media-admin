@@ -1,18 +1,20 @@
-//! 应用级默认配置（VAD / Whisper / 翻译），与 [`ma_subtitle::types::SubtitleGenerateConfig`] 对应但各块为必填，便于持久化与表单「全局默认值」。
-
+//! 应用级默认配置（VAD / Whisper / 翻译 / Stash），与 [`ma_subtitle::types::SubtitleGenerateConfig`] 对应但各块为必填，便于持久化与表单「全局默认值」。
+use crate::stash::StashConnectConfig;
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
-/// 应用设置：识别流水线默认参数 + 翻译默认参数。
+/// 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。
 #[typeshare]
 #[derive(Clone, Serialize, Deserialize)]
+
 pub struct AppConfig {
     pub vad_config: VadConfig,
     pub whisper_engine_config: WhisperEngineConfig,
     pub whisper_transcribe_config: WhisperTranscribeConfig,
     pub translate_config: SubtitleTranslateConfig,
+    pub stash_config: StashConnectConfig,
 }
 
 impl Default for AppConfig {
@@ -25,16 +27,19 @@ impl AppConfig {
     /// 由 [`SubtitleGenerateConfig::default`] 展开得到初始持久化内容。
     pub fn from_generate_defaults() -> Self {
         let g = SubtitleGenerateConfig::default();
+
         Self {
             vad_config: g.vad_config.unwrap_or_default(),
             whisper_engine_config: g.whisper_engine_config.unwrap_or_default(),
             whisper_transcribe_config: g.whisper_transcribe_config.unwrap_or_default(),
             translate_config: g.translate_config.unwrap_or_default(),
+            stash_config: StashConnectConfig::default(),
         }
     }
 }
 
 /// 将全局配置展开为「新建字幕任务」表单的基准结构（各子配置均为 `Some`）。
+
 pub fn app_config_to_generate_defaults(global: &AppConfig) -> SubtitleGenerateConfig {
     SubtitleGenerateConfig {
         vad_config: Some(global.vad_config.clone()),
@@ -49,6 +54,7 @@ pub fn app_config_to_generate_defaults(global: &AppConfig) -> SubtitleGenerateCo
 /// - `req_config == None`：整包采用 [`app_config_to_generate_defaults`]。
 /// - 子块为 `None`：该块采用全局对应块。
 /// - `translate_config == None`：本任务不链式翻译（与「子块继承」区分）。
+
 pub fn merge_subtitle_generate_config(
     req_config: Option<SubtitleGenerateConfig>,
     global: &AppConfig,
@@ -78,8 +84,7 @@ fn non_empty_or(s: &str, fallback: &str) -> String {
     let t = s.trim();
     if t.is_empty() {
         fallback.to_string()
-    }
-    else {
+    } else {
         t.to_string()
     }
 }
@@ -96,14 +101,12 @@ pub fn merge_subtitle_translate_fields(
         target_language: non_empty_or(&partial.target_language, &global.target_language),
         concurrency: if partial.concurrency > 0 {
             partial.concurrency
-        }
-        else {
+        } else {
             global.concurrency
         },
         batch_size: if partial.batch_size > 0 {
             partial.batch_size
-        }
-        else {
+        } else {
             global.batch_size
         },
         remove_source_srt: partial.remove_source_srt,
@@ -121,13 +124,16 @@ pub fn merge_subtitle_translate_job_config(
     }
 }
 
-/// 设置页保存：`incoming` 中 api_key 为空时不覆盖已保存密钥。
+/// 设置页保存：翻译 / Stash 的 `api_key` 为空时不覆盖已保存密钥。
 pub fn merge_app_config_on_put_translate_api_key(
     previous: &AppConfig,
     mut incoming: AppConfig,
 ) -> AppConfig {
     if incoming.translate_config.api_key.trim().is_empty() {
         incoming.translate_config.api_key = previous.translate_config.api_key.clone();
+    }
+    if incoming.stash_config.api_key.trim().is_empty() {
+        incoming.stash_config.api_key = previous.stash_config.api_key.clone();
     }
     incoming
 }

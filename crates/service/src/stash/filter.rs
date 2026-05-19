@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::Value as JsonValue;
+
+/// GraphQL `Any` / 任意 JSON（透传 Stash 原生结构）
+#[typeshare::typeshare(serialized_as = "unknown")]
+pub type StashJsonValue = JsonValue;
 
 /// Stash `CriterionModifier`（与 GraphQL 枚举值一致）
 #[typeshare::typeshare]
@@ -112,7 +116,7 @@ pub struct StashIdsCriterion {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StashCustomFieldCriterion {
     pub field: String,
-    pub value: Vec<Value>,
+    pub value: Vec<StashJsonValue>,
     pub modifier: StashCriterionModifier,
 }
 
@@ -242,21 +246,21 @@ pub struct StashSceneFilterType {
 
     /// 关联实体过滤器（结构体庞大，按需透传 Stash 原生 JSON）
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub galleries_filter: Option<Value>,
+    pub galleries_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub performers_filter: Option<Value>,
+    pub performers_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub studios_filter: Option<Value>,
+    pub studios_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags_filter: Option<Value>,
+    pub tags_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub movies_filter: Option<Value>,
+    pub movies_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub groups_filter: Option<Value>,
+    pub groups_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub markers_filter: Option<Value>,
+    pub markers_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub files_filter: Option<Value>,
+    pub files_filter: Option<StashJsonValue>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<Vec<StashCustomFieldCriterion>>,

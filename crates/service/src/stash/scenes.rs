@@ -1,11 +1,10 @@
 use anyhow::{Result, anyhow};
-use ma_utils::config::get_stash_base_url;
 use ma_utils::types::PageResult;
 use serde::Deserialize;
 use serde_json::json;
 
 use crate::stash::StashScenePaths;
-use crate::stash::types::StashSceneListReq;
+use crate::stash::types::{StashConnectConfig, StashSceneListReq};
 
 use super::forward_graphql;
 use super::types::StashSceneRow;
@@ -28,7 +27,10 @@ struct GraphqlError {
 }
 
 /// 调用 Stash `findScenes` 并返回分页列表。
-pub async fn list_scenes(req: StashSceneListReq) -> Result<PageResult<StashSceneRow>> {
+pub async fn list_scenes(
+    cfg: &StashConnectConfig,
+    req: StashSceneListReq,
+) -> Result<PageResult<StashSceneRow>> {
     let StashSceneListReq {
         filter: input_filter,
         scene_filter: input_scene_filter,
@@ -40,7 +42,7 @@ pub async fn list_scenes(req: StashSceneListReq) -> Result<PageResult<StashScene
         "per_page": input_filter.page_size,
     });
 
-    let stash_host = get_stash_base_url()?;
+    let stash_host = cfg.base_url.trim().trim_end_matches('/').to_string();
 
     if let Some(q) = input_filter.q.as_deref().filter(|s| !s.is_empty()) {
         filter["q"] = json!(q);
@@ -69,7 +71,7 @@ pub async fn list_scenes(req: StashSceneListReq) -> Result<PageResult<StashScene
         "operationName": "FindScenes",
     });
 
-    let text = forward_graphql(body).await?;
+    let text = forward_graphql(cfg, body).await?;
     let envelope: serde_json::Value = serde_json::from_str(&text)?;
 
     if let Some(errors) = envelope.get("errors").and_then(|v| v.as_array()) {

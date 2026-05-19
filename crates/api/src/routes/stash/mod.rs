@@ -1,8 +1,8 @@
-use crate::{StateRouter, error::AppError};
+use crate::{AppState, StateRouter, error::AppError};
 use axum::{
     Json, Router,
     body::Body,
-    extract::Query,
+    extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -20,11 +20,13 @@ pub fn routes() -> StateRouter {
 }
 
 async fn scenes_list_handler(
+    State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<StashSceneListReq>, AppError>,
 ) -> Result<Json<PageResult<StashSceneRow>>, AppError> {
-    let res = list_scenes(body)
+    let stash_config = state.app_config.read().await.stash_config.clone();
+    let res = list_scenes(&stash_config, body)
         .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
+        .map_err(map_stash_err)?;
     Ok(Json(res))
 }
 
@@ -34,14 +36,16 @@ struct MediaQuery {
 }
 
 async fn media_proxy_handler(
+    State(state): State<AppState>,
     Query(q): Query<MediaQuery>,
     req_headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let range = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok());
+    let stash_config = state.app_config.read().await.stash_config.clone();
 
-    let proxied = proxy_media(&q.path, range)
+    let proxied = proxy_media(&stash_config, &q.path, range)
         .await
-        .map_err(|e| AppError::Upstream(e.to_string()))?;
+        .map_err(map_stash_err)?;
 
     let mut resp_headers = HeaderMap::new();
     for (name, value) in proxied.headers.iter() {
@@ -61,4 +65,13 @@ async fn media_proxy_handler(
     );
 
     Ok((status, resp_headers, body).into_response())
+}
+
+fn map_stash_err(e: anyhow::Error) -> AppError {
+    let msg = e.to_string();
+    if msg.contains("未配置 Stash") {
+        AppError::BadRequest(msg)
+    } else {
+        AppError::Upstream(msg)
+    }
 }

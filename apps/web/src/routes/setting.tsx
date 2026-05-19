@@ -18,6 +18,7 @@ import {
   Typography,
 } from 'antd'
 import { useEffect, useState } from 'react'
+import { StashConfigFormGroup } from '@/components/stash-config-form-group'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
   useWhisperModelFilenameOptions,
@@ -194,15 +195,15 @@ function RouteComponent() {
           title="下载目录与安装路径由服务端配置（环境变量 DOWNLOAD_DIR、MODELS_DIR、FFMPEG_DIR 或默认 ~/.media-admin 下子目录）。"
         />
 
-        <Card title="字幕识别与翻译默认参数" variant="borderless" className="shadow-sm">
+        <Card title="应用默认参数" variant="borderless" className="shadow-sm">
           <Typography.Paragraph className="mb-4 text-sm text-neutral-600">
-            以下参数持久化在服务端数据库，作为新建字幕生成 / 翻译任务的全局默认值。翻译
+            以下参数持久化在本地
+            <code className="mx-1 rounded bg-neutral-100 px-1">app_config.json</code>
+            。翻译与 Stash 的
             <code className="mx-1 rounded bg-neutral-100 px-1">API Key</code>
-            留空保存时不覆盖已存密钥。未覆盖的项仍可由环境变量
-            <code className="mx-1 rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_BASE</code>
-            、
-            <code className="mx-1 rounded bg-neutral-100 px-1">TRANSLATE_OPENAI_API_KEY</code>
-            等在运行时兜底。
+            /
+            <code className="mx-1 rounded bg-neutral-100 px-1">ApiKey</code>
+            留空保存时不覆盖已存密钥。
           </Typography.Paragraph>
           <Spin spinning={appCfgQuery.isPending}>
             {appCfgQuery.data
@@ -229,6 +230,7 @@ function RouteComponent() {
                       }
                     }}
                   >
+                    <StashConfigFormGroup variant="setting" />
                     <SubtitlePipelineFormGroups
                       whisperModelFilenameOptions={whisperModelFilenameOptions}
                       whisperModelsLoading={whisperModelsLoading}

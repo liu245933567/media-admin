@@ -24,7 +24,7 @@
     "noEmit": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
+    "erasableSyntaxOnly": false,
 
     "skipLibCheck": true
   },

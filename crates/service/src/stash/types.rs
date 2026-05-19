@@ -2,6 +2,25 @@ use serde::{Deserialize, Serialize};
 
 use super::filter::StashSceneFilterType;
 
+/// Stash 连接配置（持久化于应用 `AppConfig`）。
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StashConnectConfig {
+    /// 实例根地址，如 `http://127.0.0.1:9999`
+    pub base_url: String,
+    /// GraphQL / 媒体请求使用的 ApiKey；无鉴权时可留空
+    pub api_key: String,
+}
+
+impl Default for StashConnectConfig {
+    fn default() -> Self {
+        Self {
+            base_url: String::new(),
+            api_key: String::new(),
+        }
+    }
+}
+
 fn default_list_page() -> i32 {
     1
 }
