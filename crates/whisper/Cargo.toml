@@ -1,0 +1,24 @@
+[package]
+name = "media-admin-whisper"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ma_whisper"
+
+[features]
+default = []
+cuda = ["whisper-rs/cuda"]
+
+[dependencies]
+whisper-rs = { version = "0.16" }
+webrtc-vad = "0.4"
+hound = "3"
+
+anyhow.workspace = true
+tracing.workspace = true
+serde.workspace = true
+tokio.workspace = true
+
+media-admin-utils = { path = "../../crates/utils" }
+typeshare = "1.0.5"

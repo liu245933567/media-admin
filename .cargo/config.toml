@@ -1,0 +1,4 @@
+[profile.dev]
+# incremental = false
+
+[env]

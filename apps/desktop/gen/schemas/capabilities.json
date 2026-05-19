@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Main window: Vite dev server or bundled Axum origin","remote":{"urls":["http://localhost:*/*","http://127.0.0.1:*/*"]},"local":true,"windows":["main"],"permissions":["core:default","core:window:allow-close","core:window:allow-is-maximized","core:window:allow-start-dragging","core:window:allow-toggle-maximize"]}}

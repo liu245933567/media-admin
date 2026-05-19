@@ -1,0 +1,11 @@
+/target
+/target-*
+/*.db
+/*.db-journal
+/node_modules
+/dist
+.DS_Store
+/static
+.env
+/apps/web/node_modules
+/apps/**/node_modules

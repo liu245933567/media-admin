@@ -1,0 +1,44 @@
+[workspace]
+members = [
+  "apps/server",
+  "apps/desktop",
+  "crates/api",
+  "crates/whisper",
+  "crates/utils",
+  "crates/subtitle",
+  "crates/db",
+  "crates/service",
+]
+resolver = "3"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = { version = "1", features = ["backtrace"] }
+tracing = "0.1"
+tokio = { version = "1.5.2", features = [
+  "fs",
+  "macros",
+  "rt-multi-thread",
+  "io-util",
+  "process",
+  "time",
+] }
+futures = "0.3.32"
+reqwest = { version = "0.13.3", features = [
+  "json",
+  "rustls",
+  "stream",
+], default-features = false }
+typeshare = "1.0.5"
+sqlx = { version = "0.8.6", default-features = false, features = [
+  "runtime-tokio-rustls",
+  "sqlite",
+  "macros",
+  "migrate",
+] }
+log = "0.4"
+chrono = "0.4"
+dotenvy = "0.15"
+taskmill = "0.7.1"
+tokio-util = "0.7"

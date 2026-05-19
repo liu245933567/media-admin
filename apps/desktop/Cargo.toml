@@ -1,0 +1,28 @@
+[package]
+name = "media-admin-desktop"
+version = "0.1.0"
+description = "Media Admin desktop (Tauri)"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2024"
+rust-version = "1.95.0"
+
+[lib]
+name = "media_admin_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+cuda = ["media-admin-api/cuda"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.1", features = [] }
+
+[dependencies]
+dotenvy.workspace = true
+tracing.workspace = true
+tauri = { version = "2.11.1", features = [] }
+tauri-plugin-tracing = "0.3"
+
+media-admin-api = { path = "../../crates/api" }
+media-admin-utils = { path = "../../crates/utils" }

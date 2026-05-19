@@ -1,0 +1,11 @@
+[package]
+name = "media-admin-server"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+cuda = ["media-admin-api/cuda"]
+
+[dependencies]
+dotenvy.workspace = true
+media-admin-api = { path = "../../crates/api" }

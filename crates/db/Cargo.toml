@@ -1,0 +1,17 @@
+[package]
+name = "media-admin-db"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ma_db"
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+log.workspace = true
+
+sqlx.workspace = true
+
+media-admin-utils = { path = "../../crates/utils" }

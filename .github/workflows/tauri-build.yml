@@ -1,0 +1,141 @@
+name: Tauri 桌面端打包
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+      - "latest"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }} with CUDA ${{ matrix.cuda }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            cuda: "12.4.1"
+          - os: ubuntu-22.04
+            cuda: "12.4.1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # CUDA 本地安装包解压 + 写入 /usr/local 需要大量空间；默认还带 --samples，易触发 No space left on device。
+      - name: 释放磁盘空间（Linux / CUDA）
+        if: runner.os == 'Linux'
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+
+      - name: Install CUDA
+        uses: jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: ${{ matrix.cuda }}
+          log-file-suffix: ${{ matrix.os }}-cuda-${{ matrix.cuda }}.txt
+          # 仅 Linux + local 安装生效：去掉 samples，减少磁盘占用（CI 编译不需要示例）。
+          linux-local-args: '["--toolkit"]'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Linux 系统依赖（Tauri / WebKit / bindgen）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libclang-dev clang
+
+      - name: 安装依赖 pnpm workspace
+        run: pnpm install --frozen-lockfile
+
+      # Linux AppImage：linuxdeploy 对带 .relr.dyn 的库执行 strip 易失败（见 tauri-apps/tauri#14796）。
+      # NO_STRIP 跳过该 strip；APPIMAGE_EXTRACT_AND_RUN 在无 FUSE 的 CI 上解压运行 linuxdeploy 等 AppImage。
+      - name: Tauri build（Windows）
+        if: runner.os == 'Windows'
+        run: pnpm --filter @media-admin/desktop build
+
+      - name: Tauri build（Linux，兼容 AppImage / linuxdeploy）
+        if: runner.os == 'Linux'
+        env:
+          NO_STRIP: "true"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: pnpm --filter @media-admin/desktop build
+
+      - name: 上传安装包与 release 可执行文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: media-admin-${{ matrix.os }}-cuda-${{ matrix.cuda }}
+          path: |
+            target/release/bundle/
+            target/release/media-admin-desktop.exe
+            target/release/media-admin-desktop
+          if-no-files-found: warn
+
+  publish-release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载各平台构建产物
+        uses: actions/download-artifact@v4
+        with:
+          pattern: media-admin-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: 整理 Release 安装包
+        shell: bash
+        run: |
+          mkdir -p release-upload
+          shopt -s globstar nullglob
+          for f in release-assets/**/*; do
+            if [ -f "$f" ] && [[ "$f" =~ \.(exe|msi|deb|AppImage)$ ]]; then
+              cp -v "$f" "release-upload/$(basename "$f")"
+            fi
+          done
+          ls -la release-upload/
+          test "$(ls -A release-upload)"
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: release-upload/*

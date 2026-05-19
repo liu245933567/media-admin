@@ -1,0 +1,43 @@
+[package]
+name = "media-admin-api"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ma_api"
+
+[features]
+cuda = ["media-admin-service/cuda"]
+
+[dependencies]
+anyhow.workspace = true
+reqwest.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+typeshare.workspace = true
+
+media-admin-utils = { path = "../../crates/utils" }
+media-admin-db = { path = "../../crates/db" }
+media-admin-service = { path = "../../crates/service" }
+
+axum = { version = "0.8.9", features = ["macros", "json"] }
+axum-extra = { version = "0.12.5", features = ["with-rejection"] }
+
+
+futures-util = { version = "0.3", default-features = false, features = ["io"] }
+
+
+uuid = { version = "1", features = ["v4", "serde"] }
+
+
+zip = "8.6.0"
+
+thiserror = "2.0.18"
+
+
+tokio.workspace = true
+tokio-stream = { version = "0.1.18", features = ["sync"] }
+
+tower-http = { version = "0.6.9", features = ["cors", "trace", "fs"] }

@@ -1,0 +1,14 @@
+{
+  "name": "@media-admin/desktop",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev --no-watch",
+    "dev:cuda": "tauri dev --no-watch --features cuda",
+    "build": "tauri build",
+    "build:cuda": "tauri build --features cuda"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.1"
+  }
+}

@@ -1,0 +1,7 @@
+# type_mappings 只对解析器已支持的 Rust 类型生效。
+# u64/i64/usize/isize 在解析阶段即不支持，无法通过此处映射为 bigint。
+# 分页等 API 请使用 u32/i32，或查阅 typeshare 文档中的 U53/I54（JS 安全整数）。
+
+[typescript.type_mappings]
+"StashJsonValue" = "unknown"
+"JsonValue" = "unknown"

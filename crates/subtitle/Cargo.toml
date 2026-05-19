@@ -1,0 +1,27 @@
+[package]
+name = "media-admin-subtitle"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ma_subtitle"
+
+[features]
+cuda = ["media-admin-whisper/cuda"]
+
+[dependencies]
+serde.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+
+async-openai = { version = "0.38.0", default-features = false, features = [
+  "rustls",
+  "chat-completion",
+] }
+
+media-admin-whisper = { path = "../../crates/whisper" }
+media-admin-utils = { path = "../../crates/utils" }
+typeshare = "1.0.5"
