@@ -1,4 +1,3 @@
-import type { SetupDownloadUiProgress } from '@/lib/setup-download-taskmill'
 import type { AppConfig } from '@/types'
 import {
   PageContainer,
@@ -9,15 +8,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import {
   Alert,
   App,
-  Button,
   Card,
-  Modal,
-  Progress,
   Space,
   Spin,
   Typography,
 } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { FfmpegSetupCard } from '@/components/ffmpeg-setup-card'
 import { StashConfigFormGroup } from '@/components/stash-config-form-group'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
@@ -25,21 +22,9 @@ import {
   WhisperModelsSetupCard,
 } from '@/components/whisper-models-setup-card'
 import {
-  mapSetupDownloadFromHistory,
-  mapSetupDownloadFromSnapshot,
-  uiProgressPercent,
-} from '@/lib/setup-download-taskmill'
-import {
   appConfigQueryKey,
   fetchAppConfig,
-  fetchFfmpegSetupStatus,
-  fetchTaskmillHistory,
-  fetchTaskmillSnapshot,
-  ffmpegSetupStatusQueryKey,
-  startFfmpegDownload,
   subtitleGenerateDefaultsQueryKey,
-  taskmillHistoryQueryKey,
-  taskmillSnapshotQueryKey,
   updateAppConfig,
 } from '@/request'
 
@@ -67,118 +52,6 @@ function RouteComponent() {
       )
     }
   }, [appCfgQuery.isError, appCfgQuery.error, message])
-
-  const ffmpegSetupQuery = useQuery({
-    queryKey: ffmpegSetupStatusQueryKey,
-    queryFn: fetchFfmpegSetupStatus,
-  })
-
-  const [ffmpegTaskId, setFfmpegTaskId] = useState<number | null>(null)
-  const [ffmpegProgress, setFfmpegProgress] = useState<SetupDownloadUiProgress | null>(null)
-  const [ffmpegBusy, setFfmpegBusy] = useState(false)
-
-  const taskmillSnapshotQuery = useQuery({
-    queryKey: taskmillSnapshotQueryKey,
-    queryFn: fetchTaskmillSnapshot,
-    refetchInterval: ffmpegTaskId != null ? 500 : false,
-  })
-
-  const taskmillHistoryQuery = useQuery({
-    queryKey: taskmillHistoryQueryKey({ limit: 40, offset: 0 }),
-    queryFn: () => fetchTaskmillHistory({ limit: 40, offset: 0 }),
-    enabled: ffmpegTaskId != null,
-    refetchInterval: ffmpegTaskId != null ? 1000 : false,
-  })
-
-  useEffect(() => {
-    if (ffmpegSetupQuery.isError) {
-      message.error(
-        ffmpegSetupQuery.error instanceof Error
-          ? ffmpegSetupQuery.error.message
-          : '加载 FFmpeg 状态失败',
-      )
-    }
-  }, [ffmpegSetupQuery.isError, ffmpegSetupQuery.error, message])
-
-  useEffect(() => {
-    const snapshot = taskmillSnapshotQuery.data
-    const history = taskmillHistoryQuery.data
-    if (!snapshot || ffmpegTaskId == null) {
-      return
-    }
-
-    const fromSnap = mapSetupDownloadFromSnapshot(snapshot, ffmpegTaskId)
-    if (fromSnap) {
-      setFfmpegProgress(fromSnap)
-      return
-    }
-
-    const record = history?.find(h => h.id === ffmpegTaskId)
-    if (!record) {
-      return
-    }
-
-    const terminal = mapSetupDownloadFromHistory(record)
-    setFfmpegProgress(terminal)
-    setFfmpegTaskId(null)
-    setFfmpegBusy(false)
-    if (terminal.status === 'done') {
-      message.success(terminal.message || '下载完成')
-      void queryClient.invalidateQueries({ queryKey: ffmpegSetupStatusQueryKey })
-    }
-    else {
-      message.error(terminal.message || '下载失败')
-    }
-    setTimeout(setFfmpegProgress, 800, null)
-  }, [
-    ffmpegTaskId,
-    taskmillSnapshotQuery.data,
-    taskmillHistoryQuery.data,
-    message,
-    queryClient,
-  ])
-
-  function openFfmpegDownloadModal() {
-    Modal.confirm({
-      title: '下载 FFmpeg',
-      content: (
-        <div className="space-y-2 text-neutral-700">
-          <p>将清理未完成下载后，按当前系统自动选择构建（BtbN FFmpeg-Builds），并安装到配置的工具目录。</p>
-          <p className="text-sm text-neutral-500">
-            Linux / macOS 解压依赖本机
-            {' '}
-            <code className="rounded bg-neutral-100 px-1">tar</code>
-            {' '}
-            命令；Windows 使用 zip 解压。
-          </p>
-        </div>
-      ),
-      okText: '开始下载',
-      cancelText: '取消',
-      onOk: async () => {
-        setFfmpegBusy(true)
-        setFfmpegProgress(null)
-        try {
-          const { job_id } = await startFfmpegDownload({})
-          const taskId = Number.parseInt(job_id, 10)
-          if (!Number.isFinite(taskId)) {
-            throw new TypeError('无效的任务 ID')
-          }
-          setFfmpegTaskId(taskId)
-          setFfmpegProgress({
-            status: 'running',
-            message: '任务已入队，等待执行…',
-          })
-        }
-        catch (e) {
-          setFfmpegBusy(false)
-          message.error(e instanceof Error ? e.message : '启动下载失败')
-        }
-      },
-    })
-  }
-
-  const ffmpegDownloadBlocked = Boolean(ffmpegSetupQuery.data?.local_ready)
 
   const appConfigFormKey = appCfgQuery.isSuccess
     ? String(appCfgQuery.dataUpdatedAt)
@@ -249,50 +122,7 @@ function RouteComponent() {
 
         <WhisperModelsSetupCard />
 
-        <Card title="FFmpeg" variant="borderless" className="shadow-sm">
-          <Space orientation="vertical" size="middle" className="w-full">
-            <Spin spinning={ffmpegSetupQuery.isPending}>
-              <Typography.Paragraph className="mb-0 text-neutral-600">
-                为字幕流水线下载与当前系统匹配的静态构建，并写入 ffmpeg 工具目录。
-                {ffmpegDownloadBlocked
-                  ? (
-                      <Typography.Text type="success" className="ml-2 text-sm">
-                        已就绪
-                      </Typography.Text>
-                    )
-                  : null}
-              </Typography.Paragraph>
-            </Spin>
-            <Button
-              type="primary"
-              onClick={openFfmpegDownloadModal}
-              disabled={ffmpegBusy || ffmpegDownloadBlocked}
-              loading={ffmpegBusy}
-            >
-              下载 FFmpeg（当前平台）
-            </Button>
-            {ffmpegDownloadBlocked
-              ? (
-                  <Typography.Text type="secondary" className="text-sm">
-                    当前服务器工具目录中已存在 FFmpeg，无需重复下载。
-                  </Typography.Text>
-                )
-              : null}
-            {ffmpegProgress
-              ? (
-                  <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
-                    <Progress
-                      percent={uiProgressPercent(ffmpegProgress)}
-                      status={ffmpegProgress.status === 'error' ? 'exception' : 'active'}
-                    />
-                    <Typography.Paragraph className="mb-0 mt-2 text-xs text-neutral-600">
-                      {ffmpegProgress.message}
-                    </Typography.Paragraph>
-                  </div>
-                )
-              : null}
-          </Space>
-        </Card>
+        <FfmpegSetupCard />
       </Space>
     </PageContainer>
   )

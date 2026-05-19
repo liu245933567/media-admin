@@ -8,6 +8,8 @@ import type {
   FsReadTextRes,
   VideoFolderScanReq,
   VideoFolderScanRes,
+  VideoPlaybackProbeRes,
+  VideoTranscodeStatusRes,
   WhisperDownloadStartReq,
   WhisperModelsListRes,
 } from '@/types'
@@ -21,6 +23,32 @@ export function fetchFsList(params: FsListReq) {
 /** 读取文本文件（用于预览字幕内容） */
 export function fetchFsReadText(params: FsReadTextReq) {
   return post<FsReadTextRes, FsReadTextReq>('/fs/read-text', params)
+}
+
+/** 本地视频流 URL（供 video.js / `<video>` 使用，支持 Range） */
+export function buildLocalVideoSrc(path: string): string {
+  return `/api/fs/video?path=${encodeURIComponent(path)}`
+}
+
+/** 转码后的 MP4 流 URL（须先完成转码） */
+export function buildTranscodedVideoSrc(path: string): string {
+  return `/api/fs/video/transcoded?path=${encodeURIComponent(path)}`
+}
+
+/** 探测视频是否适合浏览器直链播放 */
+export function fetchVideoPlaybackProbe(params: { path: string }) {
+  return get<VideoPlaybackProbeRes>('/fs/video/probe', params)
+}
+
+/** 查询转码进度 */
+export function fetchVideoTranscodeStatus(params: { path: string }) {
+  return get<VideoTranscodeStatusRes>('/fs/video/transcode/status', params)
+}
+
+/** 启动服务端转码（幂等） */
+export function startVideoTranscode(params: { path: string }) {
+  const q = encodeURIComponent(params.path)
+  return post<VideoTranscodeStatusRes>(`/fs/video/transcode/start?path=${q}`)
 }
 
 /** 递归扫描文件夹下视频文件（同 stem 字幕列表） */

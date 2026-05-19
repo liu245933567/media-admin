@@ -116,6 +116,7 @@ export interface AppConfig {
 	whisper_engine_config: WhisperEngineConfig;
 	whisper_transcribe_config: WhisperTranscribeConfig;
 	translate_config: SubtitleTranslateConfig;
+	/** 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。 */
 	stash_config?: StashConnectConfig;
 }
 
@@ -497,6 +498,30 @@ export interface VideoFolderScanReq {
 
 export interface VideoFolderScanRes {
 	items: VideoFolderScanItem[];
+}
+
+export interface VideoPlaybackProbeRes {
+	/** 是否建议走直链（H.264/AAC 等浏览器常见组合） */
+	direct_playable: boolean;
+	/** 是否建议服务端转码后再播 */
+	needs_transcode: boolean;
+	video_codec?: string;
+	audio_codec?: string;
+	container?: string;
+}
+
+export enum VideoTranscodePhase {
+	Idle = "idle",
+	Running = "running",
+	Ready = "ready",
+	Failed = "failed",
+}
+
+export interface VideoTranscodeStatusRes {
+	phase: VideoTranscodePhase;
+	/** 0.0–1.0，仅 `running` 时有效 */
+	progress?: number;
+	message?: string;
 }
 
 export interface WhisperDownloadStartReq {

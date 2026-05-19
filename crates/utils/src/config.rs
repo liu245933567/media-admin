@@ -33,20 +33,24 @@ pub fn get_ffmpeg_dir() -> PathBuf {
 
 /// 配置的 FFMPEG_DIR 下是否已存在 ffmpeg / ffmpeg.exe（不校验是否可执行）
 pub fn ffmpeg_tool_installed() -> bool {
-    let dir = get_ffmpeg_dir();
-    dir.join("ffmpeg.exe").is_file() || dir.join("ffmpeg").is_file()
+    get_ffmpeg_bin_path().is_ok()
 }
 
 /// 获取 ffmpeg 可执行文件路径
 pub fn get_ffmpeg_bin_path() -> Result<String> {
     let dir = get_ffmpeg_dir();
-    let win = dir.join("ffmpeg.exe");
-    if win.exists() {
-        return Ok(win.to_string_lossy().to_string());
-    }
-    let unix = dir.join("ffmpeg");
-    if unix.exists() {
-        return Ok(unix.to_string_lossy().to_string());
+    let candidates = if cfg!(windows) {
+        [
+            dir.join("bin/ffmpeg.exe"),
+            dir.join("ffmpeg.exe"),
+        ]
+    } else {
+        [dir.join("bin/ffmpeg"), dir.join("ffmpeg")]
+    };
+    for p in candidates {
+        if p.is_file() {
+            return Ok(p.to_string_lossy().to_string());
+        }
     }
     bail!("未找到 ffmpeg 可执行文件");
 }
@@ -56,6 +60,37 @@ pub fn get_temp_wav_dir() -> PathBuf {
     match std::env::var("TEMP_WAV_DIR") {
         Ok(path) => PathBuf::from(path),
         Err(_) => get_default_app_path().join("temp/wav"),
+    }
+}
+
+/// 视频浏览器转码缓存目录（H.264 + AAC 的 MP4）
+pub fn get_transcode_cache_dir() -> PathBuf {
+    match std::env::var("TRANSCODE_CACHE_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => get_default_app_path().join("temp/transcode"),
+    }
+}
+
+/// 转码时 GPU（NVENC）使用策略，由环境变量 `TRANSCODE_GPU` 控制。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranscodeGpuMode {
+    /// 检测到 `h264_nvenc` 时优先 GPU，失败则回退 CPU
+    Auto,
+    /// 强制尝试 NVENC（失败则回退 CPU）
+    Nvenc,
+    /// 仅 CPU（libx264）
+    Off,
+}
+
+/// 读取 `TRANSCODE_GPU`：`auto`（默认）/ `nvenc` / `off`（亦支持 `1`/`0`/`cpu`）。
+pub fn get_transcode_gpu_mode() -> TranscodeGpuMode {
+    match std::env::var("TRANSCODE_GPU")
+        .map(|s| s.trim().to_ascii_lowercase())
+        .as_deref()
+    {
+        Ok("nvenc") | Ok("on") | Ok("gpu") | Ok("1") | Ok("true") => TranscodeGpuMode::Nvenc,
+        Ok("off") | Ok("cpu") | Ok("0") | Ok("false") => TranscodeGpuMode::Off,
+        _ => TranscodeGpuMode::Auto,
     }
 }
 

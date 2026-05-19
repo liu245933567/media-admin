@@ -145,21 +145,21 @@ async fn download_to_file(
     Ok(received)
 }
 
-fn find_ffmpeg_binary(root: &Path) -> Result<PathBuf> {
-    fn walk(dir: &Path, out: &mut Option<PathBuf>) -> std::io::Result<()> {
-        if out.is_some() {
+/// 校验目录树内存在 ffmpeg 可执行文件（BtbN 包通常在 `bin/` 下）。
+fn ensure_ffmpeg_binary_present(root: &Path) -> Result<()> {
+    fn walk(dir: &Path, found: &mut bool) -> std::io::Result<()> {
+        if *found {
             return Ok(());
         }
-        let read = std::fs::read_dir(dir)?;
-        for e in read.flatten() {
+        for e in std::fs::read_dir(dir)?.flatten() {
             let p = e.path();
             let ft = e.file_type()?;
             if ft.is_dir() {
-                walk(&p, out)?;
+                walk(&p, found)?;
             } else if ft.is_file() {
                 let name = e.file_name().to_string_lossy().to_ascii_lowercase();
                 if name == "ffmpeg.exe" || name == "ffmpeg" {
-                    *out = Some(p);
+                    *found = true;
                     return Ok(());
                 }
             }
@@ -167,9 +167,89 @@ fn find_ffmpeg_binary(root: &Path) -> Result<PathBuf> {
         Ok(())
     }
 
-    let mut found = None;
+    let mut found = false;
     walk(root, &mut found).map_err(|e| anyhow!("遍历解压目录失败: {e}"))?;
-    found.ok_or_else(|| anyhow!("解压包内未找到 ffmpeg 可执行文件"))
+    if found {
+        Ok(())
+    } else {
+        bail!("解压包内未找到 ffmpeg 可执行文件")
+    }
+}
+
+/// BtbN 压缩包通常只有一层顶层目录（如 `ffmpeg-8.0-full_build/`）。
+fn resolve_extract_payload_root(extract_dir: &Path) -> Result<PathBuf> {
+    let mut dirs = Vec::new();
+    let mut file_count = 0usize;
+    for e in std::fs::read_dir(extract_dir).context("读取解压目录失败")? {
+        let e = e?;
+        let ft = e.file_type()?;
+        if ft.is_dir() {
+            dirs.push(e.path());
+        } else if ft.is_file() {
+            file_count += 1;
+        }
+    }
+    if dirs.len() == 1 && file_count == 0 {
+        Ok(dirs.pop().unwrap())
+    } else {
+        Ok(extract_dir.to_path_buf())
+    }
+}
+
+async fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    tokio::fs::create_dir_all(dst).await?;
+    let mut entries = tokio::fs::read_dir(src).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        let ft = entry.file_type().await?;
+        if ft.is_dir() {
+            Box::pin(copy_dir_recursive(&from, &to)).await?;
+        } else {
+            tokio::fs::copy(&from, &to).await?;
+        }
+    }
+    Ok(())
+}
+
+/// 将解压后的完整目录树安装到 `FFMPEG_DIR`（含 bin/ffprobe 等）。
+async fn install_extracted_tree(payload_root: &Path, dest_dir: &Path) -> Result<()> {
+    ensure_ffmpeg_binary_present(payload_root)?;
+
+    if tokio::fs::try_exists(dest_dir).await.unwrap_or(false) {
+        tokio::fs::remove_dir_all(dest_dir).await?;
+    }
+    if let Some(parent) = dest_dir.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    if tokio::fs::rename(payload_root, dest_dir).await.is_err() {
+        copy_dir_recursive(payload_root, dest_dir).await?;
+        tokio::fs::remove_dir_all(payload_root).await.ok();
+    }
+
+    #[cfg(unix)]
+    chmod_bin_executables(dest_dir).await?;
+
+    Ok(())
+}
+
+#[cfg(unix)]
+async fn chmod_bin_executables(dest_dir: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin = dest_dir.join("bin");
+    if !bin.is_dir() {
+        return Ok(());
+    }
+    let mode = std::fs::Permissions::from_mode(0o755);
+    let mut entries = tokio::fs::read_dir(&bin).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_type().await?.is_file() {
+            tokio::fs::set_permissions(entry.path(), mode.clone()).await.ok();
+        }
+    }
+    Ok(())
 }
 
 fn extract_zip_sync(archive_path: &Path, out_dir: &Path) -> Result<()> {
@@ -282,46 +362,36 @@ pub async fn run_ffmpeg_download(
     .context("解压失败")?;
 
     check_cancelled()?;
-    let bin_src = find_ffmpeg_binary(&extract_dir)?;
+
+    let payload_root = tokio::task::spawn_blocking({
+        let extract_dir = extract_dir.clone();
+        move || resolve_extract_payload_root(&extract_dir)
+    })
+    .await
+    .context("解析解压目录 panic")??;
+
     let dest_dir = get_ffmpeg_dir();
-    tokio::fs::create_dir_all(&dest_dir).await?;
-
-    let dest_name = if cfg!(windows) {
-        "ffmpeg.exe"
-    } else {
-        "ffmpeg"
-    };
-    let dest_bin = dest_dir.join(dest_name);
-
-    if tokio::fs::try_exists(&dest_bin).await.unwrap_or(false) {
-        tokio::fs::remove_file(&dest_bin).await.ok();
-    }
 
     progress
         .update("moving", 0, None, "正在安装到工具目录…")
         .await;
     check_cancelled()?;
 
-    tokio::fs::copy(&bin_src, &dest_bin)
+    install_extracted_tree(&payload_root, &dest_dir)
         .await
-        .with_context(|| format!("复制 ffmpeg 到 {} 失败", dest_bin.display()))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::Permissions::from_mode(0o755);
-        std::fs::set_permissions(&dest_bin, mode).ok();
-    }
+        .with_context(|| format!("安装 FFmpeg 到 {} 失败", dest_dir.display()))?;
 
     tokio::fs::remove_file(&archive_path).await.ok();
-    tokio::fs::remove_dir_all(&extract_dir).await.ok();
+    if tokio::fs::try_exists(&extract_dir).await.unwrap_or(false) {
+        tokio::fs::remove_dir_all(&extract_dir).await.ok();
+    }
 
     progress
         .update(
             "done",
             0,
             None,
-            format!("已安装到 {}", dest_bin.display()),
+            format!("已安装到 {}", dest_dir.display()),
         )
         .await;
 

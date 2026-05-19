@@ -106,7 +106,7 @@ function PageComponent() {
   return (
     <PageContainer
       title="任务管理"
-      subTitle="查看 Taskmill 调度队列、控制任务生命周期；可按类型筛选。"
+      subTitle="应用启动后调度默认暂停，请点击「恢复任务调度」后再执行任务；可按类型筛选。"
     >
       <div className="flex flex-col gap-4">
         <Space wrap>

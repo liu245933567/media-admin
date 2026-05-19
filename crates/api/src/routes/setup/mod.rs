@@ -6,8 +6,8 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use ma_service::setup_download::{
     DownloadJobStartRes, FfmpegDownloadStartReq, FfmpegSetupStatusRes, WhisperDownloadStartReq,
-    WhisperModelsListRes, enqueue_ffmpeg_setup_download, enqueue_whisper_model_download,
-    ffmpeg_setup_status, list_whisper_models, submit_outcome_task_id,
+    WhisperModelsListRes, ffmpeg_setup_status, list_whisper_models, start_ffmpeg_setup_download,
+    start_whisper_model_download,
 };
 
 use crate::{AppState, StateRouter, error::AppError};
@@ -32,10 +32,9 @@ async fn whisper_download_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<WhisperDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {
-    let outcome = enqueue_whisper_model_download(&state.taskmill, body)
+    let task_id = start_whisper_model_download(&state.taskmill, body)
         .await
         .map_err(map_setup_download_error)?;
-    let task_id = submit_outcome_task_id(outcome).map_err(map_setup_download_error)?;
     Ok(Json(DownloadJobStartRes {
         job_id: task_id.to_string(),
     }))
@@ -46,10 +45,9 @@ async fn ffmpeg_download_handler(
     WithRejection(Json(body), _): WithRejection<Json<FfmpegDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {
     let _ = body;
-    let outcome = enqueue_ffmpeg_setup_download(&state.taskmill)
+    let task_id = start_ffmpeg_setup_download(&state.taskmill)
         .await
         .map_err(map_setup_download_error)?;
-    let task_id = submit_outcome_task_id(outcome).map_err(map_setup_download_error)?;
     Ok(Json(DownloadJobStartRes {
         job_id: task_id.to_string(),
     }))

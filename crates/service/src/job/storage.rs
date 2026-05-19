@@ -182,6 +182,10 @@ impl TaskmillRuntime {
             });
         }
 
+        // 应用启动时不自动派发队列中的任务，由用户在任务页手动「恢复任务调度」。
+        scheduler.pause_all().await;
+        tracing::info!("taskmill 调度器已默认暂停，待用户手动恢复后才开始执行任务");
+
         Ok(Self {
             scheduler,
             domain,

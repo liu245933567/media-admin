@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub whisper_engine_config: WhisperEngineConfig,
     pub whisper_transcribe_config: WhisperTranscribeConfig,
     pub translate_config: SubtitleTranslateConfig,
+    /// 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。
+    #[serde(default)]
     pub stash_config: StashConnectConfig,
 }
 

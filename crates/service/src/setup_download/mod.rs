@@ -10,7 +10,8 @@ pub(crate) mod whisper;
 pub use catalog::whisper_catalog;
 pub use status::{ffmpeg_setup_status, list_whisper_models};
 pub use submit::{
-    enqueue_ffmpeg_setup_download, enqueue_whisper_model_download, submit_outcome_task_id,
+    enqueue_ffmpeg_setup_download, enqueue_whisper_model_download, start_ffmpeg_setup_download,
+    start_whisper_model_download, submit_outcome_task_id,
 };
 pub use types::{
     DownloadJobStartRes, DownloadProgressSnapshot, FfmpegDownloadStartReq, FfmpegSetupStatusRes,

@@ -8,6 +8,8 @@ use std::{
 };
 use typeshare::typeshare;
 
+use crate::media_paths::is_video_file;
+
 #[typeshare]
 #[derive(Debug, Deserialize)]
 pub struct VideoFolderScanReq {
@@ -130,14 +132,6 @@ pub async fn scan_video_folder(params: VideoFolderScanReq) -> Result<VideoFolder
     items.sort_by(|a, b| a.video_path.cmp(&b.video_path));
 
     Ok(VideoFolderScanRes { items })
-}
-
-fn is_video_file(path: &Path) -> bool {
-    match ext_lower(path) {
-        Some("mp4") | Some("mkv") | Some("mov") | Some("avi") | Some("webm") | Some("flv")
-        | Some("m4v") | Some("ts") | Some("wmv") | Some("m2ts") | Some("mts") => true,
-        _ => false,
-    }
 }
 
 fn is_subtitle_file(path: &Path) -> bool {

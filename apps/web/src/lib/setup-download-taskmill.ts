@@ -1,4 +1,4 @@
-import type { TaskmillJobSnapshot } from '@/types'
+import type { TaskmillJobSnapshot, TaskmillTaskRecord } from '@/types'
 import type { TaskmillTaskHistoryRecord } from '@/types/taskmill-history'
 
 /** 设置页下载任务在 UI 上的进度形态。 */
@@ -23,9 +23,35 @@ export function uiProgressPercent(p: SetupDownloadUiProgress | null): number | u
   return undefined
 }
 
+/** 从活跃任务记录解析排队/运行中的进度（快照仅含 running 列表）。 */
+export function mapSetupDownloadFromActiveRecord(
+  record: TaskmillTaskRecord,
+  snapshot?: TaskmillJobSnapshot,
+): SetupDownloadUiProgress {
+  if (record.status === 'running' && snapshot) {
+    const fromSnap = mapSetupDownloadFromSnapshot(snapshot, record.id)
+    if (fromSnap) {
+      return fromSnap
+    }
+  }
+
+  const statusHint: Record<TaskmillTaskRecord['status'], string> = {
+    pending: '已入队，等待执行…',
+    running: record.label || '正在下载…',
+    paused: '任务已暂停',
+    waiting: '等待子任务…',
+    blocked: '等待依赖…',
+  }
+
+  return {
+    status: 'running',
+    message: statusHint[record.status] ?? record.label,
+  }
+}
+
 /**
  * 从调度快照解析指定任务的运行中进度。
- * 任务不在 `running` 中时返回 `null`（应改查 history）。
+ * 任务不在 `running` 中时返回 `null`（应改查 history 或活跃列表）。
  */
 export function mapSetupDownloadFromSnapshot(
   snapshot: TaskmillJobSnapshot,

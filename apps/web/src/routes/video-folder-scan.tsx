@@ -4,7 +4,7 @@ import { SearchOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { useMutation } from '@tanstack/react-query'
 
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { App, Button, Input, List, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
@@ -12,25 +12,7 @@ import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-
 import { SubtitleWebModal } from '@/components/subtitle-web-modal'
 import { fetchFsDeleteSubtitleApi, scanVideoFolder } from '@/request'
 import { formatBytes } from '@/utils'
-
-function getParentPath(videoPath: string): string {
-  const i1 = videoPath.lastIndexOf('/')
-  const i2 = videoPath.lastIndexOf('\\')
-  const i = Math.max(i1, i2)
-  if (i < 0)
-    return ''
-  return videoPath.slice(0, i)
-}
-
-function joinVideoDir(videoPath: string, filename: string): string {
-  const i1 = videoPath.lastIndexOf('/')
-  const i2 = videoPath.lastIndexOf('\\')
-  const i = Math.max(i1, i2)
-  if (i < 0)
-    return filename
-  const base = videoPath.slice(0, i + 1)
-  return `${base}${filename}`
-}
+import { getParentPath, joinVideoDir } from '@/utils/video-path'
 
 function DeleteSubtitleButton({ videoPath, subtitleName, onDeleted }: { videoPath: string, subtitleName: string, onDeleted?: () => void }) {
   const { message } = App.useApp()
@@ -259,35 +241,54 @@ function PageComponent() {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
-      render: (_, { video_path }, _index, action) => [
-        <Button
-          key="enqueue"
-          type="link"
-          className="m-0! p-0!"
-          onClick={() => openSubtitleCreateSingle(video_path)}
-        >
-          生成字幕
-        </Button>,
-        <SubtitleWebModal
-          key="subtitle-web"
-          videoPath={video_path}
-          trigger={({ setOpen }) => (
-            <Tooltip title="查询网络字幕">
-              <Button
-                type="link"
-                className="m-0! p-0!"
-                onClick={() => setOpen(true)}
-              >
-                查询网络字幕
-              </Button>
-            </Tooltip>
-          )}
-          onDownloaded={() => {
-            action?.reload()
-          }}
-        />,
-      ],
+      width: 240,
+      render: (_, { video_path, subtitle_names }, _index, action) => {
+        const subtitleList = subtitle_names ?? []
+        const playSearch: {
+          videoPath: string
+          subtitles?: string
+        } = { videoPath: video_path }
+        if (subtitleList.length > 0)
+          playSearch.subtitles = subtitleList.join(',')
+
+        return [
+          <Link
+            key="play"
+            to="/video-play"
+            search={playSearch}
+          >
+            <Button type="link" className="m-0! p-0!">
+              播放
+            </Button>
+          </Link>,
+          <Button
+            key="enqueue"
+            type="link"
+            className="m-0! p-0!"
+            onClick={() => openSubtitleCreateSingle(video_path)}
+          >
+            生成字幕
+          </Button>,
+          <SubtitleWebModal
+            key="subtitle-web"
+            videoPath={video_path}
+            trigger={({ setOpen }) => (
+              <Tooltip title="查询网络字幕">
+                <Button
+                  type="link"
+                  className="m-0! p-0!"
+                  onClick={() => setOpen(true)}
+                >
+                  查询网络字幕
+                </Button>
+              </Tooltip>
+            )}
+            onDownloaded={() => {
+              action?.reload()
+            }}
+          />,
+        ]
+      },
     },
   ], [openSubtitleCreateSingle])
 
