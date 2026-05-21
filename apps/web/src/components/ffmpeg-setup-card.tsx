@@ -187,7 +187,7 @@ export function FfmpegSetupCard() {
           : null}
         {ffmpegProgress
           ? (
-              <div className="rounded border border-neutral-200 bg-neutral-50 p-3">
+              <div className="rounded border border-neutral-200 p-3">
                 <Progress
                   percent={uiProgressPercent(ffmpegProgress)}
                   status={ffmpegProgress.status === 'error' ? 'exception' : 'active'}

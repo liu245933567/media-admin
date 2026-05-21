@@ -1,7 +1,68 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WebviewUrl, WebviewWindowBuilder,
+};
+
+const MAIN_WINDOW_LABEL: &str = "main";
+const TRAY_ID: &str = "main-tray";
+const MENU_SHOW: &str = "show";
+const MENU_QUIT: &str = "quit";
+
+/// 显示并聚焦主窗口。
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// 创建系统托盘图标与菜单。
+fn setup_system_tray(app: &tauri::AppHandle) -> Result<(), String> {
+    let show_item =
+        MenuItem::with_id(app, MENU_SHOW, "显示主窗口", true, None::<&str>)
+            .map_err(|e| format!("tray menu show: {e}"))?;
+    let quit_item = MenuItem::with_id(app, MENU_QUIT, "退出", true, None::<&str>)
+        .map_err(|e| format!("tray menu quit: {e}"))?;
+    let menu = Menu::with_items(app, &[&show_item, &quit_item])
+        .map_err(|e| format!("tray menu: {e}"))?;
+
+    let mut tray_builder = TrayIconBuilder::with_id(TRAY_ID)
+        .tooltip("Media Admin")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            MENU_SHOW => show_main_window(app),
+            MENU_QUIT => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon() {
+        tray_builder = tray_builder.icon(icon.clone());
+    }
+
+    tray_builder
+        .build(app)
+        .map_err(|e| format!("tray icon: {e}"))?;
+
+    Ok(())
+}
 
 /// 从 `http://host:port/...` 得到 `host:port`，供 `TcpStream::connect` 使用。
 fn tcp_addr_from_http_url(web_url: &str) -> Option<String> {
@@ -68,6 +129,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tracing_plugin)
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == MAIN_WINDOW_LABEL {
+                    let _ = window.hide();
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
             let listen = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:3000".to_string());
 
@@ -85,9 +154,11 @@ pub fn run() {
             #[cfg(debug_assertions)]
             wait_for_dev_server(&web_url)?;
 
+            setup_system_tray(app.handle())?;
+
             WebviewWindowBuilder::new(
                 app,
-                "main",
+                MAIN_WINDOW_LABEL,
                 WebviewUrl::External(
                     web_url
                         .parse()

@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
+use ma_whisper::types::WhisperTranscribeItem;
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -18,6 +19,7 @@ use futures::stream::{self, StreamExt};
 use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
 
 use crate::file::{SrtEntry, build_srt, parse_srt};
+use crate::segment_filter::is_translatable_segment;
 use crate::types::SubtitleTranslateConfig;
 
 /// 单条翻译请求的最长等待时间（含网络 + 服务端推理）
@@ -47,6 +49,7 @@ const LOG_TEXT_MAX_CHARS: usize = 80;
 const KNOWN_LANG_CODES: &[&str] = &["zh", "en", "ja", "ko", "fr", "de", "es", "ru", "tr"];
 
 /// OpenAI 兼容翻译客户端与模型配置
+#[derive(Clone)]
 struct TranslateCtx {
     client: Arc<Client<OpenAIConfig>>,
     model: String,
@@ -257,7 +260,7 @@ fn map_openai_translate_err(e: OpenAIError) -> anyhow::Error {
     }
 }
 
-fn is_fatal_translate_err(e: &anyhow::Error) -> bool {
+pub fn is_fatal_translate_err(e: &anyhow::Error) -> bool {
     format!("{e:#}").contains(TRANSLATE_TASK_FATAL_MARKER)
 }
 
@@ -388,6 +391,81 @@ fn strip_translation_prefix(s: &str) -> String {
         .to_string()
 }
 
+/// 在内存中翻译 Whisper 识别条目（保留时间戳，仅替换 `text`）。
+pub async fn translate_whisper_items(
+    items: &mut [WhisperTranscribeItem],
+    options: &SubtitleTranslateConfig,
+) -> Result<()> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let ctx = TranslateCtx::new(options)?;
+    let batch_size = options.batch_size.max(1) as usize;
+    let concurrency = options.concurrency.max(1) as usize;
+
+    let work_items: Vec<(usize, String)> = items
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| is_translatable_segment(e))
+        .map(|(i, e)| (i, e.text.clone()))
+        .collect();
+
+    if work_items.is_empty() {
+        return Ok(());
+    }
+
+    tracing::info!(
+        "开始翻译识别条目: {} 条 (待译 {}) -> {} (model={}, batch_size={}, concurrency={})",
+        items.len(),
+        work_items.len(),
+        ctx.target_language,
+        ctx.model,
+        batch_size,
+        concurrency
+    );
+
+    let translated = run_translate_work(&ctx, work_items, batch_size, concurrency).await?;
+    let (ok, fail) = apply_whisper_translation_results(items, translated)?;
+    tracing::info!("识别条目翻译完成: 成功 {}, 失败 {}", ok, fail);
+    Ok(())
+}
+
+/// 将翻译结果写回 [`WhisperTranscribeItem`] 列表。
+fn apply_whisper_translation_results(
+    items: &mut [WhisperTranscribeItem],
+    translated: Vec<(usize, Result<String>)>,
+) -> Result<(usize, usize)> {
+    let mut ok = 0usize;
+    let mut fail = 0usize;
+
+    for (i, res) in translated {
+        match res {
+            Ok(t) => {
+                let cleaned = t.trim();
+                if cleaned.is_empty() && !items[i].text.trim().is_empty() {
+                    fail += 1;
+                    tracing::warn!("第 {} 条翻译返回空内容，保留原文", i + 1);
+                    items[i].text = format!("[未翻译] {}", items[i].text.trim());
+                } else {
+                    items[i].text = cleaned.to_string();
+                    ok += 1;
+                }
+            }
+            Err(e) => {
+                if is_fatal_translate_err(&e) {
+                    return Err(e).context(format!("字幕翻译在第 {} 条处中止", i + 1));
+                }
+                fail += 1;
+                tracing::warn!("第 {} 条翻译失败，保留原文: {:#}", i + 1, e);
+                items[i].text = format!("[未翻译] {}", items[i].text.trim());
+            }
+        }
+    }
+
+    Ok((ok, fail))
+}
+
 /// 翻译 SRT 文件，保留时间戳与条目顺序，写出新的 SRT 文件。
 pub async fn translate_srt_file(
     src_srt: &Path,
@@ -411,7 +489,11 @@ pub async fn translate_srt_file(
     let work_items: Vec<(usize, String)> = entries
         .iter()
         .enumerate()
-        .filter(|(_, e)| !e.text.trim().is_empty())
+        .filter(|(_, e)| {
+            let dur_cs = 100i64;
+            !e.text.trim().is_empty()
+                && !crate::segment_filter::is_meaningless_segment(&e.text, dur_cs)
+        })
         .map(|(i, e)| (i, e.text.clone()))
         .collect();
 
@@ -445,6 +527,157 @@ pub async fn translate_srt_file(
     }
 
     Ok(dst)
+}
+
+/// 与识别并行：收到 `notify` 时扫描新增条目并提交翻译，结果写回 `segments` 的 `text`。
+pub async fn overlap_translate_whisper_segments(
+    segments: Arc<Mutex<Vec<WhisperTranscribeItem>>>,
+    mut notify: tokio::sync::mpsc::UnboundedReceiver<()>,
+    options: SubtitleTranslateConfig,
+) -> Result<()> {
+    let ctx = TranslateCtx::new(&options)?;
+    let batch_size = options.batch_size.max(1) as usize;
+    let concurrency = options.concurrency.max(1) as usize;
+    let mut scheduled_until = 0usize;
+    let mut in_flight: futures::stream::FuturesUnordered<
+        tokio::task::JoinHandle<Result<Vec<(usize, Result<String>)>>>,
+    > = futures::stream::FuturesUnordered::new();
+
+    loop {
+        tokio::select! {
+            msg = notify.recv() => {
+                if msg.is_none() {
+                    break;
+                }
+                while notify.try_recv().is_ok() {}
+            }
+            Some(join_res) = in_flight.next(), if !in_flight.is_empty() => {
+                let batch_results = join_res.context("翻译批任务 join 失败")??;
+                let mut segs = segments.lock().expect("segments lock");
+                apply_whisper_translation_results(&mut segs, batch_results)?;
+            }
+            else => {
+                tokio::task::yield_now().await;
+            }
+        }
+        schedule_overlap_batches(
+            &segments,
+            &mut scheduled_until,
+            &ctx,
+            batch_size,
+            concurrency,
+            &mut in_flight,
+            true,
+        )?;
+    }
+
+    finish_overlap_translation(
+        &segments,
+        &mut scheduled_until,
+        &ctx,
+        batch_size,
+        concurrency,
+        &mut in_flight,
+    )
+    .await?;
+
+    Ok(())
+}
+
+/// 识别结束后：循环「入队 → 等待全部完成」直至无待译条目，避免长视频后半段漏翻。
+async fn finish_overlap_translation(
+    segments: &Arc<Mutex<Vec<WhisperTranscribeItem>>>,
+    scheduled_until: &mut usize,
+    ctx: &TranslateCtx,
+    batch_size: usize,
+    concurrency: usize,
+    in_flight: &mut futures::stream::FuturesUnordered<
+        tokio::task::JoinHandle<Result<Vec<(usize, Result<String>)>>>,
+    >,
+) -> Result<()> {
+    loop {
+        schedule_overlap_batches(
+            segments,
+            scheduled_until,
+            ctx,
+            batch_size,
+            concurrency,
+            in_flight,
+            false,
+        )?;
+
+        while let Some(join_res) = in_flight.next().await {
+            let batch_results = join_res.context("翻译批任务 join 失败")??;
+            let mut segs = segments.lock().expect("segments lock");
+            apply_whisper_translation_results(&mut segs, batch_results)?;
+        }
+
+        if collect_whisper_translate_work(segments, *scheduled_until).is_empty() {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+/// `require_full_batch` 为 true 时仅当待译条数 ≥ `batch_size` 才提交（识别过程中）；收尾阶段提交全部剩余。
+fn schedule_overlap_batches(
+    segments: &Arc<Mutex<Vec<WhisperTranscribeItem>>>,
+    scheduled_until: &mut usize,
+    ctx: &TranslateCtx,
+    batch_size: usize,
+    concurrency: usize,
+    in_flight: &mut futures::stream::FuturesUnordered<
+        tokio::task::JoinHandle<Result<Vec<(usize, Result<String>)>>>,
+    >,
+    require_full_batch: bool,
+) -> Result<()> {
+    let work = collect_whisper_translate_work(segments, *scheduled_until);
+    if work.is_empty() {
+        return Ok(());
+    }
+    if require_full_batch && work.len() < batch_size {
+        return Ok(());
+    }
+
+    let total = work.len();
+    let batches: Vec<Vec<(usize, String)>> = work.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let done = Arc::new(AtomicUsize::new(0));
+    let total_batches = batches.len();
+    let mut last_scheduled_idx: Option<usize> = None;
+
+    for (bi, batch) in batches.into_iter().enumerate() {
+        if in_flight.len() >= concurrency {
+            break;
+        }
+        if let Some((idx, _)) = batch.last() {
+            last_scheduled_idx = Some(*idx);
+        }
+        let ctx = ctx.clone();
+        let done = done.clone();
+        in_flight.push(tokio::spawn(async move {
+            process_translate_batch(&ctx, bi, total_batches, batch, &done, total).await
+        }));
+    }
+
+    if let Some(idx) = last_scheduled_idx {
+        *scheduled_until = idx + 1;
+    }
+    Ok(())
+}
+
+fn collect_whisper_translate_work(
+    segments: &Arc<Mutex<Vec<WhisperTranscribeItem>>>,
+    scheduled_until: usize,
+) -> Vec<(usize, String)> {
+    let segs = segments.lock().expect("segments lock");
+    let mut work = Vec::new();
+    for i in scheduled_until..segs.len() {
+        if is_translatable_segment(&segs[i]) {
+            work.push((i, segs[i].text.clone()));
+        }
+    }
+    work
 }
 
 /// 并发翻译字幕条目；按 `batch_size` 分块，批失败时回退为逐条翻译。
@@ -622,7 +855,8 @@ fn clip_for_log(s: &str) -> String {
     }
 }
 
-fn default_translated_path(src: &Path, target_language: &str) -> PathBuf {
+/// 根据源 SRT 路径与目标语言计算译文 SRT 路径。
+pub fn default_translated_path(src: &Path, target_language: &str) -> PathBuf {
     let code = language_short_code(target_language);
     let stem = src
         .file_stem()

@@ -1,6 +1,7 @@
 import type {
   SubtitleGenerateConfig,
   SubtitleGenerateReq,
+  SubtitleTranslateConfig,
   VadConfig,
   VideoFolderScanItem,
 } from '@/types/api'
@@ -39,6 +40,17 @@ const DEFAULT_VAD_CONFIG: VadConfig = {
   padding_ms: 300,
   min_speech_ms: 200,
   max_segment_ms: 30_000,
+}
+
+/** 继承全局翻译：空字段由服务端 merge；`translate_config` 缺省/`None` 表示本任务不翻译 */
+const INHERIT_TRANSLATE_CONFIG: SubtitleTranslateConfig = {
+  base_url: '',
+  api_key: '',
+  model: '',
+  target_language: '',
+  concurrency: 0,
+  batch_size: 0,
+  remove_source_srt: false,
 }
 
 export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerFormProps) {
@@ -136,7 +148,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
       const translate_config = !enableTranslate
         ? undefined
         : inheritTranslate
-          ? undefined
+          ? INHERIT_TRANSLATE_CONFIG
           : rest.translate_config ?? d?.translate_config
 
       return {

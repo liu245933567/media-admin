@@ -2,19 +2,34 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import type { VideoFolderScanItem } from '@/types/api'
 import { SearchOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { App, Button, Input, List, Popconfirm, Space, Table, Tooltip, Typography } from 'antd'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleWebModal } from '@/components/subtitle-web-modal'
-import { fetchFsDeleteSubtitleApi, scanVideoFolder } from '@/request'
+import { buildVideoPlaySearch } from '@/lib/video-play-search'
+import {
+  fetchFsDeleteSubtitleApi,
+  scanVideoFolder,
+  VIDEO_FOLDER_SCAN_GC_MS,
+  VIDEO_FOLDER_SCAN_STALE_MS,
+  videoFolderScanQueryKey,
+} from '@/request'
 import { formatBytes } from '@/utils'
 import { getParentPath, joinVideoDir } from '@/utils/video-path'
 
-function DeleteSubtitleButton({ videoPath, subtitleName, onDeleted }: { videoPath: string, subtitleName: string, onDeleted?: () => void }) {
+function DeleteSubtitleButton({
+  videoPath,
+  subtitleName,
+  onDeleted,
+}: {
+  videoPath: string
+  subtitleName: string
+  onDeleted?: () => void
+}) {
   const { message } = App.useApp()
 
   const subtitlePath = joinVideoDir(videoPath, subtitleName)
@@ -116,11 +131,51 @@ export const Route = createFileRoute('/video-folder-scan')({
   component: PageComponent,
 })
 
+const VIDEO_FOLDER_SCAN_ROOT_DIR_KEY = 'media-admin:video-folder-scan:root-dir'
+
+function loadPersistedRootDir(): string {
+  try {
+    return localStorage.getItem(VIDEO_FOLDER_SCAN_ROOT_DIR_KEY) ?? ''
+  }
+  catch {
+    return ''
+  }
+}
+
+function persistRootDir(value: string) {
+  try {
+    localStorage.setItem(VIDEO_FOLDER_SCAN_ROOT_DIR_KEY, value)
+  }
+  catch {
+    // 隐私模式 / 配额满时忽略
+  }
+}
+
 function PageComponent() {
   const actionRef = useRef<ActionType>(null)
   const { message } = App.useApp()
 
-  const [params, setParams] = useState<{ rootDir: string }>({ rootDir: '' })
+  const [rootDir, setRootDir] = useState(() => loadPersistedRootDir())
+
+  const scanQuery = useQuery({
+    queryKey: videoFolderScanQueryKey(rootDir),
+    queryFn: () => scanVideoFolder({ root_dir: rootDir.trim() }),
+    enabled: Boolean(rootDir.trim()),
+    staleTime: VIDEO_FOLDER_SCAN_STALE_MS,
+    gcTime: VIDEO_FOLDER_SCAN_GC_MS,
+  })
+
+  const listData = scanQuery.data?.items ?? []
+
+  useEffect(() => {
+    if (scanQuery.isError) {
+      message.error(scanQuery.error.message ?? '查询失败')
+    }
+  }, [scanQuery.isError, scanQuery.error, message])
+
+  const reloadList = useCallback(() => {
+    void scanQuery.refetch()
+  }, [scanQuery])
 
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
@@ -171,9 +226,7 @@ function PageComponent() {
                     key="delete"
                     videoPath={row.video_path}
                     subtitleName={name}
-                    onDeleted={() => {
-                      actionRef.current?.reload()
-                    }}
+                    onDeleted={reloadList}
                   />,
                 ]}
               >
@@ -186,7 +239,7 @@ function PageComponent() {
         />
       )
     },
-  }), [])
+  }), [reloadList])
 
   const columns = useMemo<ProColumns<VideoFolderScanItem>[]>(() => [
     {
@@ -242,14 +295,9 @@ function PageComponent() {
       title: '操作',
       valueType: 'option',
       width: 240,
-      render: (_, { video_path, subtitle_names }, _index, action) => {
-        const subtitleList = subtitle_names ?? []
-        const playSearch: {
-          videoPath: string
-          subtitles?: string
-        } = { videoPath: video_path }
-        if (subtitleList.length > 0)
-          playSearch.subtitles = subtitleList.join(',')
+      render: (_, row) => {
+        const { video_path } = row
+        const playSearch = buildVideoPlaySearch(row, rootDir)
 
         return [
           <Link
@@ -283,14 +331,12 @@ function PageComponent() {
                 </Button>
               </Tooltip>
             )}
-            onDownloaded={() => {
-              action?.reload()
-            }}
+            onDownloaded={reloadList}
           />,
         ]
       },
     },
-  ], [openSubtitleCreateSingle])
+  ], [openSubtitleCreateSingle, rootDir, reloadList])
 
   return (
     <PageContainer title={false}>
@@ -310,17 +356,15 @@ function PageComponent() {
         rowKey="video_path"
         actionRef={actionRef}
         search={false}
-        params={params}
-        request={async (params) => {
-          const res = await scanVideoFolder({ root_dir: params.rootDir })
-          return {
-            data: res.items,
-            success: true,
-          }
+        dataSource={listData}
+        loading={scanQuery.isFetching}
+        options={{
+          reload: () => reloadList(),
+          density: false,
+          setting: false,
         }}
-        options={{ reload: false, density: false, setting: false }}
         expandable={expandable}
-        manualRequest
+        manualRequest={!rootDir.trim()}
         rowSelection={{}}
         pagination={{ pageSize: 20, showSizeChanger: true }}
         toolBarRender={(_action, { selectedRows }) => [
@@ -333,13 +377,14 @@ function PageComponent() {
             批量字幕生成
           </Button>,
         ]}
-        onRequestError={(error) => {
-          message.error(error.message ?? '查询失败')
-        }}
         toolbar={{
           search: {
+            placeholder: '输入视频根目录',
+            value: rootDir,
             onSearch: (value) => {
-              setParams(prev => ({ ...prev, rootDir: value }))
+              const next = value.trim()
+              persistRootDir(next)
+              setRootDir(next)
             },
           },
         }}

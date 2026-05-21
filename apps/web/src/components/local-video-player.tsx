@@ -1,9 +1,15 @@
 import type Player from 'video.js/dist/types/player'
 import type VjsHtmlTrackElement from 'video.js/dist/types/tracks/html-track-element'
-import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Progress, Select, Spin } from 'antd'
+import type { VideoJsPlaylistNavOptions } from '@/lib/videojs-playlist-controls'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import { Alert, Button, Progress, Spin } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import videojs from 'video.js'
+import {
+  ensureVideoJsPlaylistButtons,
+  refreshSubsCapsButton,
+  syncVideoJsPlaylistButtons,
+} from '@/lib/videojs-playlist-controls'
 import {
   buildLocalVideoSrc,
   buildTranscodedVideoSrc,
@@ -14,7 +20,7 @@ import {
 } from '@/request'
 import { VideoTranscodePhase } from '@/types/api'
 import { createSubtitleBlobUrl } from '@/utils/srt-to-vtt'
-import { getFileName, getFileStem } from '@/utils/video-path'
+import { resolveDefaultChineseSubtitlePath } from '@/utils/subtitle-track'
 import 'video.js/dist/video-js.css'
 
 export interface LocalSubtitleTrack {
@@ -27,52 +33,49 @@ export interface LocalVideoPlayerProps {
   subtitleTracks: LocalSubtitleTrack[]
   /** 默认选中的字幕文件名（非完整路径） */
   defaultSubtitleLabel?: string
-}
-
-function resolveDefaultTrackPath(
-  videoPath: string,
-  tracks: LocalSubtitleTrack[],
-  preferredLabel?: string,
-): string | undefined {
-  if (!tracks.length)
-    return undefined
-  if (preferredLabel) {
-    const hit = tracks.find(t => t.label === preferredLabel)
-    if (hit)
-      return hit.path
-  }
-  const videoStem = getFileStem(getFileName(videoPath))
-  const sameStem = tracks.find(t => getFileStem(t.label) === videoStem)
-  return (sameStem ?? tracks[0]).path
+  /** 铺满父容器（播放页全屏） */
+  fillViewport?: boolean
+  /** 写入 video.js 控制栏的上一集 / 下一集（有值时显示原生底部按钮） */
+  playlistNav?: VideoJsPlaylistNavOptions
 }
 
 /** video.js 的 HTMLTrackElement（与 DOM 同名类型区分），挂载后通过 `.track` 控制字幕 */
 type RemoteTextTrackHandle = VjsHtmlTrackElement & { track: Pick<TextTrack, 'mode'> }
 
-function detachRemoteSubtitle(
-  player: Player,
-  trackElRef: React.RefObject<RemoteTextTrackHandle | null>,
+/** 将当前应显示的字幕轨设为 showing，其余 hidden（供原生 CC 菜单与默认轨共用） */
+function applySubtitleTrackMode(
+  attached: Map<string, RemoteTextTrackHandle>,
+  activePath: string | undefined,
 ) {
-  const el = trackElRef.current
-  if (!el)
-    return
-  player.removeRemoteTextTrack(el)
-  trackElRef.current = null
+  for (const [path, handle] of attached) {
+    handle.track.mode = activePath && path === activePath ? 'showing' : 'hidden'
+  }
+}
+
+function clearAttachedSubtitleTracks(
+  player: Player,
+  attached: Map<string, RemoteTextTrackHandle>,
+) {
+  for (const handle of attached.values())
+    player.removeRemoteTextTrack(handle)
+  attached.clear()
 }
 
 export function LocalVideoPlayer({
   videoPath,
   subtitleTracks,
   defaultSubtitleLabel,
+  fillViewport = false,
+  playlistNav,
 }: LocalVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const playerRef = useRef<Player | null>(null)
-  const subtitleBlobRef = useRef<string | null>(null)
-  const remoteSubtitleElRef = useRef<RemoteTextTrackHandle | null>(null)
+  const subtitleBlobUrlsRef = useRef<Map<string, string>>(new Map())
+  const attachedSubtitleTracksRef = useRef<Map<string, RemoteTextTrackHandle>>(new Map())
   const transcodeStartRequested = useRef(false)
 
   const initialTrackPath = useMemo(
-    () => resolveDefaultTrackPath(videoPath, subtitleTracks, defaultSubtitleLabel),
+    () => resolveDefaultChineseSubtitlePath(videoPath, subtitleTracks, defaultSubtitleLabel),
     [videoPath, subtitleTracks, defaultSubtitleLabel],
   )
 
@@ -85,11 +88,6 @@ export function LocalVideoPlayer({
   useEffect(() => {
     transcodeStartRequested.current = false
   }, [videoPath])
-
-  const activeTrack = useMemo(
-    () => subtitleTracks.find(t => t.path === activeTrackPath),
-    [subtitleTracks, activeTrackPath],
-  )
 
   const probeQuery = useQuery({
     queryKey: ['video-playback-probe', videoPath],
@@ -132,16 +130,41 @@ export function LocalVideoPlayer({
     return undefined
   }, [probeQuery.isSuccess, needsTranscode, videoPath, transcodeStatusQuery.data?.phase])
 
-  const subtitleQuery = useQuery({
-    queryKey: ['local-video-subtitle', activeTrackPath],
-    enabled: Boolean(activeTrackPath),
-    queryFn: async () => {
-      if (!activeTrackPath)
-        return null
-      const res = await fetchFsReadText({ path: activeTrackPath })
-      return createSubtitleBlobUrl(activeTrackPath, res.content)
-    },
+  /** 预加载同目录全部字幕，供 video.js 原生 CC 菜单切换 */
+  const subtitleBlobQueries = useQueries({
+    queries: subtitleTracks.map(track => ({
+      queryKey: ['local-video-subtitle', track.path] as const,
+      queryFn: async () => {
+        const res = await fetchFsReadText({ path: track.path })
+        return createSubtitleBlobUrl(track.path, res.content)
+      },
+      staleTime: 5 * 60 * 1000,
+    })),
   })
+
+  const subtitleBlobByPath = useMemo(() => {
+    const map = new Map<string, string>()
+    subtitleTracks.forEach((track, index) => {
+      const url = subtitleBlobQueries[index]?.data
+      if (url)
+        map.set(track.path, url)
+    })
+    return map
+  }, [subtitleTracks, subtitleBlobQueries])
+
+  /** 仅在组件卸载时销毁 player（勿在 playbackSrc 暂空时 dispose，否则换集后无法在同一 video 节点上重建） */
+  useEffect(() => {
+    return () => {
+      for (const url of subtitleBlobUrlsRef.current.values())
+        URL.revokeObjectURL(url)
+      subtitleBlobUrlsRef.current.clear()
+      if (playerRef.current) {
+        clearAttachedSubtitleTracks(playerRef.current, attachedSubtitleTracksRef.current)
+        playerRef.current.dispose()
+        playerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const el = videoRef.current
@@ -151,153 +174,225 @@ export function LocalVideoPlayer({
     let player = playerRef.current
     if (!player) {
       player = videojs(el, {
-        fluid: true,
+        fluid: !fillViewport,
+        fill: fillViewport,
         controls: true,
         preload: 'auto',
         sources: [{ src: playbackSrc, type: 'video/mp4' }],
       })
+      if (fillViewport) {
+        player.addClass('vjs-always-show-controls')
+      }
       playerRef.current = player
     }
     else {
       player.src({ src: playbackSrc, type: 'video/mp4' })
     }
-
-    return () => {
-      if (subtitleBlobRef.current) {
-        URL.revokeObjectURL(subtitleBlobRef.current)
-        subtitleBlobRef.current = null
-      }
-      if (playerRef.current) {
-        detachRemoteSubtitle(playerRef.current, remoteSubtitleElRef)
-        playerRef.current.dispose()
-        playerRef.current = null
-      }
-    }
-  }, [playbackSrc])
+  }, [playbackSrc, fillViewport, playlistNav])
 
   useEffect(() => {
     const player = playerRef.current
-    if (!player)
+    if (!player || !playbackSrc)
+      return
+    ensureVideoJsPlaylistButtons(player, playlistNav)
+    syncVideoJsPlaylistButtons(player, playlistNav)
+  }, [playlistNav, playbackSrc])
+
+  /** 将全部已加载字幕注册为 remote text tracks，原生 CC 按钮才能列出并切换 */
+  useEffect(() => {
+    const player = playerRef.current
+    if (!player || !playbackSrc)
       return
 
-    detachRemoteSubtitle(player, remoteSubtitleElRef)
+    let cancelled = false
 
-    if (subtitleBlobRef.current) {
-      URL.revokeObjectURL(subtitleBlobRef.current)
-      subtitleBlobRef.current = null
+    const syncRemoteTracks = () => {
+      if (cancelled)
+        return
+
+      const attached = attachedSubtitleTracksRef.current
+      const knownPaths = new Set(subtitleTracks.map(t => t.path))
+
+      for (const path of [...attached.keys()]) {
+        if (!knownPaths.has(path)) {
+          player.removeRemoteTextTrack(attached.get(path)!)
+          attached.delete(path)
+        }
+      }
+
+      for (const [index, track] of subtitleTracks.entries()) {
+        const blobUrl = subtitleBlobByPath.get(track.path)
+        if (!blobUrl || attached.has(track.path))
+          continue
+
+        subtitleBlobUrlsRef.current.set(track.path, blobUrl)
+        // 每条轨需唯一 srclang，且勿设 default，否则 CC 菜单会把同语言多条都标为选中
+        const trackEl = player.addRemoteTextTrack(
+          {
+            kind: 'subtitles',
+            src: blobUrl,
+            srclang: `sub-${index}`,
+            label: track.label,
+            default: false,
+          },
+          false,
+        ) as RemoteTextTrackHandle
+        trackEl.track.mode = track.path === activeTrackPath ? 'showing' : 'hidden'
+        attached.set(track.path, trackEl)
+      }
+
+      applySubtitleTrackMode(attached, activeTrackPath)
+      refreshSubsCapsButton(player)
     }
 
-    const blobUrl = subtitleQuery.data
-    if (!blobUrl || !activeTrack)
+    if (player.readyState() >= 1)
+      syncRemoteTracks()
+    else
+      player.ready(syncRemoteTracks)
+
+    return () => {
+      cancelled = true
+    }
+  }, [playbackSrc, subtitleTracks, subtitleBlobByPath, activeTrackPath])
+
+  /** 外部默认轨 / 表单变更时同步 mode（不拆除轨道，避免打断原生菜单） */
+  useEffect(() => {
+    if (!playerRef.current || !playbackSrc)
+      return
+    applySubtitleTrackMode(attachedSubtitleTracksRef.current, activeTrackPath)
+  }, [activeTrackPath, playbackSrc])
+
+  /** 原生 CC 菜单切换时回写 activeTrackPath */
+  useEffect(() => {
+    const player = playerRef.current
+    if (!player || !playbackSrc)
       return
 
-    subtitleBlobRef.current = blobUrl
-    const trackEl = player.addRemoteTextTrack(
-      {
-        kind: 'subtitles',
-        src: blobUrl,
-        srclang: 'zh',
-        label: activeTrack.label,
-        default: true,
-      },
-      false,
-    ) as RemoteTextTrackHandle
-    remoteSubtitleElRef.current = trackEl
-    trackEl.track.mode = 'showing'
-  }, [subtitleQuery.data, activeTrack])
+    const list = player.textTracks()
+    const onChange = () => {
+      let showingPath: string | undefined
+      for (const [path, handle] of attachedSubtitleTracksRef.current) {
+        if (handle.track.mode === 'showing') {
+          showingPath = path
+          break
+        }
+      }
+      setActiveTrackPath((prev) => {
+        if (prev === showingPath)
+          return prev
+        return showingPath
+      })
+    }
+
+    list.addEventListener('change', onChange)
+    return () => list.removeEventListener('change', onChange)
+  }, [playbackSrc, subtitleTracks])
 
   const transcodePhase = transcodeStatusQuery.data?.phase
   const showTranscodeProgress = needsTranscode
     && transcodePhase !== VideoTranscodePhase.Ready
     && transcodePhase !== VideoTranscodePhase.Failed
 
+  const alertClass = fillViewport
+    ? 'border-white/10 bg-zinc-900/90 text-white [&_.ant-alert-message]:text-white [&_.ant-alert-description]:text-white/70'
+    : ''
+
   return (
-    <div className="w-full max-w-5xl">
-      {probeQuery.isError && (
-        <Alert
-          type="error"
-          showIcon
-          className="mb-3"
-          title="无法分析视频"
-          description={probeQuery.error.message}
-        />
-      )}
-      {needsTranscode && transcodePhase === VideoTranscodePhase.Failed && (
-        <Alert
-          type="error"
-          showIcon
-          className="mb-3"
-          title="转码失败"
-          description={transcodeStatusQuery.data?.message ?? '请确认已安装 FFmpeg 后重试'}
-          action={(
-            <Button
-              size="small"
-              onClick={() => {
-                transcodeStartRequested.current = false
-                void startVideoTranscode({ path: videoPath }).then(() => {
-                  transcodeStartRequested.current = true
-                  void transcodeStatusQuery.refetch()
-                })
-              }}
-            >
-              重试
-            </Button>
+    <div
+      className={
+        fillViewport
+          ? 'flex h-full min-h-0 w-full flex-col'
+          : 'w-full max-w-5xl'
+      }
+    >
+      {(probeQuery.isError || (needsTranscode && transcodePhase === VideoTranscodePhase.Failed) || showTranscodeProgress) && (
+        <div
+          className={
+            fillViewport
+              ? 'absolute top-0 right-0 left-0 z-30 max-h-[40%] space-y-1 overflow-y-auto p-2'
+              : 'mb-3 space-y-3'
+          }
+        >
+          {probeQuery.isError && (
+            <Alert
+              type="error"
+              showIcon
+              className={alertClass}
+              title="无法分析视频"
+              description={probeQuery.error.message}
+            />
           )}
-        />
-      )}
-      {showTranscodeProgress && (
-        <div className="mb-3">
-          <p className="mb-2 text-sm text-gray-600">
-            {transcodeStatusQuery.data?.message ?? '正在准备转码…'}
-            {probeQuery.data?.video_codec && (
-              <span className="ml-2 text-gray-400">
-                (
-                {probeQuery.data.container ?? '未知容器'}
-                {' / '}
-                {probeQuery.data.video_codec}
-                )
-              </span>
-            )}
-          </p>
-          <Progress
-            percent={Math.round((transcodeStatusQuery.data?.progress ?? 0) * 100)}
-            status="active"
-          />
+          {needsTranscode && transcodePhase === VideoTranscodePhase.Failed && (
+            <Alert
+              type="error"
+              showIcon
+              className={alertClass}
+              title="转码失败"
+              description={transcodeStatusQuery.data?.message ?? '请确认已安装 FFmpeg 后重试'}
+              action={(
+                <Button
+                  size="small"
+                  onClick={() => {
+                    transcodeStartRequested.current = false
+                    void startVideoTranscode({ path: videoPath }).then(() => {
+                      transcodeStartRequested.current = true
+                      void transcodeStatusQuery.refetch()
+                    })
+                  }}
+                >
+                  重试
+                </Button>
+              )}
+            />
+          )}
+          {showTranscodeProgress && (
+            <div className={fillViewport ? 'rounded-lg bg-zinc-900/90 px-3 py-2 text-white' : ''}>
+              <p className={`mb-2 text-sm ${fillViewport ? 'text-white/80' : 'text-gray-600'}`}>
+                {transcodeStatusQuery.data?.message ?? '正在准备转码…'}
+                {probeQuery.data?.video_codec && (
+                  <span className={fillViewport ? 'ml-2 text-white/45' : 'ml-2 text-gray-400'}>
+                    (
+                    {probeQuery.data.container ?? '未知容器'}
+                    {' / '}
+                    {probeQuery.data.video_codec}
+                    )
+                  </span>
+                )}
+              </p>
+              <Progress
+                percent={Math.round((transcodeStatusQuery.data?.progress ?? 0) * 100)}
+                status="active"
+              />
+            </div>
+          )}
         </div>
       )}
-      <div data-vjs-player className="relative aspect-video w-full">
+      <div
+        data-vjs-player
+        className={
+          fillViewport
+            ? 'relative min-h-0 flex-1 overflow-hidden'
+            : 'relative aspect-video w-full'
+        }
+      >
         {!playbackSrc && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/5">
-            <Spin tip={needsTranscode ? '等待转码完成…' : '加载视频…'} />
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+            <Spin
+              tip={needsTranscode ? '等待转码完成…' : '加载视频…'}
+              className={fillViewport ? '[&_.ant-spin-text]:text-white/70!' : ''}
+            />
           </div>
         )}
         <video
           ref={videoRef}
-          className="video-js vjs-big-play-centered vjs-fluid"
+          className={
+            fillViewport
+              ? 'video-js vjs-big-play-centered h-full w-full'
+              : 'video-js vjs-big-play-centered vjs-fluid'
+          }
           playsInline
         />
       </div>
-      {subtitleTracks.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-gray-500">字幕</span>
-          <Select
-            allowClear
-            placeholder="选择字幕"
-            className="min-w-48"
-            value={activeTrackPath}
-            loading={subtitleQuery.isFetching}
-            disabled={!playbackSrc}
-            options={subtitleTracks.map(t => ({
-              value: t.path,
-              label: t.label,
-            }))}
-            onChange={(path) => {
-              setActiveTrackPath(path ?? undefined)
-            }}
-          />
-          {subtitleQuery.isFetching && <Spin size="small" />}
-        </div>
-      )}
     </div>
   )
 }

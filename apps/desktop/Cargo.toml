@@ -21,7 +21,7 @@ tauri-build = { version = "2.6.1", features = [] }
 [dependencies]
 dotenvy.workspace = true
 tracing.workspace = true
-tauri = { version = "2.11.1", features = [] }
+tauri = { version = "2.11.1", features = ["tray-icon"] }
 tauri-plugin-tracing = "0.3"
 
 media-admin-api = { path = "../../crates/api" }

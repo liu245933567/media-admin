@@ -1,11 +1,6 @@
 //! Taskmill SQLite 持久化调度器（与业务 DB 分离）。
 
-use std::{
-    collections::VecDeque,
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::sync::Mutex;
 
@@ -19,17 +14,11 @@ use taskmill::{
 };
 use tokio_util::sync::CancellationToken;
 
-use super::setup_download_exec::{
-    FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor,
-};
-use super::spawn::{
-    ExtractWavExecutor, SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor,
-    WhisperVadSrtExecutor,
-};
+use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
+use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
 use super::types::{
-    ExtractWavTask, FfmpegSetupDownloadTask, MediaJobsDomain, SubtitleTranslateJob,
-    VideoSubtitleGenerateTask, WhisperModelDownloadTask, WhisperVadSrtTask, GROUP_FFMPEG,
-    GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER,
+    FfmpegSetupDownloadTask, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain,
+    SubtitleTranslateJob, VideoSubtitleGenerateTask, WhisperModelDownloadTask,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,7 +37,6 @@ pub struct TimestampedSchedulerEvent {
 const EXEC_EVENT_LOG_CAP: usize = 400;
 
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
-const DEFAULT_GROUP_FFMPEG: usize = 2;
 const DEFAULT_GROUP_WHISPER: usize = 1;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
 const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
@@ -56,7 +44,6 @@ const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
 /// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
 struct SchedulerConcurrencyLimits {
     max_concurrency: usize,
-    ffmpeg: usize,
     whisper: usize,
     translate: usize,
     setup_download: usize,
@@ -65,7 +52,6 @@ struct SchedulerConcurrencyLimits {
 fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
     SchedulerConcurrencyLimits {
         max_concurrency: env_usize("TASKMILL_MAX_CONCURRENCY", DEFAULT_MAX_CONCURRENCY),
-        ffmpeg: env_usize("TASKMILL_GROUP_FFMPEG", DEFAULT_GROUP_FFMPEG),
         whisper: env_usize("TASKMILL_GROUP_WHISPER", DEFAULT_GROUP_WHISPER),
         translate: env_usize("TASKMILL_GROUP_TRANSLATE", DEFAULT_GROUP_TRANSLATE),
         setup_download: env_usize(
@@ -113,7 +99,6 @@ impl TaskmillRuntime {
         let limits = scheduler_concurrency_limits();
         tracing::info!(
             max_concurrency = limits.max_concurrency,
-            group_ffmpeg = limits.ffmpeg,
             group_whisper = limits.whisper,
             group_translate = limits.translate,
             group_setup_download = limits.setup_download,
@@ -136,14 +121,11 @@ impl TaskmillRuntime {
             .domain(
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
-                    .task::<ExtractWavTask>(ExtractWavExecutor)
-                    .task::<WhisperVadSrtTask>(WhisperVadSrtExecutor)
                     .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
                     .task::<WhisperModelDownloadTask>(whisper_dl_exec)
                     .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
             )
             .max_concurrency(limits.max_concurrency)
-            .group_concurrency(GROUP_FFMPEG, limits.ffmpeg)
             .group_concurrency(GROUP_WHISPER, limits.whisper)
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
@@ -244,10 +226,7 @@ impl TaskmillRuntime {
             .await
             .context("读取 taskmill 快照失败")?;
         let metrics = self.scheduler.metrics_snapshot().await;
-        Ok(TaskmillSnapshot {
-            scheduler,
-            metrics,
-        })
+        Ok(TaskmillSnapshot { scheduler, metrics })
     }
 
     pub async fn recent_history(

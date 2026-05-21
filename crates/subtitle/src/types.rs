@@ -41,6 +41,9 @@ impl Default for SubtitleTranslateConfig {
 #[derive(Serialize)]
 pub struct SubtitleGenerateItem {
     pub srt_path: String,
+    /// 流水线内完成翻译时的译文 SRT 路径
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub translated_srt_path: Option<String>,
 }
 
 #[typeshare]

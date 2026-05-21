@@ -1,6 +1,6 @@
 import { ProLayout } from '@ant-design/pro-components'
 import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+// import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { DesktopWindowControls } from '@/components/desktop-window-controls'
 import { menu } from '@/config'
 import { isTauri } from '@/utils/is-tauri'
@@ -11,6 +11,7 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   const pathname = useRouterState({ select: s => s.location.pathname })
+  const immersivePlay = pathname === '/video-play'
 
   return (
     <ProLayout
@@ -18,6 +19,13 @@ function RootLayout() {
       logo="/favicon.ico"
       layout="top"
       location={{ pathname }}
+      menuRender={immersivePlay ? () => null : undefined}
+      headerRender={immersivePlay ? false : undefined}
+      contentStyle={
+        immersivePlay
+          ? { padding: 0, margin: 0, minHeight: '100vh' }
+          : undefined
+      }
       route={{
         name: 'root',
         children: menu,
@@ -49,7 +57,7 @@ function RootLayout() {
       }}
     >
       <Outlet />
-      {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-left" /> : null}
+      {/* {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-left" /> : null} */}
     </ProLayout>
   )
 }

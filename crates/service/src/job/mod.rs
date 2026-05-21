@@ -22,7 +22,6 @@ pub use submit::{
 pub use ma_subtitle::types::SubtitleGenerateConfig;
 pub use taskmill::TaskHistoryRecord;
 pub use types::{
-    ExtractWavTask, FfmpegSetupDownloadTask, MediaJobsDomain, SubtitleTranslateJob,
-    VideoSubtitleGenerateTask, WhisperModelDownloadTask, WhisperVadSrtTask, GROUP_FFMPEG,
-    GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER,
+    FfmpegSetupDownloadTask, MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask,
+    WhisperModelDownloadTask, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER,
 };

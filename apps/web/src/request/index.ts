@@ -56,6 +56,15 @@ export function scanVideoFolder(params: VideoFolderScanReq) {
   return post<VideoFolderScanRes, VideoFolderScanReq>('/video-folder/scan', params)
 }
 
+/** 本地视频目录扫描列表在 React Query 中的缓存时长 */
+export const VIDEO_FOLDER_SCAN_STALE_MS = 5 * 60 * 1000
+export const VIDEO_FOLDER_SCAN_GC_MS = 30 * 60 * 1000
+
+/** 本地视频目录扫描列表（列表页与播放页上下集共用） */
+export function videoFolderScanQueryKey(rootDir: string) {
+  return ['video-folder-scan', rootDir.trim()] as const
+}
+
 export * from './job'
 export * from './settings'
 export * from './stash'

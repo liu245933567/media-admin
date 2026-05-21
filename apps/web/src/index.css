@@ -80,3 +80,12 @@ html[data-theme="dark"] {
 .stash-scene-cover-video::-webkit-media-controls-toggle-closed-captions-button {
   display: none !important;
 }
+
+/* 播放页：未开播时显示控制栏；开播后仍遵循 video.js 播放中自动隐藏逻辑 */
+.video-js.vjs-always-show-controls:not(.vjs-has-started) .vjs-control-bar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+

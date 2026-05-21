@@ -24,7 +24,7 @@ pub struct WhisperTranscribeOutput {
 
 /// whisper 引擎运行时配置（影响模型加载，启动期决定）
 #[typeshare]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WhisperEngineConfig {
     /// 模型文件名
     pub model_filename: String,
@@ -42,7 +42,7 @@ pub struct WhisperEngineConfig {
 impl Default for WhisperEngineConfig {
     fn default() -> Self {
         Self {
-            model_filename: "ggml-large-v3.bin".into(),
+            model_filename: "ggml-large-v3-turbo.bin".into(),
             use_gpu: true,
             flash_attn: true,
         }
