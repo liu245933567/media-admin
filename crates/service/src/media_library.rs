@@ -176,18 +176,18 @@ pub async fn list_media_roots(pool: &SqlitePool) -> Result<Vec<MediaRootRow>> {
 
 /// 新增媒体资源根目录，要求根目录之间不能互相包含。
 pub async fn create_media_root(pool: &SqlitePool, req: MediaRootCreateReq) -> Result<MediaRootRow> {
-    let root_path = normalize_existing_dir(&req.path).await?;
+    let normalized = normalize_existing_dir(&req.path).await?;
     let name = req
         .name
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(ToOwned::to_owned)
-        .unwrap_or_else(|| default_root_name(&root_path));
+        .unwrap_or_else(|| default_root_name(&normalized.display_path));
 
-    ensure_not_overlapping(pool, &root_path, None).await?;
+    ensure_not_overlapping(pool, &normalized.real_path, None).await?;
 
-    let path = root_path.to_string_lossy().to_string();
+    let path = normalized.display_path.to_string_lossy().to_string();
     let row = sqlx::query_as::<_, MediaRootRecord>(
         r#"
         INSERT INTO media_resource_roots (path, name)
@@ -505,25 +505,35 @@ async fn find_media_root(pool: &SqlitePool, id: i64) -> Result<MediaRootRecord> 
     .ok_or_else(|| anyhow::anyhow!("媒体资源目录不存在"))
 }
 
-async fn normalize_existing_dir(raw: &str) -> Result<PathBuf> {
+/// 用户输入路径和真实路径。前者用于展示/入库，后者仅用于比较映射盘、符号链接等真实位置。
+struct NormalizedDir {
+    display_path: PathBuf,
+    real_path: PathBuf,
+}
+
+async fn normalize_existing_dir(raw: &str) -> Result<NormalizedDir> {
     let path_text = raw.trim();
     if path_text.is_empty() {
         bail!("path 不能为空");
     }
-    let path = PathBuf::from(path_text);
-    if !path.is_absolute() {
+    let display_path = PathBuf::from(path_text);
+    if !display_path.is_absolute() {
         bail!("path 必须为绝对路径");
     }
-    if !tokio::fs::try_exists(&path).await? {
+    if !tokio::fs::try_exists(&display_path).await? {
         bail!("path 不存在");
     }
-    let meta = tokio::fs::metadata(&path).await?;
+    let meta = tokio::fs::metadata(&display_path).await?;
     if !meta.is_dir() {
         bail!("path 必须为目录");
     }
-    tokio::fs::canonicalize(&path)
+    let real_path = tokio::fs::canonicalize(&display_path)
         .await
-        .with_context(|| format!("规范化路径失败: {}", path.display()))
+        .with_context(|| format!("规范化路径失败: {}", display_path.display()))?;
+    Ok(NormalizedDir {
+        display_path,
+        real_path,
+    })
 }
 
 async fn ensure_not_overlapping(
@@ -536,7 +546,9 @@ async fn ensure_not_overlapping(
         if exclude_id == Some(i64::from(root.id)) {
             continue;
         }
-        let existing = PathBuf::from(&root.path);
+        let existing = tokio::fs::canonicalize(&root.path)
+            .await
+            .unwrap_or_else(|_| PathBuf::from(&root.path));
         if paths_overlap(new_path, &existing) {
             bail!(
                 "媒体资源路径不能互相包含：{} 与 {}",
