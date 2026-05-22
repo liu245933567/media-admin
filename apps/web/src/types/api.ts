@@ -262,6 +262,35 @@ export interface PageResult<T> {
 	total: number;
 }
 
+export interface SubtitleGenerateConfig {
+	vad_config?: VadConfig;
+	whisper_engine_config?: WhisperEngineConfig;
+	whisper_transcribe_config?: WhisperTranscribeConfig;
+	translate_config?: SubtitleTranslateConfig;
+}
+
+export interface ScanGenerateSubtitleReq {
+	folder_path: string;
+	/** `None` 表示整包采用全局默认。 */
+	config?: SubtitleGenerateConfig;
+	/** 若同 video_path 已有 pending/running 生成任务则跳过（默认 true） */
+	skip_if_exists?: boolean;
+}
+
+export interface SubtitleGenerateBulkFailedItem {
+	video_path: string;
+	error: string;
+}
+
+export interface ScanGenerateSubtitleRes {
+	scan: MediaLibraryScanRes;
+	matched_videos: number;
+	without_subtitles: number;
+	submitted: string[];
+	skipped: string[];
+	failed: SubtitleGenerateBulkFailedItem[];
+}
+
 /** Stash `CriterionModifier`（与 GraphQL 枚举值一致） */
 export enum StashCriterionModifier {
 	Eq = "=",
@@ -491,18 +520,6 @@ export interface StashSceneRow {
 export interface StashStringCriterion {
 	value: string;
 	modifier: StashCriterionModifier;
-}
-
-export interface SubtitleGenerateBulkFailedItem {
-	video_path: string;
-	error: string;
-}
-
-export interface SubtitleGenerateConfig {
-	vad_config?: VadConfig;
-	whisper_engine_config?: WhisperEngineConfig;
-	whisper_transcribe_config?: WhisperTranscribeConfig;
-	translate_config?: SubtitleTranslateConfig;
 }
 
 export interface SubtitleGenerateBulkReq {

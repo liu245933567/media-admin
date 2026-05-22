@@ -5,11 +5,12 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
-    SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes,
-    SubtitleGenerateReq, SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord,
-    TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes, TaskmillSnapshot,
-    TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
-    enqueue_subtitle_translate_req, subtitle_generate_defaults,
+    ScanGenerateSubtitleReq, ScanGenerateSubtitleRes, SubtitleGenerateBulkReq,
+    SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes, SubtitleGenerateReq,
+    SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord, TaskmillCancelRes, TaskmillControlOk,
+    TaskmillDeleteHistoryRes, TaskmillSnapshot, TimestampedSchedulerEvent,
+    bulk_enqueue_subtitle_generate, enqueue_subtitle_generate, enqueue_subtitle_translate_req,
+    scan_and_enqueue_subtitle_generate, subtitle_generate_defaults,
 };
 use serde::Deserialize;
 
@@ -60,6 +61,7 @@ pub fn routes() -> StateRouter {
         .route("/generate-defaults", get(generate_defaults_handler))
         .route("/generate", post(generate_handler))
         .route("/generate/bulk", post(generate_bulk_handler))
+        .route("/scan-generate", post(scan_generate_handler))
         .route("/translate", post(translate_handler))
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
@@ -99,6 +101,17 @@ async fn generate_bulk_handler(
     let res = bulk_enqueue_subtitle_generate(&state.taskmill, body, &global)
         .await
         .map_err(AppError::Internal)?;
+    Ok(Json(res))
+}
+
+async fn scan_generate_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<ScanGenerateSubtitleReq>, AppError>,
+) -> Result<Json<ScanGenerateSubtitleRes>, AppError> {
+    let global = state.app_config.read().await;
+    let res = scan_and_enqueue_subtitle_generate(&state.db, &state.taskmill, body, &global)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(Json(res))
 }
 
@@ -158,16 +171,12 @@ async fn active_tasks_handler(
     Ok(Json(rows))
 }
 
-async fn scheduler_pause_handler(
-    State(state): State<AppState>,
-) -> Json<TaskmillControlOk> {
+async fn scheduler_pause_handler(State(state): State<AppState>) -> Json<TaskmillControlOk> {
     state.taskmill.pause_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }
 
-async fn scheduler_resume_handler(
-    State(state): State<AppState>,
-) -> Json<TaskmillControlOk> {
+async fn scheduler_resume_handler(State(state): State<AppState>) -> Json<TaskmillControlOk> {
     state.taskmill.resume_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }

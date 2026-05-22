@@ -160,6 +160,13 @@ pub struct MediaLibraryScanRes {
     pub removed: u32,
 }
 
+/// 已校验的媒体资源子目录。
+#[derive(Debug, Clone)]
+pub struct MediaResolvedChildDir {
+    pub root_id: i64,
+    pub folder_path: String,
+}
+
 /// 列出已维护的媒体资源根目录。
 pub async fn list_media_roots(pool: &SqlitePool) -> Result<Vec<MediaRootRow>> {
     let rows = sqlx::query_as::<_, MediaRootRecord>(
@@ -236,6 +243,34 @@ pub async fn enqueue_media_library_scan(
         .await
 }
 
+/// 校验文件夹属于已配置媒体根目录的子目录。
+pub async fn resolve_media_child_dir(
+    pool: &SqlitePool,
+    folder_path: &str,
+) -> Result<MediaResolvedChildDir> {
+    let normalized = normalize_existing_dir(folder_path).await?;
+    let roots = list_media_roots(pool).await?;
+
+    for root in roots {
+        let root_path = PathBuf::from(&root.path);
+        let root_real = tokio::fs::canonicalize(&root_path)
+            .await
+            .unwrap_or_else(|_| root_path.clone());
+
+        if normalized.real_path == root_real {
+            bail!("请选择媒体根目录下的子文件夹，不能选择媒体根目录本身");
+        }
+        if normalized.real_path.starts_with(&root_real) {
+            return Ok(MediaResolvedChildDir {
+                root_id: i64::from(root.id),
+                folder_path: normalized.display_path.to_string_lossy().to_string(),
+            });
+        }
+    }
+
+    bail!("文件夹必须位于已配置的媒体资源目录下")
+}
+
 /// 查询扫描入库的视频文件，并附带同目录匹配的字幕文件。
 pub async fn list_media_videos(
     pool: &SqlitePool,
@@ -302,6 +337,41 @@ pub async fn list_media_videos(
         data,
         total: i54(total, "媒体文件数量超出 JS 安全整数范围")?,
     })
+}
+
+/// 查询指定目录下扫描入库的视频文件，并附带同目录匹配的字幕文件。
+pub async fn list_media_videos_under_dir(
+    pool: &SqlitePool,
+    root_id: i64,
+    dir_path: &str,
+) -> Result<Vec<MediaVideoRow>> {
+    let dir = PathBuf::from(dir_path);
+    if !dir.is_absolute() {
+        bail!("媒体资源路径必须为绝对路径");
+    }
+    let prefix = scan_dir_prefix(&dir);
+    let pattern = format!("{}%", escape_sqlite_like(&prefix));
+
+    let rows = sqlx::query_as::<_, MediaFileRecord>(
+        r#"
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
+        FROM media_files
+        WHERE root_id = ?1
+          AND file_type = ?2
+          AND file_path LIKE ?3 ESCAPE '\'
+        ORDER BY file_path ASC
+        "#,
+    )
+    .bind(root_id)
+    .bind(MediaFileType::Video.as_str())
+    .bind(pattern)
+    .fetch_all(pool)
+    .await?;
+
+    let subtitle_rows = subtitle_records_for_videos(pool, &rows).await?;
+    rows.into_iter()
+        .map(|row| media_video_to_api(row, &subtitle_rows))
+        .collect()
 }
 
 /// 查询视频媒体文件记录，可按分页参数限制返回范围。
@@ -397,6 +467,29 @@ pub async fn scan_media_root(
     pool: &SqlitePool,
     root_id: i64,
     root_path: &str,
+) -> Result<MediaLibraryScanRes> {
+    scan_media_path(pool, root_id, root_path, ScanCleanupScope::Root).await
+}
+
+/// 扫描指定媒体资源子目录，并只更新该子目录范围内的数据库记录。
+pub async fn scan_media_dir(
+    pool: &SqlitePool,
+    root_id: i64,
+    dir_path: &str,
+) -> Result<MediaLibraryScanRes> {
+    scan_media_path(pool, root_id, dir_path, ScanCleanupScope::Dir).await
+}
+
+enum ScanCleanupScope {
+    Root,
+    Dir,
+}
+
+async fn scan_media_path(
+    pool: &SqlitePool,
+    root_id: i64,
+    root_path: &str,
+    cleanup_scope: ScanCleanupScope,
 ) -> Result<MediaLibraryScanRes> {
     let root = PathBuf::from(root_path);
     if !root.is_absolute() {
@@ -499,12 +592,33 @@ pub async fn scan_media_root(
         .await?;
     }
 
-    let removed = sqlx::query("DELETE FROM media_files WHERE root_id = ?1 AND scanned_at <> ?2")
-        .bind(root_id)
-        .bind(&scanned_at)
-        .execute(&mut *tx)
-        .await?
-        .rows_affected();
+    let removed = match cleanup_scope {
+        ScanCleanupScope::Root => {
+            sqlx::query("DELETE FROM media_files WHERE root_id = ?1 AND scanned_at <> ?2")
+                .bind(root_id)
+                .bind(&scanned_at)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected()
+        }
+        ScanCleanupScope::Dir => {
+            let pattern = format!("{}%", escape_sqlite_like(&scan_dir_prefix(&root)));
+            sqlx::query(
+                r#"
+                DELETE FROM media_files
+                WHERE root_id = ?1
+                  AND scanned_at <> ?2
+                  AND file_path LIKE ?3 ESCAPE '\'
+                "#,
+            )
+            .bind(root_id)
+            .bind(&scanned_at)
+            .bind(pattern)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected()
+        }
+    };
 
     sqlx::query(
         r#"
@@ -762,6 +876,25 @@ fn subtitle_matches_video(video_path: &str, subtitle_path: &str) -> bool {
         || subtitle_stem
             .strip_prefix(video_stem)
             .is_some_and(|rest| rest.starts_with('.'))
+}
+
+fn scan_dir_prefix(dir: &Path) -> String {
+    let mut prefix = dir.to_string_lossy().to_string();
+    if !prefix.ends_with(std::path::MAIN_SEPARATOR) {
+        prefix.push(std::path::MAIN_SEPARATOR);
+    }
+    prefix
+}
+
+fn escape_sqlite_like(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if matches!(ch, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
 }
 
 fn push_media_file_filters<'a>(

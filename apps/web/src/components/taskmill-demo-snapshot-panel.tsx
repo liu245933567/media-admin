@@ -296,7 +296,6 @@ export function TaskmillSnapshotPanel({
           rowKey="id"
           loading={loading}
           pagination={false}
-          scroll={{ x: 900 }}
           dataSource={scheduler.running}
           columns={runningColumns}
           locale={{ emptyText: '当前无运行中任务' }}

@@ -1,4 +1,6 @@
 import type {
+  ScanGenerateSubtitleReq,
+  ScanGenerateSubtitleRes,
   SubtitleGenerateBulkReq,
   SubtitleGenerateBulkRes,
   SubtitleGenerateDefaultsRes,
@@ -78,6 +80,13 @@ export function enqueueSubtitleGenerate(req: SubtitleGenerateReq) {
 export function enqueueSubtitleGenerateBulk(params: SubtitleGenerateBulkReq) {
   return post<SubtitleGenerateBulkRes, SubtitleGenerateBulkReq>(
     '/jobs/generate/bulk',
+    params,
+  )
+}
+
+export function scanAndEnqueueSubtitleGenerate(params: ScanGenerateSubtitleReq) {
+  return post<ScanGenerateSubtitleRes, ScanGenerateSubtitleReq>(
+    '/jobs/scan-generate',
     params,
   )
 }

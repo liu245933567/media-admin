@@ -6,7 +6,12 @@ use serde::{Deserialize, Serialize};
 use taskmill::{SubmitOutcome, TypedTask};
 use typeshare::typeshare;
 
-use crate::app_config::{AppConfig, merge_subtitle_generate_config, merge_subtitle_translate_job_config};
+use crate::app_config::{
+    AppConfig, merge_subtitle_generate_config, merge_subtitle_translate_job_config,
+};
+use crate::media_library::{
+    MediaLibraryScanRes, list_media_videos_under_dir, resolve_media_child_dir, scan_media_dir,
+};
 
 use super::storage::TaskmillRuntime;
 use super::types::{SubtitleTranslateJob, VideoSubtitleGenerateTask};
@@ -45,6 +50,27 @@ pub struct SubtitleGenerateBulkRes {
     pub failed: Vec<SubtitleGenerateBulkFailedItem>,
 }
 
+#[typeshare]
+#[derive(Deserialize)]
+pub struct ScanGenerateSubtitleReq {
+    pub folder_path: String,
+    /// `None` 表示整包采用全局默认。
+    pub config: Option<SubtitleGenerateConfig>,
+    /// 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）
+    pub skip_if_exists: Option<bool>,
+}
+
+#[typeshare]
+#[derive(Serialize)]
+pub struct ScanGenerateSubtitleRes {
+    pub scan: MediaLibraryScanRes,
+    pub matched_videos: u32,
+    pub without_subtitles: u32,
+    pub submitted: Vec<String>,
+    pub skipped: Vec<String>,
+    pub failed: Vec<SubtitleGenerateBulkFailedItem>,
+}
+
 /// 新建任务表单的默认配置（来自当前全局 [`AppConfig`]）。
 #[typeshare]
 #[derive(Serialize)]
@@ -77,10 +103,7 @@ pub async fn enqueue_subtitle_generate(
     }
     let config = merge_subtitle_generate_config(req.config, global);
     runtime
-        .enqueue_generate(VideoSubtitleGenerateTask {
-            video_path,
-            config,
-        })
+        .enqueue_generate(VideoSubtitleGenerateTask { video_path, config })
         .await
 }
 
@@ -138,6 +161,60 @@ pub async fn bulk_enqueue_subtitle_generate(
         submitted,
         skipped,
         failed,
+    })
+}
+
+pub async fn scan_and_enqueue_subtitle_generate(
+    pool: &ma_db::SqlitePool,
+    runtime: &TaskmillRuntime,
+    req: ScanGenerateSubtitleReq,
+    global: &AppConfig,
+) -> Result<ScanGenerateSubtitleRes> {
+    let folder_path = req.folder_path.trim();
+    if folder_path.is_empty() {
+        bail!("folder_path 不能为空");
+    }
+
+    let resolved = resolve_media_child_dir(pool, folder_path).await?;
+    let scan = scan_media_dir(pool, resolved.root_id, &resolved.folder_path).await?;
+    let videos = list_media_videos_under_dir(pool, resolved.root_id, &resolved.folder_path).await?;
+    let target_paths = videos
+        .iter()
+        .filter(|row| row.subtitle_count == 0)
+        .map(|row| row.file_path.clone())
+        .collect::<Vec<_>>();
+    let matched_videos = u32::try_from(videos.len()).unwrap_or(u32::MAX);
+    let without_subtitles = u32::try_from(target_paths.len()).unwrap_or(u32::MAX);
+
+    if target_paths.is_empty() {
+        return Ok(ScanGenerateSubtitleRes {
+            scan,
+            matched_videos,
+            without_subtitles,
+            submitted: Vec::new(),
+            skipped: Vec::new(),
+            failed: Vec::new(),
+        });
+    }
+
+    let enqueue_res = bulk_enqueue_subtitle_generate(
+        runtime,
+        SubtitleGenerateBulkReq {
+            video_paths: target_paths,
+            config: req.config,
+            skip_if_exists: req.skip_if_exists,
+        },
+        global,
+    )
+    .await?;
+
+    Ok(ScanGenerateSubtitleRes {
+        scan,
+        matched_videos,
+        without_subtitles,
+        submitted: enqueue_res.submitted,
+        skipped: enqueue_res.skipped,
+        failed: enqueue_res.failed,
     })
 }
 

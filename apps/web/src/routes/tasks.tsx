@@ -1,12 +1,12 @@
-import { DownOutlined, PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { App, Button, Card, Dropdown, Space, Switch, Tabs, Tag } from 'antd'
 import { useMemo, useState } from 'react'
+import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
-import { TaskTypeFilter } from '@/components/task-type-filter'
 import { TaskmillActiveTasksPanel } from '@/components/taskmill-active-tasks-panel'
 import { TaskmillExecLogPanel } from '@/components/taskmill-demo-exec-log-panel'
 import { TaskmillHistoryPanel } from '@/components/taskmill-demo-history-panel'
@@ -34,6 +34,7 @@ export const Route = createFileRoute('/tasks')({
 function PageComponent() {
   const { message } = App.useApp()
   const [createOpen, setCreateOpen] = useState(false)
+  const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [execLogAutoRefresh, setExecLogAutoRefresh] = useState(true)
   const [taskTypeFilter] = useState<string | undefined>()
@@ -107,6 +108,11 @@ function PageComponent() {
                 onClick: () => setCreateOpen(true),
               },
               {
+                key: 'scan-subtitle-generate',
+                label: '扫描并生成字幕',
+                onClick: () => setScanGenerateOpen(true),
+              },
+              {
                 key: 'subtitle-translate',
                 label: '字幕翻译（SRT）',
                 onClick: () => setTranslateOpen(true),
@@ -128,6 +134,14 @@ function PageComponent() {
           onOpenChange={setCreateOpen}
           onCreated={() => {
             message.success('已提交字幕生成任务')
+            refreshAll()
+          }}
+        />
+        <ScanGenerateSubtitleDrawerForm
+          open={scanGenerateOpen}
+          onOpenChange={setScanGenerateOpen}
+          onCreated={() => {
+            message.success('已提交扫描并生成字幕任务')
             refreshAll()
           }}
         />
