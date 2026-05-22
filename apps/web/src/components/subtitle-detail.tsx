@@ -1,16 +1,18 @@
 import { useMutation } from '@tanstack/react-query'
-import { Drawer, Result, Spin } from 'antd'
+import { App, Button, Drawer, Popconfirm, Result, Space, Spin } from 'antd'
 import { useMemo, useState } from 'react'
-import { fetchFsReadText } from '@/request'
+import { fetchFsDeleteSubtitleApi, fetchFsReadText } from '@/request'
 import { deserializeSubtitleText } from '@/utils/subtitle'
 
 export interface SubtitleDetailModalProps {
   /** 渲染触发器，将 open 绑定到点击等交互上以打开弹窗 */
   trigger: (props: { setOpen: (open: boolean) => void }) => React.ReactNode
   subtitlePath: string
+  onDeleted?: () => void
 }
 
-export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailModalProps) {
+export function SubtitleDetailModal({ trigger, subtitlePath, onDeleted }: SubtitleDetailModalProps) {
+  const { message } = App.useApp()
   const [open, setOpen] = useState(false)
 
   const subtitlePreviewTitle = useMemo(() => {
@@ -22,6 +24,16 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
       const res = await fetchFsReadText({ path: subtitlePath })
       return deserializeSubtitleText(res.content)
     },
+  })
+
+  const deleteSubtitleMutation = useMutation({
+    mutationFn: fetchFsDeleteSubtitleApi,
+    onSuccess: () => {
+      message.success('字幕文件已删除')
+      setOpen(false)
+      onDeleted?.()
+    },
+    onError: error => message.error(error.message ?? '删除失败'),
   })
 
   const renderSubtitleContent = () => {
@@ -68,7 +80,25 @@ export function SubtitleDetailModal({ trigger, subtitlePath }: SubtitleDetailMod
           setOpen(false)
         }}
         size={1100}
-        footer={null}
+        footer={(
+          <Space>
+            <Button onClick={() => fsReadTextQuery.mutate()}>
+              刷新
+            </Button>
+            <Popconfirm
+              title="删除字幕文件"
+              description={`确定从磁盘删除「${subtitlePath}」？此操作不可恢复。`}
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => deleteSubtitleMutation.mutate({ path: subtitlePath })}
+            >
+              <Button danger loading={deleteSubtitleMutation.isPending}>
+                删除
+              </Button>
+            </Popconfirm>
+          </Space>
+        )}
         destroyOnHidden
       >
         {renderSubtitleContent()}

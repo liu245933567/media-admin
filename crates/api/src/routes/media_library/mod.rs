@@ -5,8 +5,8 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::media_library::{
-    MediaFilesPageRes, MediaFilesQuery, MediaRootCreateReq, MediaRootRow, create_media_root,
-    delete_media_root, enqueue_media_library_scan, list_media_files, list_media_roots,
+    MediaRootCreateReq, MediaRootRow, MediaVideosPageRes, MediaVideosQuery, create_media_root,
+    delete_media_root, enqueue_media_library_scan, list_media_roots, list_media_videos,
 };
 
 use crate::{AppState, StateRouter, error::AppError};
@@ -60,9 +60,9 @@ async fn scan_root_handler(
 
 async fn list_files_handler(
     State(state): State<AppState>,
-    Query(q): Query<MediaFilesQuery>,
-) -> Result<Json<MediaFilesPageRes>, AppError> {
-    let rows = list_media_files(&state.db, q)
+    Query(q): Query<MediaVideosQuery>,
+) -> Result<Json<MediaVideosPageRes>, AppError> {
+    let rows = list_media_videos(&state.db, q)
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(rows))

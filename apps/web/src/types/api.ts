@@ -170,39 +170,6 @@ export interface FsReadTextRes {
 	content: string;
 }
 
-/** 媒体文件类型。 */
-export enum MediaFileType {
-	Video = "Video",
-	Subtitle = "Subtitle",
-}
-
-/** 已扫描入库的媒体文件列表行。 */
-export interface MediaFileRow {
-	id: number;
-	root_id: number;
-	file_name: string;
-	file_path: string;
-	file_size: number;
-	modified_at: string;
-	file_type: MediaFileType;
-	scanned_at: string;
-}
-
-/** 媒体文件分页查询结果。 */
-export interface MediaFilesPageRes {
-	data: MediaFileRow[];
-	total: number;
-}
-
-/** 媒体文件分页查询条件。 */
-export interface MediaFilesQuery {
-	root_id?: number;
-	file_type?: MediaFileType;
-	q?: string;
-	current?: number;
-	page_size?: number;
-}
-
 /** 媒体库扫描结果摘要。 */
 export interface MediaLibraryScanRes {
 	scanned: number;
@@ -234,6 +201,43 @@ export interface MediaRootRow {
 	created_at: string;
 	updated_at: string;
 	last_scanned_at?: string;
+}
+
+/** 视频拥有的字幕文件列表行。 */
+export interface MediaSubtitleRow {
+	id: number;
+	file_name: string;
+	file_path: string;
+	file_size: number;
+	modified_at: string;
+	scanned_at: string;
+}
+
+/** 媒体库视频列表行。 */
+export interface MediaVideoRow {
+	id: number;
+	root_id: number;
+	file_name: string;
+	file_path: string;
+	file_size: number;
+	modified_at: string;
+	scanned_at: string;
+	subtitle_count: number;
+	subtitles: MediaSubtitleRow[];
+}
+
+/** 媒体库视频分页查询结果。 */
+export interface MediaVideosPageRes {
+	data: MediaVideoRow[];
+	total: number;
+}
+
+/** 媒体库视频分页查询条件。 */
+export interface MediaVideosQuery {
+	root_id?: number;
+	q?: string;
+	current?: number;
+	page_size?: number;
 }
 
 export interface PageParams {
@@ -608,5 +612,11 @@ export interface WhisperModelItem {
 
 export interface WhisperModelsListRes {
 	items: WhisperModelItem[];
+}
+
+/** 媒体文件类型。 */
+export enum MediaFileType {
+	Video = "Video",
+	Subtitle = "Subtitle",
 }
 

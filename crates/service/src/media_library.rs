@@ -68,24 +68,36 @@ pub struct MediaRootRow {
 
 #[typeshare]
 #[derive(Debug, Serialize)]
-/// 已扫描入库的媒体文件列表行。
-pub struct MediaFileRow {
+/// 视频拥有的字幕文件列表行。
+pub struct MediaSubtitleRow {
+    pub id: I54,
+    pub file_name: String,
+    pub file_path: String,
+    pub file_size: U53,
+    pub modified_at: String,
+    pub scanned_at: String,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 媒体库视频列表行。
+pub struct MediaVideoRow {
     pub id: I54,
     pub root_id: I54,
     pub file_name: String,
     pub file_path: String,
     pub file_size: U53,
     pub modified_at: String,
-    pub file_type: MediaFileType,
     pub scanned_at: String,
+    pub subtitle_count: u32,
+    pub subtitles: Vec<MediaSubtitleRow>,
 }
 
 #[typeshare]
 #[derive(Debug, Deserialize)]
-/// 媒体文件分页查询条件。
-pub struct MediaFilesQuery {
+/// 媒体库视频分页查询条件。
+pub struct MediaVideosQuery {
     pub root_id: Option<I54>,
-    pub file_type: Option<MediaFileType>,
     pub q: Option<String>,
     pub current: Option<i32>,
     pub page_size: Option<i32>,
@@ -93,20 +105,10 @@ pub struct MediaFilesQuery {
 
 #[typeshare]
 #[derive(Debug, Serialize)]
-/// 媒体文件分页查询结果。
-pub struct MediaFilesPageRes {
-    pub data: Vec<MediaFileRow>,
+/// 媒体库视频分页查询结果。
+pub struct MediaVideosPageRes {
+    pub data: Vec<MediaVideoRow>,
     pub total: I54,
-}
-
-#[typeshare]
-#[derive(Debug, Serialize)]
-/// 媒体库扫描结果摘要。
-pub struct MediaLibraryScanRes {
-    pub scanned: u32,
-    pub videos: u32,
-    pub subtitles: u32,
-    pub removed: u32,
 }
 
 #[derive(Debug, FromRow)]
@@ -129,8 +131,17 @@ struct MediaFileRecord {
     file_path: String,
     file_size: i64,
     modified_at: String,
-    file_type: String,
     scanned_at: String,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 媒体库扫描结果摘要。
+pub struct MediaLibraryScanRes {
+    pub scanned: u32,
+    pub videos: u32,
+    pub subtitles: u32,
+    pub removed: u32,
 }
 
 /// 列出已维护的媒体资源根目录。
@@ -209,13 +220,12 @@ pub async fn enqueue_media_library_scan(
         .await
 }
 
-/// 查询扫描入库的媒体文件。
-pub async fn list_media_files(pool: &SqlitePool, q: MediaFilesQuery) -> Result<MediaFilesPageRes> {
+/// 查询扫描入库的视频文件，并附带同目录匹配的字幕文件。
+pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result<MediaVideosPageRes> {
     let current = q.current.unwrap_or(1).max(1);
     let page_size = q.page_size.unwrap_or(20).clamp(1, 200);
     let offset = (current - 1) * page_size;
 
-    let file_type = q.file_type.as_ref().map(MediaFileType::as_str);
     let keyword =
         q.q.as_deref()
             .map(str::trim)
@@ -224,16 +234,26 @@ pub async fn list_media_files(pool: &SqlitePool, q: MediaFilesQuery) -> Result<M
 
     let mut count_builder = QueryBuilder::<Sqlite>::new("SELECT COUNT(*) FROM media_files");
     let root_id = q.root_id.map(i64::from);
-    push_media_file_filters(&mut count_builder, root_id, file_type, keyword.as_deref());
+    push_media_file_filters(
+        &mut count_builder,
+        root_id,
+        Some(MediaFileType::Video.as_str()),
+        keyword.as_deref(),
+    );
     let total: i64 = count_builder.build_query_scalar().fetch_one(pool).await?;
 
     let mut rows_builder = QueryBuilder::<Sqlite>::new(
         r#"
-        SELECT id, root_id, file_name, file_path, file_size, modified_at, file_type, scanned_at
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
         FROM media_files
         "#,
     );
-    push_media_file_filters(&mut rows_builder, root_id, file_type, keyword.as_deref());
+    push_media_file_filters(
+        &mut rows_builder,
+        root_id,
+        Some(MediaFileType::Video.as_str()),
+        keyword.as_deref(),
+    );
     rows_builder.push(" ORDER BY file_path ASC LIMIT ");
     rows_builder.push_bind(page_size);
     rows_builder.push(" OFFSET ");
@@ -243,12 +263,13 @@ pub async fn list_media_files(pool: &SqlitePool, q: MediaFilesQuery) -> Result<M
         .build_query_as::<MediaFileRecord>()
         .fetch_all(pool)
         .await?;
+    let subtitle_rows = subtitle_records_for_videos(pool, &rows).await?;
     let data = rows
         .into_iter()
-        .map(media_file_to_api)
+        .map(|row| media_video_to_api(row, &subtitle_rows))
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(MediaFilesPageRes {
+    Ok(MediaVideosPageRes {
         data,
         total: i54(total, "媒体文件数量超出 JS 安全整数范围")?,
     })
@@ -491,8 +512,28 @@ fn media_root_to_api(row: MediaRootRecord) -> Result<MediaRootRow> {
     })
 }
 
-fn media_file_to_api(row: MediaFileRecord) -> Result<MediaFileRow> {
-    Ok(MediaFileRow {
+fn media_subtitle_to_api(row: &MediaFileRecord) -> Result<MediaSubtitleRow> {
+    Ok(MediaSubtitleRow {
+        id: i54(row.id, "媒体文件 id 超出 JS 安全整数范围")?,
+        file_name: row.file_name.clone(),
+        file_path: row.file_path.clone(),
+        file_size: u53(
+            u64::try_from(row.file_size).context("文件大小不能为负数")?,
+            "文件大小超出 JS 安全整数范围",
+        )?,
+        modified_at: row.modified_at.clone(),
+        scanned_at: row.scanned_at.clone(),
+    })
+}
+
+fn media_video_to_api(row: MediaFileRecord, subtitle_rows: &[MediaFileRecord]) -> Result<MediaVideoRow> {
+    let subtitles = subtitle_rows
+        .iter()
+        .filter(|subtitle| subtitle_matches_video(&row.file_path, &subtitle.file_path))
+        .map(media_subtitle_to_api)
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(MediaVideoRow {
         id: i54(row.id, "媒体文件 id 超出 JS 安全整数范围")?,
         root_id: i54(row.root_id, "媒体资源目录 id 超出 JS 安全整数范围")?,
         file_name: row.file_name,
@@ -502,9 +543,64 @@ fn media_file_to_api(row: MediaFileRecord) -> Result<MediaFileRow> {
             "文件大小超出 JS 安全整数范围",
         )?,
         modified_at: row.modified_at,
-        file_type: MediaFileType::from_db(&row.file_type),
         scanned_at: row.scanned_at,
+        subtitle_count: u32::try_from(subtitles.len()).unwrap_or(u32::MAX),
+        subtitles,
     })
+}
+
+async fn subtitle_records_for_videos(
+    pool: &SqlitePool,
+    videos: &[MediaFileRecord],
+) -> Result<Vec<MediaFileRecord>> {
+    if videos.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut root_ids = videos.iter().map(|row| row.root_id).collect::<Vec<_>>();
+    root_ids.sort_unstable();
+    root_ids.dedup();
+
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        r#"
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
+        FROM media_files
+        WHERE file_type = 
+        "#,
+    );
+    builder.push_bind(MediaFileType::Subtitle.as_str());
+    builder.push(" AND root_id IN (");
+    let mut separated = builder.separated(", ");
+    for root_id in root_ids {
+        separated.push_bind(root_id);
+    }
+    separated.push_unseparated(") ORDER BY file_path ASC");
+
+    builder
+        .build_query_as::<MediaFileRecord>()
+        .fetch_all(pool)
+        .await
+        .map_err(Into::into)
+}
+
+fn subtitle_matches_video(video_path: &str, subtitle_path: &str) -> bool {
+    let video = Path::new(video_path);
+    let subtitle = Path::new(subtitle_path);
+    if video.parent() != subtitle.parent() {
+        return false;
+    }
+
+    let Some(video_stem) = video.file_stem().and_then(OsStr::to_str) else {
+        return false;
+    };
+    let Some(subtitle_stem) = subtitle.file_stem().and_then(OsStr::to_str) else {
+        return false;
+    };
+
+    subtitle_stem == video_stem
+        || subtitle_stem
+            .strip_prefix(video_stem)
+            .is_some_and(|rest| rest.starts_with('.'))
 }
 
 fn push_media_file_filters<'a>(

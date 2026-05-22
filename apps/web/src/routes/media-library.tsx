@@ -1,17 +1,17 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
-import type { MediaFileRow } from '@/types'
+import type { MediaSubtitleRow, MediaVideoRow } from '@/types'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Space, Tag } from 'antd'
+import { Button, List, Popover, Space, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useMemo, useRef, useState } from 'react'
+import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import {
   fetchMediaFiles,
   fetchMediaRoots,
   mediaRootsQueryKey,
 } from '@/request'
-import { MediaFileType } from '@/types'
 import { formatBytes } from '@/utils'
 
 export const Route = createFileRoute('/media-library')({
@@ -34,27 +34,12 @@ function PageComponent() {
     }))
   }, [rootsQuery.data])
 
-  const fileColumns = useMemo<ProColumns<MediaFileRow>[]>(() => [
+  const fileColumns = useMemo<ProColumns<MediaVideoRow>[]>(() => [
     {
       title: '文件名',
       dataIndex: 'file_name',
       ellipsis: true,
       copyable: true,
-    },
-    {
-      title: '类型',
-      dataIndex: 'file_type',
-      width: 100,
-      valueType: 'select',
-      fieldProps: {
-        options: [
-          { label: '视频', value: MediaFileType.Video },
-          { label: '字幕', value: MediaFileType.Subtitle },
-        ],
-      },
-      render: (_, row) => row.file_type === MediaFileType.Video
-        ? <Tag color="blue">视频</Tag>
-        : <Tag color="green">字幕</Tag>,
     },
     {
       title: '资源路径',
@@ -70,6 +55,19 @@ function PageComponent() {
         const root = (rootsQuery.data ?? []).find(item => Number(item.id) === Number(row.root_id))
         return root?.name ?? row.root_id
       },
+    },
+    {
+      title: '字幕数量',
+      dataIndex: 'subtitle_count',
+      width: 110,
+      search: false,
+      render: (_, row) => (
+        <SubtitleCountPopover
+          videoName={row.file_name}
+          subtitles={row.subtitles ?? []}
+          onChanged={() => filesActionRef.current?.reload()}
+        />
+      ),
     },
     {
       title: '大小',
@@ -97,14 +95,13 @@ function PageComponent() {
   return (
     <PageContainer title={false}>
       <Space direction="vertical" size={16} className="w-full">
-        <ProTable<MediaFileRow>
+        <ProTable<MediaVideoRow>
           rowKey="id"
           actionRef={filesActionRef}
           columns={fileColumns}
           request={async (params) => {
             const res = await fetchMediaFiles({
               root_id: params.root_id ? Number(params.root_id) : undefined,
-              file_type: params.file_type as MediaFileType | undefined,
               q: fileKeyword,
               current: params.current,
               page_size: params.pageSize,
@@ -131,4 +128,78 @@ function PageComponent() {
       </Space>
     </PageContainer>
   )
+}
+
+function SubtitleCountPopover({
+  videoName,
+  subtitles,
+  onChanged,
+}: {
+  videoName: string
+  subtitles: MediaSubtitleRow[]
+  onChanged: () => void
+}) {
+  if (!subtitles.length) {
+    return <Tag>0</Tag>
+  }
+
+  const content = (
+    <List
+      size="small"
+      dataSource={subtitles}
+      className="min-w-64 max-w-[28rem]"
+      renderItem={subtitle => (
+        <List.Item
+          actions={[
+            <SubtitleDetailModal
+              key="detail"
+              subtitlePath={subtitle.file_path}
+              onDeleted={onChanged}
+              trigger={({ setOpen }) => (
+                <Button
+                  type="link"
+                  size="small"
+                  className="m-0! p-0!"
+                  onClick={() => setOpen(true)}
+                >
+                  详情
+                </Button>
+              )}
+            />,
+          ]}
+        >
+          <Typography.Text ellipsis={{ tooltip: subtitle.file_name }}>
+            {subtitleDisplayName(videoName, subtitle.file_name)}
+          </Typography.Text>
+        </List.Item>
+      )}
+    />
+  )
+
+  return (
+    <Popover content={content} trigger="hover">
+      <Tag color="blue" className="cursor-pointer">
+        {subtitles.length}
+      </Tag>
+    </Popover>
+  )
+}
+
+function subtitleDisplayName(videoName: string, subtitleName: string): string {
+  const videoStem = trimExtension(videoName)
+  const subtitleStem = trimExtension(subtitleName)
+  const subtitleExt = subtitleName.slice(subtitleStem.length)
+  if (subtitleStem === videoStem) {
+    return subtitleExt || subtitleName
+  }
+  const prefix = `${videoStem}.`
+  if (subtitleStem.startsWith(prefix)) {
+    return `${subtitleStem.slice(prefix.length)}${subtitleExt}`
+  }
+  return subtitleName
+}
+
+function trimExtension(fileName: string): string {
+  const idx = fileName.lastIndexOf('.')
+  return idx > 0 ? fileName.slice(0, idx) : fileName
 }

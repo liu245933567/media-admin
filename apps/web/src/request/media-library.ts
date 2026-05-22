@@ -1,9 +1,8 @@
 import type {
-  MediaFileType,
-  MediaFilesPageRes,
-  MediaFilesQuery,
   MediaRootCreateReq,
   MediaRootRow,
+  MediaVideosPageRes,
+  MediaVideosQuery,
 } from '@/types'
 import { del, get, post } from './utils'
 
@@ -27,7 +26,6 @@ export function enqueueMediaRootScan(id: number) {
 
 export interface MediaFilesParams {
   root_id?: number
-  file_type?: MediaFileType
   q?: string
   current?: number
   page_size?: number
@@ -38,9 +36,8 @@ export function mediaFilesQueryKey(params: MediaFilesParams) {
 }
 
 export function fetchMediaFiles(params: MediaFilesParams = {}) {
-  return get<MediaFilesPageRes, MediaFilesQuery>('/media-library/files', {
+  return get<MediaVideosPageRes, MediaVideosQuery>('/media-library/files', {
     root_id: params.root_id,
-    file_type: params.file_type,
     q: params.q,
     current: params.current ?? 1,
     page_size: params.page_size ?? 20,
