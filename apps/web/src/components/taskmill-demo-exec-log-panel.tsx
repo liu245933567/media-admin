@@ -1,6 +1,7 @@
 import type { TaskmillExecLogEntry } from '@/types'
 import { Space, Switch, Typography } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { formatTaskmillTime } from '@/lib/taskmill-time'
 
 interface TaskEventHeaderLike {
   task_id?: number
@@ -117,7 +118,7 @@ export function TaskmillExecLogPanel({
           : lines.length === 0
             ? <Typography.Text type="secondary">暂无事件；提交任务后将出现派发与进度日志。</Typography.Text>
             : lines.map((row, i) => {
-                const ts = row.received_at.replace('T', ' ').replace(/\.\d+Z?$/, '')
+                const ts = formatTaskmillTime(row.received_at)
                 const summary = formatTaskmillExecLogSummary(row.event)
                 return (
                   <div key={`${row.received_at}-${i}`} className="whitespace-pre-wrap break-all border-b py-1 last:border-b-0">

@@ -36,6 +36,7 @@ export function deleteMediaVideos(params: MediaVideoDeleteReq) {
 export interface MediaFilesParams {
   root_id?: number
   q?: string
+  has_subtitle?: boolean
   current?: number
   page_size?: number
 }
@@ -48,6 +49,7 @@ export function fetchMediaFiles(params: MediaFilesParams = {}) {
   return get<MediaVideosPageRes, MediaVideosQuery>('/media-library/files', {
     root_id: params.root_id,
     q: params.q,
+    has_subtitle: params.has_subtitle,
     current: params.current ?? 1,
     page_size: params.page_size ?? 20,
   })

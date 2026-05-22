@@ -38,7 +38,9 @@ function AntdConfigAndRouter() {
     <ConfigProvider
       locale={zhCN}
       theme={{
-        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm: isDark
+          ? antdTheme.darkAlgorithm
+          : antdTheme.defaultAlgorithm,
       }}
     >
       <AntdApp>

@@ -20,6 +20,37 @@ function statusColor(status: TaskmillTaskStatus): string {
   return map[status]
 }
 
+export function transStatus(status: string): string {
+  const map: Record<string, string> = {
+    running: '运行中',
+    pending: '等待中',
+    paused: '暂停中',
+    waiting: '等待中',
+    blocked: '阻塞中',
+    completed: '已完成',
+    failed: '失败',
+    cancelled: '已取消',
+    superseded: '已替换',
+    expired: '已过期',
+    dependency_failed: '依赖失败',
+    dead_letter: '死信',
+  }
+
+  return map[status] ?? status
+}
+
+const JOB_TYPE_LABELS: Record<string, string> = {
+  'media-jobs::media-library-scan': '媒体库扫描',
+  'media-jobs::whisper-model-download': '下载 Whisper 模型',
+  'media-jobs::ffmpeg-setup-download': '下载 FFmpeg',
+  'media-jobs::video-subtitle-generate': '字幕生成',
+  'media-jobs::subtitle-translate': '字幕翻译',
+}
+
+export function transJobType(type: string): string {
+  return JOB_TYPE_LABELS[type] ?? type.split('::').pop() ?? ''
+}
+
 export interface TaskmillActiveTasksPanelProps {
   items: TaskmillTaskRecord[] | undefined
   loading?: boolean
@@ -84,9 +115,14 @@ export function TaskmillActiveTasksPanel({
         ellipsis: true,
         render: (t: string) => (
           <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[180px]">
-            {t}
+            {transJobType(t)}
           </Typography.Text>
         ),
+        filters: Object.entries(JOB_TYPE_LABELS).map(([key, value]) => ({
+          text: value,
+          value: key,
+        })),
+        onFilter: (value, record) => record.task_type === value,
       },
       {
         title: '标签',
@@ -103,7 +139,7 @@ export function TaskmillActiveTasksPanel({
         dataIndex: 'status',
         width: 96,
         render: (s: TaskmillTaskStatus) => (
-          <Tag color={statusColor(s)}>{s}</Tag>
+          <Tag color={statusColor(s)}>{transStatus(s)}</Tag>
         ),
       },
       {
@@ -173,8 +209,7 @@ export function TaskmillActiveTasksPanel({
       loading={loading}
       columns={columns}
       dataSource={items ?? []}
-      scroll={{ x: 900 }}
-      pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: [15, 30, 50] }}
+      pagination={{ showSizeChanger: true }}
       locale={{ emptyText: '当前无活跃任务' }}
     />
   )

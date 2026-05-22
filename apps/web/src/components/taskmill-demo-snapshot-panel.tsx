@@ -12,7 +12,6 @@ import {
   Button,
   Card,
   Col,
-  Collapse,
   Descriptions,
   Empty,
   Popconfirm,
@@ -26,6 +25,7 @@ import {
 } from 'antd'
 import { useMemo } from 'react'
 import { cancelTaskmillTask } from '@/request'
+import { transStatus } from './taskmill-active-tasks-panel'
 
 function formatDuration(d: TaskmillSerdeDuration | null | undefined): string {
   if (!d)
@@ -119,7 +119,7 @@ export function TaskmillSnapshotPanel({
         dataIndex: 'status',
         width: 96,
         render: (s: TaskmillTaskStatus) => (
-          <Tag color={statusColor(s)}>{s}</Tag>
+          <Tag color={statusColor(s)}>{transStatus(s)}</Tag>
         ),
       },
       {
@@ -188,7 +188,7 @@ export function TaskmillSnapshotPanel({
   const { scheduler, metrics } = data
 
   return (
-    <Space direction="vertical" size="large" className="w-full">
+    <Space orientation="vertical" size="large" className="w-full">
       <Row gutter={[16, 16]}>
         <Col xs={12} sm={8} md={6}>
           <Card size="small" className="h-full shadow-sm">
@@ -210,7 +210,9 @@ export function TaskmillSnapshotPanel({
             <Statistic
               title="失败"
               value={metrics.failed}
-              valueStyle={{ color: metrics.failed ? '#cf1322' : undefined }}
+              styles={{
+                content: { color: metrics.failed ? '#cf1322' : undefined },
+              }}
             />
           </Card>
         </Col>
@@ -237,7 +239,7 @@ export function TaskmillSnapshotPanel({
       </Row>
 
       <Card size="small" title="调度器背压" className="shadow-sm">
-        <Space direction="vertical" className="w-full" size="middle">
+        <Space orientation="vertical" className="w-full" size="middle">
           <div>
             <Typography.Text type="secondary" className="text-xs">
               综合
@@ -359,23 +361,6 @@ export function TaskmillSnapshotPanel({
         </div>
       )}
 
-      <Collapse
-        size="small"
-        items={[
-          {
-            key: 'raw',
-            label: '原始 JSON',
-            children: (
-              <Typography.Paragraph>
-                <pre>
-                  {JSON.stringify(data, null, 2)}
-                </pre>
-              </Typography.Paragraph>
-
-            ),
-          },
-        ]}
-      />
     </Space>
   )
 }

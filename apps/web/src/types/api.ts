@@ -247,6 +247,7 @@ export interface MediaVideosPageRes {
 export interface MediaVideosQuery {
 	root_id?: number;
 	q?: string;
+	has_subtitle?: boolean;
 	current?: number;
 	page_size?: number;
 }

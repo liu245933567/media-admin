@@ -52,7 +52,6 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
   })
 
   const isPaused = snapshotQuery.data?.scheduler.is_paused ?? false
-  const loading = snapshotQuery.isFetching
 
   return (
     <>
@@ -69,7 +68,7 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
         : (
             <Button
               icon={<PauseCircleOutlined />}
-              loading={pauseMutation.isPending || loading}
+              loading={pauseMutation.isPending}
               onClick={() => pauseMutation.mutate()}
             >
               暂停任务调度

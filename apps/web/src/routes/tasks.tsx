@@ -36,7 +36,7 @@ function PageComponent() {
   const [createOpen, setCreateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [execLogAutoRefresh, setExecLogAutoRefresh] = useState(true)
-  const [taskTypeFilter, setTaskTypeFilter] = useState<string | undefined>()
+  const [taskTypeFilter] = useState<string | undefined>()
 
   const snapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
@@ -61,20 +61,6 @@ function PageComponent() {
     queryFn: () => fetchTaskmillExecLog(execLogQueryParams),
     refetchInterval: execLogAutoRefresh ? 1200 : false,
   })
-
-  const knownTaskTypes = useMemo(() => {
-    const types = new Set<string>()
-    for (const r of historyQuery.data ?? []) {
-      types.add(r.task_type)
-    }
-    for (const r of snapshotQuery.data?.scheduler.running ?? []) {
-      types.add(r.task_type)
-    }
-    for (const r of activeQuery.data ?? []) {
-      types.add(r.task_type)
-    }
-    return types
-  }, [historyQuery.data, snapshotQuery.data, activeQuery.data])
 
   const filteredHistory = useMemo(() => {
     const list = historyQuery.data ?? []
@@ -106,57 +92,36 @@ function PageComponent() {
   return (
     <PageContainer
       title="任务管理"
-      subTitle="应用启动后调度默认暂停，请点击「恢复任务调度」后再执行任务；可按类型筛选。"
+      extra={[
+        // <Button key="refresh" loading={snapshotQuery.isFetching} onClick={refreshAll}>
+        //   刷新
+        // </Button>,
+        <TaskmillQueueControls key="queue-controls" onChanged={refreshAll} />,
+        <Dropdown
+          key="dropdown"
+          menu={{
+            items: [
+              {
+                key: 'subtitle-generate',
+                label: '字幕生成（视频 → SRT）',
+                onClick: () => setCreateOpen(true),
+              },
+              {
+                key: 'subtitle-translate',
+                label: '字幕翻译（SRT）',
+                onClick: () => setTranslateOpen(true),
+              },
+            ],
+          }}
+        >
+          <Button type="primary">
+            新建任务
+            <PlusOutlined />
+          </Button>
+        </Dropdown>,
+      ]}
     >
       <div className="flex flex-col gap-4">
-        <Space wrap>
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'subtitle-generate',
-                  label: '字幕生成（视频 → SRT）',
-                  onClick: () => setCreateOpen(true),
-                },
-                {
-                  key: 'subtitle-translate',
-                  label: '字幕翻译（SRT）',
-                  onClick: () => setTranslateOpen(true),
-                },
-              ],
-            }}
-          >
-            <Button type="primary" icon={<PlusOutlined />}>
-              新建任务
-              {' '}
-              <DownOutlined />
-            </Button>
-          </Dropdown>
-          <TaskmillQueueControls onChanged={refreshAll} />
-          <Button loading={snapshotQuery.isFetching} onClick={refreshAll}>
-            刷新
-          </Button>
-          <Tag color={runningCount > 0 ? 'processing' : 'default'}>
-            执行中
-            {' '}
-            {runningCount}
-          </Tag>
-          <Tag color={pendingCount > 0 ? 'warning' : 'default'}>
-            排队
-            {' '}
-            {pendingCount}
-          </Tag>
-          <Tag color={activeCount > 0 ? 'blue' : 'default'}>
-            活跃
-            {' '}
-            {activeCount}
-          </Tag>
-          {snapshotQuery.data?.scheduler.is_paused
-            ? (
-                <Tag color="red">调度已暂停</Tag>
-              )
-            : null}
-        </Space>
 
         <SubtitleTaskCreateDrawerForm
           open={createOpen}
@@ -176,6 +141,29 @@ function PageComponent() {
         />
 
         <Tabs
+          tabBarExtraContent={{
+            right: (
+              <Space>
+                <Tag color={runningCount > 0 ? 'processing' : 'default'}>
+                  执行中
+                  {runningCount}
+                </Tag>
+                <Tag color={pendingCount > 0 ? 'warning' : 'default'}>
+                  排队
+                  {pendingCount}
+                </Tag>
+                <Tag color={activeCount > 0 ? 'blue' : 'default'}>
+                  活跃
+                  {activeCount}
+                </Tag>
+                {snapshotQuery.data?.scheduler.is_paused
+                  ? (
+                      <Tag color="red">调度已暂停</Tag>
+                    )
+                  : null}
+              </Space>
+            ),
+          }}
           items={[
             {
               key: 'snapshot',
@@ -194,36 +182,22 @@ function PageComponent() {
               key: 'active',
               label: '活跃任务',
               children: (
-                <Card variant="borderless" className="shadow-sm">
-                  <TaskTypeFilter
-                    taskTypes={knownTaskTypes}
-                    value={taskTypeFilter}
-                    onChange={setTaskTypeFilter}
-                  />
-                  <TaskmillActiveTasksPanel
-                    items={filteredActive}
-                    loading={activeQuery.isLoading || activeQuery.isFetching}
-                    onChanged={refreshAll}
-                  />
-                </Card>
+                <TaskmillActiveTasksPanel
+                  items={filteredActive}
+                  loading={activeQuery.isLoading || activeQuery.isFetching}
+                  onChanged={refreshAll}
+                />
               ),
             },
             {
               key: 'history',
               label: '任务历史',
               children: (
-                <Card variant="borderless" className="shadow-sm">
-                  <TaskTypeFilter
-                    taskTypes={knownTaskTypes}
-                    value={taskTypeFilter}
-                    onChange={setTaskTypeFilter}
-                  />
-                  <TaskmillHistoryPanel
-                    items={filteredHistory}
-                    loading={historyQuery.isLoading || historyQuery.isFetching}
-                    onChanged={refreshAll}
-                  />
-                </Card>
+                <TaskmillHistoryPanel
+                  items={filteredHistory}
+                  loading={historyQuery.isLoading || historyQuery.isFetching}
+                  onChanged={refreshAll}
+                />
               ),
             },
             {

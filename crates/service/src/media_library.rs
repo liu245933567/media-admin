@@ -99,6 +99,7 @@ pub struct MediaVideoRow {
 pub struct MediaVideosQuery {
     pub root_id: Option<I54>,
     pub q: Option<String>,
+    pub has_subtitle: Option<bool>,
     pub current: Option<i32>,
     pub page_size: Option<i32>,
 }
@@ -236,7 +237,10 @@ pub async fn enqueue_media_library_scan(
 }
 
 /// 查询扫描入库的视频文件，并附带同目录匹配的字幕文件。
-pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result<MediaVideosPageRes> {
+pub async fn list_media_videos(
+    pool: &SqlitePool,
+    q: MediaVideosQuery,
+) -> Result<MediaVideosPageRes> {
     let current = q.current.unwrap_or(1).max(1);
     let page_size = q.page_size.unwrap_or(20).clamp(1, 200);
     let offset = (current - 1) * page_size;
@@ -246,9 +250,37 @@ pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| format!("%{s}%"));
+    let has_subtitle = q.has_subtitle;
 
     let mut count_builder = QueryBuilder::<Sqlite>::new("SELECT COUNT(*) FROM media_files");
     let root_id = q.root_id.map(i64::from);
+
+    if let Some(has_subtitle) = has_subtitle {
+        let rows = select_media_video_records(pool, root_id, keyword.as_deref(), None).await?;
+        let subtitle_rows = subtitle_records_for_videos(pool, &rows).await?;
+        let filtered = rows
+            .into_iter()
+            .map(|row| media_video_to_api(row, &subtitle_rows))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .filter(|row| (row.subtitle_count > 0) == has_subtitle)
+            .collect::<Vec<_>>();
+        let total = filtered.len();
+        let data = filtered
+            .into_iter()
+            .skip(usize::try_from(offset).unwrap_or(0))
+            .take(usize::try_from(page_size).unwrap_or(20))
+            .collect();
+
+        return Ok(MediaVideosPageRes {
+            data,
+            total: i54(
+                i64::try_from(total).context("媒体文件数量超出 SQLite INTEGER 范围")?,
+                "媒体文件数量超出 JS 安全整数范围",
+            )?,
+        });
+    }
+
     push_media_file_filters(
         &mut count_builder,
         root_id,
@@ -257,27 +289,9 @@ pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result
     );
     let total: i64 = count_builder.build_query_scalar().fetch_one(pool).await?;
 
-    let mut rows_builder = QueryBuilder::<Sqlite>::new(
-        r#"
-        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
-        FROM media_files
-        "#,
-    );
-    push_media_file_filters(
-        &mut rows_builder,
-        root_id,
-        Some(MediaFileType::Video.as_str()),
-        keyword.as_deref(),
-    );
-    rows_builder.push(" ORDER BY file_path ASC LIMIT ");
-    rows_builder.push_bind(page_size);
-    rows_builder.push(" OFFSET ");
-    rows_builder.push_bind(offset);
-
-    let rows = rows_builder
-        .build_query_as::<MediaFileRecord>()
-        .fetch_all(pool)
-        .await?;
+    let rows =
+        select_media_video_records(pool, root_id, keyword.as_deref(), Some((page_size, offset)))
+            .await?;
     let subtitle_rows = subtitle_records_for_videos(pool, &rows).await?;
     let data = rows
         .into_iter()
@@ -288,6 +302,40 @@ pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result
         data,
         total: i54(total, "媒体文件数量超出 JS 安全整数范围")?,
     })
+}
+
+/// 查询视频媒体文件记录，可按分页参数限制返回范围。
+async fn select_media_video_records(
+    pool: &SqlitePool,
+    root_id: Option<i64>,
+    keyword: Option<&str>,
+    page: Option<(i32, i32)>,
+) -> Result<Vec<MediaFileRecord>> {
+    let mut rows_builder = QueryBuilder::<Sqlite>::new(
+        r#"
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
+        FROM media_files
+        "#,
+    );
+    push_media_file_filters(
+        &mut rows_builder,
+        root_id,
+        Some(MediaFileType::Video.as_str()),
+        keyword,
+    );
+    rows_builder.push(" ORDER BY file_path ASC");
+    if let Some((page_size, offset)) = page {
+        rows_builder.push(" LIMIT ");
+        rows_builder.push_bind(page_size);
+        rows_builder.push(" OFFSET ");
+        rows_builder.push_bind(offset);
+    }
+
+    rows_builder
+        .build_query_as::<MediaFileRecord>()
+        .fetch_all(pool)
+        .await
+        .map_err(Into::into)
 }
 
 /// 删除视频文件，并同步删除数据库中与视频匹配的字幕文件记录和磁盘文件。
@@ -607,7 +655,10 @@ fn media_subtitle_to_api(row: &MediaFileRecord) -> Result<MediaSubtitleRow> {
     })
 }
 
-fn media_video_to_api(row: MediaFileRecord, subtitle_rows: &[MediaFileRecord]) -> Result<MediaVideoRow> {
+fn media_video_to_api(
+    row: MediaFileRecord,
+    subtitle_rows: &[MediaFileRecord],
+) -> Result<MediaVideoRow> {
     let subtitles = subtitle_rows
         .iter()
         .filter(|subtitle| subtitle_matches_video(&row.file_path, &subtitle.file_path))
