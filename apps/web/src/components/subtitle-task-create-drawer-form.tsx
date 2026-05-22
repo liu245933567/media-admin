@@ -3,7 +3,6 @@ import type {
   SubtitleGenerateReq,
   SubtitleTranslateConfig,
   VadConfig,
-  VideoFolderScanItem,
 } from '@/types/api'
 import { DrawerForm, ProFormText } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
@@ -19,14 +18,19 @@ import {
   whisperModelsQueryKey,
 } from '@/request'
 
+export interface SubtitleTaskBulkSourceRow {
+  video_path: string
+  subtitle_names: string[]
+}
+
 export interface SubtitleTaskCreateDrawerFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
   /** 打开时预填视频路径（例如扫描页单条「字幕生成」） */
   initialVideoPath?: string
-  /** 非空时为批量创建：共用表单中的识别/翻译等配置，路径来自扫描结果 */
-  bulkSourceRows?: VideoFolderScanItem[]
+  /** 非空时为批量创建：共用表单中的识别/翻译等配置，路径来自视频列表 */
+  bulkSourceRows?: SubtitleTaskBulkSourceRow[]
 }
 
 /** 表单字段：配置项 + 单条模式下的视频路径 */

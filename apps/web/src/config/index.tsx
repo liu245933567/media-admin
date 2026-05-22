@@ -4,7 +4,6 @@ import {
   FolderOpenOutlined,
   SettingOutlined,
   UnorderedListOutlined,
-  VideoCameraOutlined,
 } from '@ant-design/icons'
 
 export const menu = [
@@ -12,11 +11,6 @@ export const menu = [
     name: '首页',
     path: '/',
     icon: <HomeOutlined />,
-  },
-  {
-    name: '本地视频',
-    path: '/video-folder-scan',
-    icon: <VideoCameraOutlined />,
   },
   {
     name: '媒体库',

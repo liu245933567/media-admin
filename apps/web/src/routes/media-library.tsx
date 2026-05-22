@@ -3,12 +3,13 @@ import type { MediaSubtitleRow, MediaVideoRow } from '@/types'
 import { DownOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
-import { App, Button, Dropdown, List, Modal, Popover, Space, Tag, Typography } from 'antd'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { App, Button, Dropdown, List, Popover, Space, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
+import { buildVideoPlaySearch } from '@/lib/video-play-search'
 import {
   deleteMediaVideos,
   fetchMediaFiles,
@@ -22,7 +23,8 @@ export const Route = createFileRoute('/media-library')({
 })
 
 function PageComponent() {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
+  const navigate = useNavigate()
   const filesActionRef = useRef<ActionType>(null)
   const [fileKeyword, setFileKeyword] = useState('')
   const [selectedRows, setSelectedRows] = useState<MediaVideoRow[]>([])
@@ -60,7 +62,7 @@ function PageComponent() {
     if (!rows.length) {
       return
     }
-    Modal.confirm({
+    modal.confirm({
       title: rows.length > 1 ? '批量删除视频' : '删除此视频',
       content: (
         <div className="space-y-2">
@@ -81,7 +83,7 @@ function PageComponent() {
         video_paths: rows.map(row => row.file_path),
       }),
     })
-  }, [deleteVideosMutation])
+  }, [deleteVideosMutation, modal])
 
   const openSubtitleCreateSingle = useCallback((videoPath: string) => {
     setSubtitleTaskBulkRows(undefined)
@@ -159,10 +161,17 @@ function PageComponent() {
         <Dropdown
           menu={{
             items: [
+              { key: 'play', label: '播放' },
               { key: 'delete', label: '删除此视频', danger: true },
               { key: 'generate', label: '生成字幕' },
             ],
             onClick: ({ key }) => {
+              if (key === 'play') {
+                void navigate({
+                  to: '/video-play',
+                  search: buildVideoPlaySearch(row),
+                })
+              }
               if (key === 'delete') {
                 confirmDeleteVideos([row])
               }
@@ -179,7 +188,7 @@ function PageComponent() {
         </Dropdown>
       ),
     },
-  ], [confirmDeleteVideos, openSubtitleCreateSingle, rootOptions, rootsQuery.data])
+  ], [confirmDeleteVideos, navigate, openSubtitleCreateSingle, rootOptions, rootsQuery.data])
 
   return (
     <PageContainer title={false}>

@@ -565,22 +565,6 @@ export interface SubtitleWebSearchRes {
 	items: SubtitleWebRow[];
 }
 
-export interface VideoFolderScanItem {
-	video_name: string;
-	video_path: string;
-	video_size: number;
-	/** 同目录、同 stem 的字幕文件名列表（不含路径） */
-	subtitle_names: string[];
-}
-
-export interface VideoFolderScanReq {
-	root_dir: string;
-}
-
-export interface VideoFolderScanRes {
-	items: VideoFolderScanItem[];
-}
-
 export interface VideoPlaybackProbeRes {
 	/** 是否建议走直链（H.264/AAC 等浏览器常见组合） */
 	direct_playable: boolean;

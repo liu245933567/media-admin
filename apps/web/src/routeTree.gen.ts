@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoPlayRouteImport } from './routes/video-play'
-import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
@@ -20,11 +19,6 @@ import { Route as IndexRouteImport } from './routes/index'
 const VideoPlayRoute = VideoPlayRouteImport.update({
   id: '/video-play',
   path: '/video-play',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VideoFolderScanRoute = VideoFolderScanRouteImport.update({
-  id: '/video-folder-scan',
-  path: '/video-folder-scan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksRoute = TasksRouteImport.update({
@@ -59,7 +53,6 @@ export interface FileRoutesByFullPath {
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRoutesByTo {
@@ -68,7 +61,6 @@ export interface FileRoutesByTo {
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRoutesById {
@@ -78,7 +70,6 @@ export interface FileRoutesById {
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRouteTypes {
@@ -89,7 +80,6 @@ export interface FileRouteTypes {
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -98,7 +88,6 @@ export interface FileRouteTypes {
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   id:
     | '__root__'
@@ -107,7 +96,6 @@ export interface FileRouteTypes {
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   fileRoutesById: FileRoutesById
 }
@@ -117,7 +105,6 @@ export interface RootRouteChildren {
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   TasksRoute: typeof TasksRoute
-  VideoFolderScanRoute: typeof VideoFolderScanRoute
   VideoPlayRoute: typeof VideoPlayRoute
 }
 
@@ -128,13 +115,6 @@ declare module '@tanstack/react-router' {
       path: '/video-play'
       fullPath: '/video-play'
       preLoaderRoute: typeof VideoPlayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/video-folder-scan': {
-      id: '/video-folder-scan'
-      path: '/video-folder-scan'
-      fullPath: '/video-folder-scan'
-      preLoaderRoute: typeof VideoFolderScanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks': {
@@ -181,7 +161,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   TasksRoute: TasksRoute,
-  VideoFolderScanRoute: VideoFolderScanRoute,
   VideoPlayRoute: VideoPlayRoute,
 }
 export const routeTree = rootRouteImport
