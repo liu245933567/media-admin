@@ -111,6 +111,21 @@ pub struct MediaVideosPageRes {
     pub total: I54,
 }
 
+#[typeshare]
+#[derive(Debug, Deserialize)]
+/// 删除媒体库视频请求。
+pub struct MediaVideoDeleteReq {
+    pub video_paths: Vec<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 删除媒体库视频结果摘要。
+pub struct MediaVideoDeleteRes {
+    pub deleted_videos: u32,
+    pub deleted_subtitles: u32,
+}
+
 #[derive(Debug, FromRow)]
 /// 数据库中的媒体资源根目录记录。
 struct MediaRootRecord {
@@ -272,6 +287,60 @@ pub async fn list_media_videos(pool: &SqlitePool, q: MediaVideosQuery) -> Result
     Ok(MediaVideosPageRes {
         data,
         total: i54(total, "媒体文件数量超出 JS 安全整数范围")?,
+    })
+}
+
+/// 删除视频文件，并同步删除数据库中与视频匹配的字幕文件记录和磁盘文件。
+pub async fn delete_media_videos(
+    pool: &SqlitePool,
+    req: MediaVideoDeleteReq,
+) -> Result<MediaVideoDeleteRes> {
+    if req.video_paths.is_empty() {
+        bail!("video_paths 不能为空");
+    }
+
+    let mut deleted_videos = 0_u32;
+    let mut deleted_subtitles = 0_u32;
+
+    for raw_path in req.video_paths {
+        let video_path = raw_path.trim();
+        if video_path.is_empty() {
+            continue;
+        }
+
+        let video = find_video_by_path(pool, video_path).await?;
+        let subtitles = subtitle_records_for_videos(pool, std::slice::from_ref(&video)).await?;
+        let matched_subtitles = subtitles
+            .into_iter()
+            .filter(|subtitle| subtitle_matches_video(&video.file_path, &subtitle.file_path))
+            .collect::<Vec<_>>();
+
+        for subtitle in &matched_subtitles {
+            remove_file_if_exists(&subtitle.file_path).await?;
+        }
+        remove_file_if_exists(&video.file_path).await?;
+
+        let mut tx = pool.begin().await?;
+        for subtitle in &matched_subtitles {
+            sqlx::query("DELETE FROM media_files WHERE id = ?1")
+                .bind(subtitle.id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        sqlx::query("DELETE FROM media_files WHERE id = ?1")
+            .bind(video.id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+
+        deleted_videos = deleted_videos.saturating_add(1);
+        deleted_subtitles = deleted_subtitles
+            .saturating_add(u32::try_from(matched_subtitles.len()).unwrap_or(u32::MAX));
+    }
+
+    Ok(MediaVideoDeleteRes {
+        deleted_videos,
+        deleted_subtitles,
     })
 }
 
@@ -581,6 +650,35 @@ async fn subtitle_records_for_videos(
         .fetch_all(pool)
         .await
         .map_err(Into::into)
+}
+
+async fn find_video_by_path(pool: &SqlitePool, video_path: &str) -> Result<MediaFileRecord> {
+    sqlx::query_as::<_, MediaFileRecord>(
+        r#"
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, scanned_at
+        FROM media_files
+        WHERE file_path = ?1 AND file_type = ?2
+        "#,
+    )
+    .bind(video_path)
+    .bind(MediaFileType::Video.as_str())
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("视频不存在或未入库: {video_path}"))
+}
+
+async fn remove_file_if_exists(path: &str) -> Result<()> {
+    let p = Path::new(path);
+    if !tokio::fs::try_exists(p).await? {
+        return Ok(());
+    }
+    let meta = tokio::fs::metadata(p).await?;
+    if !meta.is_file() {
+        bail!("path 不能为目录: {path}");
+    }
+    tokio::fs::remove_file(p)
+        .await
+        .with_context(|| format!("删除文件失败: {path}"))
 }
 
 fn subtitle_matches_video(video_path: &str, subtitle_path: &str) -> bool {

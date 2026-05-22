@@ -1,6 +1,8 @@
 import type {
   MediaRootCreateReq,
   MediaRootRow,
+  MediaVideoDeleteReq,
+  MediaVideoDeleteRes,
   MediaVideosPageRes,
   MediaVideosQuery,
 } from '@/types'
@@ -22,6 +24,13 @@ export function deleteMediaRoot(id: number) {
 
 export function enqueueMediaRootScan(id: number) {
   return post<unknown>(`/media-library/roots/${id}/scan`)
+}
+
+export function deleteMediaVideos(params: MediaVideoDeleteReq) {
+  return post<MediaVideoDeleteRes, MediaVideoDeleteReq>(
+    '/media-library/videos/delete',
+    params,
+  )
 }
 
 export interface MediaFilesParams {

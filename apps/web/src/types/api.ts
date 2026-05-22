@@ -213,6 +213,17 @@ export interface MediaSubtitleRow {
 	scanned_at: string;
 }
 
+/** 删除媒体库视频请求。 */
+export interface MediaVideoDeleteReq {
+	video_paths: string[];
+}
+
+/** 删除媒体库视频结果摘要。 */
+export interface MediaVideoDeleteRes {
+	deleted_videos: number;
+	deleted_subtitles: number;
+}
+
 /** 媒体库视频列表行。 */
 export interface MediaVideoRow {
 	id: number;

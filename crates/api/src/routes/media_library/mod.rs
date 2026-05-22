@@ -5,8 +5,9 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::media_library::{
-    MediaRootCreateReq, MediaRootRow, MediaVideosPageRes, MediaVideosQuery, create_media_root,
-    delete_media_root, enqueue_media_library_scan, list_media_roots, list_media_videos,
+    MediaRootCreateReq, MediaRootRow, MediaVideoDeleteReq, MediaVideoDeleteRes,
+    MediaVideosPageRes, MediaVideosQuery, create_media_root, delete_media_root,
+    delete_media_videos, enqueue_media_library_scan, list_media_roots, list_media_videos,
 };
 
 use crate::{AppState, StateRouter, error::AppError};
@@ -17,6 +18,7 @@ pub fn routes() -> StateRouter {
         .route("/roots/{id}", delete(delete_root_handler))
         .route("/roots/{id}/scan", post(scan_root_handler))
         .route("/files", get(list_files_handler))
+        .route("/videos/delete", post(delete_videos_handler))
 }
 
 async fn list_roots_handler(
@@ -66,4 +68,14 @@ async fn list_files_handler(
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(rows))
+}
+
+async fn delete_videos_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<MediaVideoDeleteReq>, AppError>,
+) -> Result<Json<MediaVideoDeleteRes>, AppError> {
+    let res = delete_media_videos(&state.db, body)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    Ok(Json(res))
 }

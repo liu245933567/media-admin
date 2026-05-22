@@ -1,13 +1,16 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import type { MediaSubtitleRow, MediaVideoRow } from '@/types'
+import { DownOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Button, List, Popover, Space, Tag, Typography } from 'antd'
+import { App, Button, Dropdown, List, Modal, Popover, Space, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
+import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import {
+  deleteMediaVideos,
   fetchMediaFiles,
   fetchMediaRoots,
   mediaRootsQueryKey,
@@ -19,8 +22,13 @@ export const Route = createFileRoute('/media-library')({
 })
 
 function PageComponent() {
+  const { message } = App.useApp()
   const filesActionRef = useRef<ActionType>(null)
   const [fileKeyword, setFileKeyword] = useState('')
+  const [selectedRows, setSelectedRows] = useState<MediaVideoRow[]>([])
+  const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
+  const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
+  const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<MediaVideoRow[] | undefined>()
 
   const rootsQuery = useQuery({
     queryKey: mediaRootsQueryKey,
@@ -33,6 +41,59 @@ function PageComponent() {
       value: Number(root.id),
     }))
   }, [rootsQuery.data])
+
+  const reloadList = useCallback(() => {
+    filesActionRef.current?.reload()
+  }, [])
+
+  const deleteVideosMutation = useMutation({
+    mutationFn: deleteMediaVideos,
+    onSuccess: (res) => {
+      message.success(`已删除 ${res.deleted_videos} 个视频，${res.deleted_subtitles} 个字幕`)
+      setSelectedRows([])
+      reloadList()
+    },
+    onError: error => message.error(error.message ?? '删除失败'),
+  })
+
+  const confirmDeleteVideos = useCallback((rows: MediaVideoRow[]) => {
+    if (!rows.length) {
+      return
+    }
+    Modal.confirm({
+      title: rows.length > 1 ? '批量删除视频' : '删除此视频',
+      content: (
+        <div className="space-y-2">
+          <Typography.Paragraph className="mb-0">
+            将从磁盘删除
+            <Typography.Text strong className="mx-1">{rows.length}</Typography.Text>
+            个视频，并同步删除与视频相关的字幕文件。
+          </Typography.Paragraph>
+          <Typography.Paragraph className="mb-0 text-neutral-500">
+            此操作不可恢复。
+          </Typography.Paragraph>
+        </div>
+      ),
+      okText: '删除',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => deleteVideosMutation.mutateAsync({
+        video_paths: rows.map(row => row.file_path),
+      }),
+    })
+  }, [deleteVideosMutation])
+
+  const openSubtitleCreateSingle = useCallback((videoPath: string) => {
+    setSubtitleTaskBulkRows(undefined)
+    setSubtitleTaskCreateInitialPath(videoPath)
+    setSubtitleTaskCreateOpen(true)
+  }, [])
+
+  const openSubtitleCreateBulk = useCallback((rows: MediaVideoRow[]) => {
+    setSubtitleTaskCreateInitialPath(undefined)
+    setSubtitleTaskBulkRows(rows)
+    setSubtitleTaskCreateOpen(true)
+  }, [])
 
   const fileColumns = useMemo<ProColumns<MediaVideoRow>[]>(() => [
     {
@@ -90,10 +151,50 @@ function PageComponent() {
       copyable: true,
       search: false,
     },
-  ], [rootOptions, rootsQuery.data])
+    {
+      title: '操作',
+      valueType: 'option',
+      width: 110,
+      render: (_, row) => (
+        <Dropdown
+          menu={{
+            items: [
+              { key: 'delete', label: '删除此视频', danger: true },
+              { key: 'generate', label: '生成字幕' },
+            ],
+            onClick: ({ key }) => {
+              if (key === 'delete') {
+                confirmDeleteVideos([row])
+              }
+              if (key === 'generate') {
+                openSubtitleCreateSingle(row.file_path)
+              }
+            },
+          }}
+        >
+          <Button type="link" className="m-0! p-0!">
+            操作
+            <DownOutlined />
+          </Button>
+        </Dropdown>
+      ),
+    },
+  ], [confirmDeleteVideos, openSubtitleCreateSingle, rootOptions, rootsQuery.data])
 
   return (
     <PageContainer title={false}>
+      <SubtitleTaskCreateDrawerForm
+        open={subtitleTaskCreateOpen}
+        onOpenChange={(open) => {
+          setSubtitleTaskCreateOpen(open)
+          if (!open) {
+            setSubtitleTaskCreateInitialPath(undefined)
+            setSubtitleTaskBulkRows(undefined)
+          }
+        }}
+        initialVideoPath={subtitleTaskCreateInitialPath}
+        bulkSourceRows={subtitleTaskBulkRows?.map(mediaVideoToScanItem)}
+      />
       <Space direction="vertical" size={16} className="w-full">
         <ProTable<MediaVideoRow>
           rowKey="id"
@@ -115,6 +216,29 @@ function PageComponent() {
           search={{ labelWidth: 88 }}
           options={{ density: false, setting: false }}
           pagination={{ pageSize: 20, showSizeChanger: true }}
+          rowSelection={{
+            selectedRowKeys: selectedRows.map(row => row.id),
+            onChange: (_, rows) => setSelectedRows(rows),
+          }}
+          toolBarRender={() => [
+            <Button
+              key="bulk-delete"
+              danger
+              disabled={!selectedRows.length}
+              loading={deleteVideosMutation.isPending}
+              onClick={() => confirmDeleteVideos(selectedRows)}
+            >
+              批量删除
+            </Button>,
+            <Button
+              key="bulk-generate"
+              type="primary"
+              disabled={!selectedRows.length}
+              onClick={() => openSubtitleCreateBulk(selectedRows)}
+            >
+              批量生成字幕
+            </Button>,
+          ]}
           toolbar={{
             search: {
               placeholder: '搜索文件名或路径',
@@ -128,6 +252,15 @@ function PageComponent() {
       </Space>
     </PageContainer>
   )
+}
+
+function mediaVideoToScanItem(row: MediaVideoRow) {
+  return {
+    video_name: row.file_name,
+    video_path: row.file_path,
+    video_size: Number(row.file_size),
+    subtitle_names: row.subtitles.map(subtitle => subtitle.file_name),
+  }
 }
 
 function SubtitleCountPopover({
