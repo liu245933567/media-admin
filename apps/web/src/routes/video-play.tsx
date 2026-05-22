@@ -1,5 +1,5 @@
 import type { VideoPlaySearch } from '@/lib/video-play-search'
-import type { VideoFolderScanItem } from '@/types/api'
+import type { MediaVideoRow } from '@/types/api'
 import { UnorderedListOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
@@ -9,10 +9,10 @@ import { LocalVideoPlayer } from '@/components/local-video-player'
 import { VideoPlaylistDrawer } from '@/components/video-playlist-drawer'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
 import {
-  scanVideoFolder,
-  VIDEO_FOLDER_SCAN_GC_MS,
-  VIDEO_FOLDER_SCAN_STALE_MS,
-  videoFolderScanQueryKey,
+  fetchMediaFiles,
+  fetchMediaRoots,
+  mediaFilesQueryKey,
+  mediaRootsQueryKey,
 } from '@/request'
 import {
   getFileName,
@@ -28,13 +28,17 @@ export const Route = createFileRoute('/video-play')({
     videoPath: typeof search.videoPath === 'string' ? search.videoPath : '',
     subtitles: typeof search.subtitles === 'string' ? search.subtitles : undefined,
     subtitle: typeof search.subtitle === 'string' ? search.subtitle : undefined,
-    rootDir: typeof search.rootDir === 'string' ? search.rootDir : undefined,
+    rootId: typeof search.rootId === 'number'
+      ? search.rootId
+      : typeof search.rootId === 'string'
+        ? Number(search.rootId)
+        : undefined,
   }),
   component: PageComponent,
 })
 
 function PageComponent() {
-  const { videoPath, subtitles, subtitle, rootDir } = Route.useSearch()
+  const { videoPath, subtitles, subtitle, rootId } = Route.useSearch()
   const navigate = useNavigate()
   const [playlistDrawerOpen, setPlaylistDrawerOpen] = useState(false)
 
@@ -55,21 +59,26 @@ function PageComponent() {
       }))
   }, [videoPath, subtitles])
 
-  const scanRoot = rootDir?.trim() ?? ''
+  const mediaRootId = Number.isFinite(rootId) ? rootId : undefined
   const playlistQuery = useQuery({
-    queryKey: videoFolderScanQueryKey(scanRoot),
-    queryFn: () => scanVideoFolder({ root_dir: scanRoot }),
-    enabled: Boolean(scanRoot),
-    staleTime: VIDEO_FOLDER_SCAN_STALE_MS,
-    gcTime: VIDEO_FOLDER_SCAN_GC_MS,
+    queryKey: mediaFilesQueryKey({ root_id: mediaRootId, page_size: 1000 }),
+    queryFn: () => fetchMediaFiles({ root_id: mediaRootId, page_size: 1000 }),
+    enabled: mediaRootId != null,
+    staleTime: 60 * 1000,
+  })
+
+  const rootsQuery = useQuery({
+    queryKey: mediaRootsQueryKey,
+    queryFn: fetchMediaRoots,
+    staleTime: 60 * 1000,
   })
 
   const playlist = useMemo(
-    () => playlistQuery.data?.items ?? [],
-    [playlistQuery.data?.items],
+    () => playlistQuery.data?.data ?? [],
+    [playlistQuery.data?.data],
   )
   const currentIndex = useMemo(
-    () => playlist.findIndex(item => item.video_path === videoPath),
+    () => playlist.findIndex(item => item.file_path === videoPath),
     [playlist, videoPath],
   )
 
@@ -80,13 +89,13 @@ function PageComponent() {
       : undefined
 
   const goToItem = useCallback(
-    (item: VideoFolderScanItem) => {
+    (item: MediaVideoRow) => {
       void navigate({
         to: '/video-play',
-        search: buildVideoPlaySearch(item, scanRoot || undefined),
+        search: buildVideoPlaySearch(item),
       })
     },
-    [navigate, scanRoot],
+    [navigate],
   )
 
   useEffect(() => {
@@ -107,7 +116,7 @@ function PageComponent() {
   }, [goToItem, prevItem, nextItem])
 
   const playlistNav = useMemo(
-    () => (scanRoot
+    () => (mediaRootId != null
       ? {
           onPrev: prevItem ? () => goToItem(prevItem) : undefined,
           onNext: nextItem ? () => goToItem(nextItem) : undefined,
@@ -115,8 +124,13 @@ function PageComponent() {
           nextDisabled: !nextItem,
         }
       : undefined),
-    [scanRoot, prevItem, nextItem, goToItem],
+    [mediaRootId, prevItem, nextItem, goToItem],
   )
+
+  const rootName = useMemo(() => {
+    const root = rootsQuery.data?.find(item => Number(item.id) === mediaRootId)
+    return root?.name
+  }, [mediaRootId, rootsQuery.data])
 
   if (!videoPath) {
     return (
@@ -124,10 +138,10 @@ function PageComponent() {
         <Result
           status="warning"
           title="缺少视频路径"
-          subTitle="请从「本地视频」列表点击播放进入"
+          subTitle="请从媒体库列表点击播放进入"
           extra={(
-            <Link to="/video-folder-scan">
-              <Button type="primary">返回本地视频</Button>
+            <Link to="/media-library">
+              <Button type="primary">返回媒体库</Button>
             </Link>
           )}
         />
@@ -138,7 +152,7 @@ function PageComponent() {
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col bg-black">
       <header className="z-20 flex shrink-0 items-center gap-2 border-b border-white/10 bg-zinc-950/95 px-3 py-2 text-white backdrop-blur-sm">
-        <Link to="/video-folder-scan">
+        <Link to="/media-library">
           <Button
             type="text"
             className="text-white/85! hover:text-white!"
@@ -162,7 +176,7 @@ function PageComponent() {
             </Typography.Text>
           )}
         </div>
-        {scanRoot
+        {mediaRootId != null
           ? (
               <Button
                 type="text"
@@ -174,7 +188,7 @@ function PageComponent() {
               </Button>
             )
           : (
-              <Link to="/video-folder-scan">
+              <Link to="/media-library">
                 <Button
                   type="text"
                   icon={<UnorderedListOutlined />}
@@ -186,14 +200,14 @@ function PageComponent() {
             )}
       </header>
 
-      {scanRoot && (
+      {mediaRootId != null && (
         <VideoPlaylistDrawer
           open={playlistDrawerOpen}
           onClose={() => setPlaylistDrawerOpen(false)}
           items={playlist}
           currentVideoPath={videoPath}
           loading={playlistQuery.isFetching}
-          rootDir={scanRoot}
+          rootName={rootName}
           onSelect={(item) => {
             setPlaylistDrawerOpen(false)
             goToItem(item)

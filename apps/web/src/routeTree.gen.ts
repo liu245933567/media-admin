@@ -10,20 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoPlayRouteImport } from './routes/video-play'
-import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
+import { Route as MediaLibraryRouteImport } from './routes/media-library'
 import { Route as IndexRouteImport } from './routes/index'
 
 const VideoPlayRoute = VideoPlayRouteImport.update({
   id: '/video-play',
   path: '/video-play',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VideoFolderScanRoute = VideoFolderScanRouteImport.update({
-  id: '/video-folder-scan',
-  path: '/video-folder-scan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksRoute = TasksRouteImport.update({
@@ -41,6 +36,11 @@ const SettingRoute = SettingRouteImport.update({
   path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaLibraryRoute = MediaLibraryRouteImport.update({
+  id: '/media-library',
+  path: '/media-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,62 +49,62 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
-  '/video-folder-scan': typeof VideoFolderScanRoute
   '/video-play': typeof VideoPlayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   id:
     | '__root__'
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
-    | '/video-folder-scan'
     | '/video-play'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MediaLibraryRoute: typeof MediaLibraryRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   TasksRoute: typeof TasksRoute
-  VideoFolderScanRoute: typeof VideoFolderScanRoute
   VideoPlayRoute: typeof VideoPlayRoute
 }
 
@@ -115,13 +115,6 @@ declare module '@tanstack/react-router' {
       path: '/video-play'
       fullPath: '/video-play'
       preLoaderRoute: typeof VideoPlayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/video-folder-scan': {
-      id: '/video-folder-scan'
-      path: '/video-folder-scan'
-      fullPath: '/video-folder-scan'
-      preLoaderRoute: typeof VideoFolderScanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks': {
@@ -145,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media-library': {
+      id: '/media-library'
+      path: '/media-library'
+      fullPath: '/media-library'
+      preLoaderRoute: typeof MediaLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -157,10 +157,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MediaLibraryRoute: MediaLibraryRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   TasksRoute: TasksRoute,
-  VideoFolderScanRoute: VideoFolderScanRoute,
   VideoPlayRoute: VideoPlayRoute,
 }
 export const routeTree = rootRouteImport

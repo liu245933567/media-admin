@@ -1,27 +1,25 @@
-import type { VideoFolderScanItem } from '@/types/api'
+import type { MediaVideoRow } from '@/types/api'
 import { isPlayableSubtitleFile } from '@/utils/video-path'
 
 export interface VideoPlaySearch {
   videoPath: string
   subtitles?: string
   subtitle?: string
-  /** 与「本地视频」扫描目录一致时，用于上一个/下一个切换 */
-  rootDir?: string
+  /** 媒体库资源路径 ID，用于上一个/下一个切换 */
+  rootId?: number
 }
 
-/** 从扫描条目构造播放页 search 参数（含同目录播放列表用的 rootDir） */
+/** 从媒体库视频条目构造播放页 search 参数。 */
 export function buildVideoPlaySearch(
-  item: Pick<VideoFolderScanItem, 'video_path' | 'subtitle_names'>,
-  rootDir?: string,
+  item: Pick<MediaVideoRow, 'file_path' | 'subtitles' | 'root_id'>,
 ): VideoPlaySearch {
-  const subtitles = (item.subtitle_names ?? [])
+  const subtitles = (item.subtitles ?? [])
+    .map(subtitle => subtitle.file_name)
     .filter(isPlayableSubtitleFile)
     .join(',')
-  const search: VideoPlaySearch = { videoPath: item.video_path }
+  const search: VideoPlaySearch = { videoPath: item.file_path }
   if (subtitles)
     search.subtitles = subtitles
-  const dir = rootDir?.trim()
-  if (dir)
-    search.rootDir = dir
+  search.rootId = Number(item.root_id)
   return search
 }

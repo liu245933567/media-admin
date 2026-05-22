@@ -1,4 +1,4 @@
-import type { VideoFolderScanItem } from '@/types/api'
+import type { MediaVideoRow } from '@/types/api'
 import { PlayCircleOutlined } from '@ant-design/icons'
 import { Drawer, Table, Tag, Typography } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
@@ -11,11 +11,11 @@ const DEFAULT_PAGE_SIZE = 20
 export interface VideoPlaylistDrawerProps {
   open: boolean
   onClose: () => void
-  items: VideoFolderScanItem[]
+  items: MediaVideoRow[]
   currentVideoPath: string
-  onSelect: (item: VideoFolderScanItem) => void
+  onSelect: (item: MediaVideoRow) => void
   loading?: boolean
-  rootDir?: string
+  rootName?: string
 }
 
 /** 播放页选集抽屉：分页浏览目录内视频并切换播放 */
@@ -26,13 +26,13 @@ export function VideoPlaylistDrawer({
   currentVideoPath,
   onSelect,
   loading = false,
-  rootDir,
+  rootName,
 }: VideoPlaylistDrawerProps) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const currentIndex = useMemo(
-    () => items.findIndex(item => item.video_path === currentVideoPath),
+    () => items.findIndex(item => item.file_path === currentVideoPath),
     [items, currentVideoPath],
   )
 
@@ -50,20 +50,20 @@ export function VideoPlaylistDrawer({
       setPage(maxPage)
   }, [open, items.length, page, pageSize])
 
-  const columns = useMemo<ColumnsType<VideoFolderScanItem>>(() => [
+  const columns = useMemo<ColumnsType<MediaVideoRow>>(() => [
     {
       title: '视频',
-      dataIndex: 'video_name',
+      dataIndex: 'file_name',
       ellipsis: true,
       render: (_, row) => (
         <span className="flex min-w-0 items-center gap-1.5">
-          {row.video_path === currentVideoPath && (
+          {row.file_path === currentVideoPath && (
             <Tag color="blue" className="mr-0 shrink-0">
               播放中
             </Tag>
           )}
-          <Typography.Text ellipsis={{ tooltip: row.video_name }}>
-            {row.video_name}
+          <Typography.Text ellipsis={{ tooltip: row.file_name }}>
+            {row.file_name}
           </Typography.Text>
         </span>
       ),
@@ -73,7 +73,7 @@ export function VideoPlaylistDrawer({
       width: 64,
       align: 'center',
       render: (_, row) => {
-        const n = row.subtitle_names?.length ?? 0
+        const n = row.subtitle_count ?? 0
         return n > 0 ? `${n}` : '—'
       },
     },
@@ -82,7 +82,7 @@ export function VideoPlaylistDrawer({
       ellipsis: true,
       width: 140,
       render: (_, row) => {
-        const parent = getParentPath(row.video_path)
+        const parent = getParentPath(row.file_path)
         return (
           <Typography.Text type="secondary" ellipsis={{ tooltip: parent }} className="text-xs">
             {parent || '—'}
@@ -96,7 +96,7 @@ export function VideoPlaylistDrawer({
       align: 'right',
       render: (_, row) => (
         <span className="text-xs text-[var(--ant-color-text-secondary)]">
-          {formatBytes(Number(row.video_size))}
+          {formatBytes(Number(row.file_size))}
         </span>
       ),
     },
@@ -126,18 +126,18 @@ export function VideoPlaylistDrawer({
       destroyOnHidden
       styles={{ body: { padding: '12px 16px' } }}
     >
-      {rootDir && (
+      {rootName && (
         <Typography.Paragraph
           type="secondary"
-          ellipsis={{ tooltip: rootDir }}
+          ellipsis={{ tooltip: rootName }}
           className="mb-3! text-xs"
         >
-          扫描目录：
-          {rootDir}
+          媒体路径：
+          {rootName}
         </Typography.Paragraph>
       )}
-      <Table<VideoFolderScanItem>
-        rowKey="video_path"
+      <Table<MediaVideoRow>
+        rowKey="file_path"
         size="small"
         loading={loading}
         columns={columns}
@@ -146,20 +146,20 @@ export function VideoPlaylistDrawer({
         onRow={record => ({
           className: [
             'cursor-pointer',
-            record.video_path === currentVideoPath
+            record.file_path === currentVideoPath
               ? '[&>td]:bg-[var(--ant-color-primary-bg)]!'
               : 'hover:[&>td]:bg-[var(--ant-color-fill-tertiary)]!',
           ].join(' '),
           onClick: () => {
-            if (record.video_path !== currentVideoPath)
+            if (record.file_path !== currentVideoPath)
               onSelect(record)
           },
         })}
-        locale={{ emptyText: '暂无视频，请先在「本地视频」扫描目录' }}
+        locale={{ emptyText: '暂无视频，请先在设置页添加媒体路径并扫描' }}
       />
       <Typography.Text type="secondary" className="mt-2 block text-xs">
         <PlayCircleOutlined className="mr-1" />
-        点击行切换播放；无目录上下文时将跳转本地视频页
+        点击行切换播放
       </Typography.Text>
     </Drawer>
   )

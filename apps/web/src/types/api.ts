@@ -170,6 +170,87 @@ export interface FsReadTextRes {
 	content: string;
 }
 
+/** 媒体库扫描结果摘要。 */
+export interface MediaLibraryScanRes {
+	scanned: number;
+	videos: number;
+	subtitles: number;
+	removed: number;
+}
+
+/**
+ * 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+ * 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+ */
+export interface MediaLibraryScanTask {
+	root_id: number;
+	root_path: string;
+}
+
+/** 新增媒体资源根目录请求。 */
+export interface MediaRootCreateReq {
+	path: string;
+	name?: string;
+}
+
+/** 媒体资源根目录列表行。 */
+export interface MediaRootRow {
+	id: number;
+	path: string;
+	name: string;
+	created_at: string;
+	updated_at: string;
+	last_scanned_at?: string;
+}
+
+/** 视频拥有的字幕文件列表行。 */
+export interface MediaSubtitleRow {
+	id: number;
+	file_name: string;
+	file_path: string;
+	file_size: number;
+	modified_at: string;
+	scanned_at: string;
+}
+
+/** 删除媒体库视频请求。 */
+export interface MediaVideoDeleteReq {
+	video_paths: string[];
+}
+
+/** 删除媒体库视频结果摘要。 */
+export interface MediaVideoDeleteRes {
+	deleted_videos: number;
+	deleted_subtitles: number;
+}
+
+/** 媒体库视频列表行。 */
+export interface MediaVideoRow {
+	id: number;
+	root_id: number;
+	file_name: string;
+	file_path: string;
+	file_size: number;
+	modified_at: string;
+	scanned_at: string;
+	subtitle_count: number;
+	subtitles: MediaSubtitleRow[];
+}
+
+/** 媒体库视频分页查询结果。 */
+export interface MediaVideosPageRes {
+	data: MediaVideoRow[];
+	total: number;
+}
+
+/** 媒体库视频分页查询条件。 */
+export interface MediaVideosQuery {
+	root_id?: number;
+	q?: string;
+	current?: number;
+	page_size?: number;
+}
+
 export interface PageParams {
 	current: number;
 	page_size: number;
@@ -449,7 +530,7 @@ export interface SubtitleGenerateReq {
 	config?: SubtitleGenerateConfig;
 }
 
-/** 字幕翻译任务（可独立提交，或由生成任务链式入队）。 */
+/** 字幕翻译任务（可独立提交，或由 [`VideoSubtitleGenerateTask`] 完成后异步入队，不阻塞生成任务）。 */
 export interface SubtitleTranslateJob {
 	source_srt_path: string;
 	config: SubtitleTranslateConfig;
@@ -482,22 +563,6 @@ export interface SubtitleWebSearchRes {
 	cid: string;
 	/** 字幕列表 */
 	items: SubtitleWebRow[];
-}
-
-export interface VideoFolderScanItem {
-	video_name: string;
-	video_path: string;
-	video_size: number;
-	/** 同目录、同 stem 的字幕文件名列表（不含路径） */
-	subtitle_names: string[];
-}
-
-export interface VideoFolderScanReq {
-	root_dir: string;
-}
-
-export interface VideoFolderScanRes {
-	items: VideoFolderScanItem[];
 }
 
 export interface VideoPlaybackProbeRes {
@@ -542,5 +607,11 @@ export interface WhisperModelItem {
 
 export interface WhisperModelsListRes {
 	items: WhisperModelItem[];
+}
+
+/** 媒体文件类型。 */
+export enum MediaFileType {
+	Video = "Video",
+	Subtitle = "Subtitle",
 }
 

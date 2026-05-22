@@ -7,8 +7,10 @@ use ma_subtitle::translate::translate_srt_file;
 use ma_whisper::engine_cache::spawn_idle_eviction_loop;
 use taskmill::{DomainTaskContext, TaskError, TypedExecutor};
 
-use super::storage::TaskmillRuntime;
-use super::types::{MediaJobsDomain, SubtitleTranslateJob, VideoSubtitleGenerateTask};
+use super::storage::{MediaLibraryScanDeps, TaskmillRuntime};
+use super::types::{
+    MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob, VideoSubtitleGenerateTask,
+};
 
 pub struct VideoSubtitleGenerateExecutor;
 
@@ -87,6 +89,52 @@ impl TypedExecutor<SubtitleTranslateJob> for SubtitleTranslateExecutor {
 
         ctx.progress()
             .report(1.0, Some(format!("翻译完成: {}", out.display())));
+        Ok(())
+    }
+}
+
+/// 媒体库扫描任务 executor。
+#[derive(Clone)]
+pub struct MediaLibraryScanExecutor {
+    deps: MediaLibraryScanDeps,
+}
+
+impl MediaLibraryScanExecutor {
+    /// 创建媒体库扫描 executor。
+    pub fn new(deps: MediaLibraryScanDeps) -> Self {
+        Self { deps }
+    }
+}
+
+impl TypedExecutor<MediaLibraryScanTask> for MediaLibraryScanExecutor {
+    async fn execute(
+        &self,
+        job: MediaLibraryScanTask,
+        ctx: DomainTaskContext<'_, MediaJobsDomain>,
+    ) -> Result<(), TaskError> {
+        let root_id = i64::from(job.root_id);
+        if root_id <= 0 {
+            return Err(TaskError::permanent("root_id 必须大于 0"));
+        }
+        if job.root_path.trim().is_empty() {
+            return Err(TaskError::permanent("root_path 不能为空"));
+        }
+
+        ctx.progress()
+            .report(0.05, Some(format!("开始扫描媒体资源: {}", job.root_path)));
+        ctx.check_cancelled()?;
+
+        let res = crate::media_library::scan_media_root(&self.deps.db, root_id, &job.root_path)
+            .await
+            .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
+
+        ctx.progress().report(
+            1.0,
+            Some(format!(
+                "扫描完成：{} 个文件（视频 {}，字幕 {}），移除 {} 条旧记录",
+                res.scanned, res.videos, res.subtitles, res.removed
+            )),
+        );
         Ok(())
     }
 }

@@ -1,9 +1,9 @@
 import {
   HomeOutlined,
   PlaySquareOutlined,
+  FolderOpenOutlined,
   SettingOutlined,
   UnorderedListOutlined,
-  VideoCameraOutlined,
 } from '@ant-design/icons'
 
 export const menu = [
@@ -13,9 +13,9 @@ export const menu = [
     icon: <HomeOutlined />,
   },
   {
-    name: '本地视频',
-    path: '/video-folder-scan',
-    icon: <VideoCameraOutlined />,
+    name: '媒体库',
+    path: '/media-library',
+    icon: <FolderOpenOutlined />,
   },
   {
     name: 'Stash 库',
