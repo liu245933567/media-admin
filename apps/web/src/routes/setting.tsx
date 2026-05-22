@@ -15,6 +15,7 @@ import {
 } from 'antd'
 import { useEffect } from 'react'
 import { FfmpegSetupCard } from '@/components/ffmpeg-setup-card'
+import { MediaRootListCard } from '@/components/media-root-list-card'
 import { StashConfigFormGroup } from '@/components/stash-config-form-group'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
@@ -123,6 +124,8 @@ function RouteComponent() {
         <WhisperModelsSetupCard />
 
         <FfmpegSetupCard />
+
+        <MediaRootListCard />
       </Space>
     </PageContainer>
   )

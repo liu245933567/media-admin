@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use serde::{Deserialize, Serialize};
 use taskmill::{DomainKey, DuplicateStrategy, IoBudget, Priority, TaskTypeConfig, TypedTask};
-use typeshare::typeshare;
+use typeshare::{I54, typeshare};
 
 #[derive(Debug, Clone, Copy)]
 pub struct MediaJobsDomain;
@@ -20,12 +20,56 @@ pub const GROUP_WHISPER: &str = "media:whisper";
 pub const GROUP_TRANSLATE: &str = "media:translate";
 /// Taskmill 资源组：设置页下载（模型 / FFmpeg，全局串行）。
 pub const GROUP_SETUP_DOWNLOAD: &str = "media:setup-download";
+/// Taskmill 资源组：媒体库文件扫描（磁盘递归 IO）。
+pub const GROUP_MEDIA_SCAN: &str = "media:scan";
 
 /// 视频字幕生成任务载荷（`config` 为识别/翻译参数，`video_path` 单独携带）。
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VideoSubtitleGenerateTask {
     pub video_path: String,
     pub config: SubtitleGenerateConfig,
+}
+
+/// 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+pub struct MediaLibraryScanTask {
+    pub root_id: I54,
+    pub root_path: String,
+}
+
+impl TypedTask for MediaLibraryScanTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "media-library-scan";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::NORMAL)
+            .expected_io(IoBudget::disk(64 * 1024 * 1024, 64 * 1024 * 1024))
+            .group(GROUP_MEDIA_SCAN)
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        if i64::from(self.root_id) <= 0 {
+            None
+        } else {
+            Some(format!("media-library-scan:{}", self.root_id))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        Some(format!("扫描媒体资源: {}", self.root_path))
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([
+            ("job.kind".to_string(), "media-library-scan".to_string()),
+            ("media.root_id".to_string(), self.root_id.to_string()),
+        ])
+    }
 }
 
 impl std::fmt::Debug for VideoSubtitleGenerateTask {

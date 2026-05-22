@@ -31,12 +31,14 @@ pub async fn serve() -> anyhow::Result<()> {
         app_config_store::load_or_init_app_config().await?,
     ));
 
-    let taskmill = TaskmillRuntime::setup().await?;
+    let db = ma_db::connect().await?;
+    let taskmill = TaskmillRuntime::setup(db.clone()).await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         taskmill,
         app_config,
+        db,
     };
 
     let app = build_router(app_state);
@@ -57,12 +59,14 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
         app_config_store::load_or_init_app_config().await?,
     ));
 
-    let taskmill = TaskmillRuntime::setup().await?;
+    let db = ma_db::connect().await?;
+    let taskmill = TaskmillRuntime::setup(db.clone()).await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         taskmill,
         app_config,
+        db,
     };
     let app = build_router(app_state);
 
@@ -87,6 +91,7 @@ pub async fn start() {
 pub(crate) struct AppState {
     pub taskmill: TaskmillRuntime,
     pub app_config: Arc<RwLock<AppConfig>>,
+    pub db: ma_db::SqlitePool,
 }
 
 type StateRouter = Router<AppState>;

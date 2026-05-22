@@ -14,6 +14,7 @@ import { Route as VideoFolderScanRouteImport } from './routes/video-folder-scan'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as SettingRouteImport } from './routes/setting'
+import { Route as MediaLibraryRouteImport } from './routes/media-library'
 import { Route as IndexRouteImport } from './routes/index'
 
 const VideoPlayRoute = VideoPlayRouteImport.update({
@@ -41,6 +42,11 @@ const SettingRoute = SettingRouteImport.update({
   path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MediaLibraryRoute = MediaLibraryRouteImport.update({
+  id: '/media-library',
+  path: '/media-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,6 +55,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/media-library': typeof MediaLibraryRoute
   '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/media-library'
     | '/setting'
     | '/stash-scenes'
     | '/tasks'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MediaLibraryRoute: typeof MediaLibraryRoute
   SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   TasksRoute: typeof TasksRoute
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/media-library': {
+      id: '/media-library'
+      path: '/media-library'
+      fullPath: '/media-library'
+      preLoaderRoute: typeof MediaLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MediaLibraryRoute: MediaLibraryRoute,
   SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   TasksRoute: TasksRoute,

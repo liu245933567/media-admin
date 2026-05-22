@@ -31,7 +31,7 @@ pub async fn connect() -> anyhow::Result<SqlitePool> {
         .await?;
     tracing::info!("connected sqlite database");
 
-    // sqlx::migrate!("./migrations").run(&pool).await?; 
+    sqlx::migrate!("./migrations").run(&pool).await?;
     tracing::info!("sqlite database migrations completed");
 
     Ok(pool)

@@ -1,0 +1,556 @@
+//! 本地媒体资源目录与扫描结果维护。
+
+use std::{
+    collections::HashSet,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
+
+use anyhow::{Context, Result, bail};
+use chrono::{DateTime, Utc};
+use ma_db::SqlitePool;
+use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, QueryBuilder, Sqlite};
+use taskmill::SubmitOutcome;
+use typeshare::{I54, U53, typeshare};
+
+use crate::{
+    job::{MediaLibraryScanTask, TaskmillRuntime},
+    media_paths::{is_subtitle_file, is_supported_media_file, media_file_type},
+};
+
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 媒体文件类型。
+pub enum MediaFileType {
+    Video,
+    Subtitle,
+}
+
+impl MediaFileType {
+    /// 返回数据库内保存的稳定字符串。
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Video => "video",
+            Self::Subtitle => "subtitle",
+        }
+    }
+
+    /// 从数据库字符串恢复媒体文件类型。
+    pub fn from_db(value: &str) -> Self {
+        match value {
+            "subtitle" => Self::Subtitle,
+            _ => Self::Video,
+        }
+    }
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+/// 新增媒体资源根目录请求。
+pub struct MediaRootCreateReq {
+    pub path: String,
+    pub name: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 媒体资源根目录列表行。
+pub struct MediaRootRow {
+    pub id: I54,
+    pub path: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_scanned_at: Option<String>,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 已扫描入库的媒体文件列表行。
+pub struct MediaFileRow {
+    pub id: I54,
+    pub root_id: I54,
+    pub file_name: String,
+    pub file_path: String,
+    pub file_size: U53,
+    pub modified_at: String,
+    pub file_type: MediaFileType,
+    pub scanned_at: String,
+}
+
+#[typeshare]
+#[derive(Debug, Deserialize)]
+/// 媒体文件分页查询条件。
+pub struct MediaFilesQuery {
+    pub root_id: Option<I54>,
+    pub file_type: Option<MediaFileType>,
+    pub q: Option<String>,
+    pub current: Option<i32>,
+    pub page_size: Option<i32>,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 媒体文件分页查询结果。
+pub struct MediaFilesPageRes {
+    pub data: Vec<MediaFileRow>,
+    pub total: I54,
+}
+
+#[typeshare]
+#[derive(Debug, Serialize)]
+/// 媒体库扫描结果摘要。
+pub struct MediaLibraryScanRes {
+    pub scanned: u32,
+    pub videos: u32,
+    pub subtitles: u32,
+    pub removed: u32,
+}
+
+#[derive(Debug, FromRow)]
+/// 数据库中的媒体资源根目录记录。
+struct MediaRootRecord {
+    id: i64,
+    path: String,
+    name: String,
+    created_at: String,
+    updated_at: String,
+    last_scanned_at: Option<String>,
+}
+
+#[derive(Debug, FromRow)]
+/// 数据库中的媒体文件记录。
+struct MediaFileRecord {
+    id: i64,
+    root_id: i64,
+    file_name: String,
+    file_path: String,
+    file_size: i64,
+    modified_at: String,
+    file_type: String,
+    scanned_at: String,
+}
+
+/// 列出已维护的媒体资源根目录。
+pub async fn list_media_roots(pool: &SqlitePool) -> Result<Vec<MediaRootRow>> {
+    let rows = sqlx::query_as::<_, MediaRootRecord>(
+        r#"
+        SELECT id, path, name, created_at, updated_at, last_scanned_at
+        FROM media_resource_roots
+        ORDER BY path ASC
+        "#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter().map(media_root_to_api).collect()
+}
+
+/// 新增媒体资源根目录，要求根目录之间不能互相包含。
+pub async fn create_media_root(pool: &SqlitePool, req: MediaRootCreateReq) -> Result<MediaRootRow> {
+    let root_path = normalize_existing_dir(&req.path).await?;
+    let name = req
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| default_root_name(&root_path));
+
+    ensure_not_overlapping(pool, &root_path, None).await?;
+
+    let path = root_path.to_string_lossy().to_string();
+    let row = sqlx::query_as::<_, MediaRootRecord>(
+        r#"
+        INSERT INTO media_resource_roots (path, name)
+        VALUES (?1, ?2)
+        RETURNING id, path, name, created_at, updated_at, last_scanned_at
+        "#,
+    )
+    .bind(path)
+    .bind(name)
+    .fetch_one(pool)
+    .await
+    .context("保存媒体资源目录失败")?;
+
+    media_root_to_api(row)
+}
+
+/// 删除媒体资源根目录及其扫描文件。
+pub async fn delete_media_root(pool: &SqlitePool, id: i64) -> Result<bool> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM media_files WHERE root_id = ?1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    let affected = sqlx::query("DELETE FROM media_resource_roots WHERE id = ?1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+    tx.commit().await?;
+    Ok(affected > 0)
+}
+
+/// 提交媒体库扫描任务。
+pub async fn enqueue_media_library_scan(
+    pool: &SqlitePool,
+    runtime: &TaskmillRuntime,
+    root_id: i64,
+) -> Result<SubmitOutcome> {
+    let root = find_media_root(pool, root_id).await?;
+    runtime
+        .enqueue_media_library_scan(MediaLibraryScanTask {
+            root_id: i54(root_id, "媒体资源目录 id 超出 JS 安全整数范围")?,
+            root_path: root.path,
+        })
+        .await
+}
+
+/// 查询扫描入库的媒体文件。
+pub async fn list_media_files(pool: &SqlitePool, q: MediaFilesQuery) -> Result<MediaFilesPageRes> {
+    let current = q.current.unwrap_or(1).max(1);
+    let page_size = q.page_size.unwrap_or(20).clamp(1, 200);
+    let offset = (current - 1) * page_size;
+
+    let file_type = q.file_type.as_ref().map(MediaFileType::as_str);
+    let keyword =
+        q.q.as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("%{s}%"));
+
+    let mut count_builder = QueryBuilder::<Sqlite>::new("SELECT COUNT(*) FROM media_files");
+    let root_id = q.root_id.map(i64::from);
+    push_media_file_filters(&mut count_builder, root_id, file_type, keyword.as_deref());
+    let total: i64 = count_builder.build_query_scalar().fetch_one(pool).await?;
+
+    let mut rows_builder = QueryBuilder::<Sqlite>::new(
+        r#"
+        SELECT id, root_id, file_name, file_path, file_size, modified_at, file_type, scanned_at
+        FROM media_files
+        "#,
+    );
+    push_media_file_filters(&mut rows_builder, root_id, file_type, keyword.as_deref());
+    rows_builder.push(" ORDER BY file_path ASC LIMIT ");
+    rows_builder.push_bind(page_size);
+    rows_builder.push(" OFFSET ");
+    rows_builder.push_bind(offset);
+
+    let rows = rows_builder
+        .build_query_as::<MediaFileRecord>()
+        .fetch_all(pool)
+        .await?;
+    let data = rows
+        .into_iter()
+        .map(media_file_to_api)
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(MediaFilesPageRes {
+        data,
+        total: i54(total, "媒体文件数量超出 JS 安全整数范围")?,
+    })
+}
+
+/// 扫描指定媒体资源根目录，并将视频/字幕文件写入数据库。
+pub async fn scan_media_root(
+    pool: &SqlitePool,
+    root_id: i64,
+    root_path: &str,
+) -> Result<MediaLibraryScanRes> {
+    let root = PathBuf::from(root_path);
+    if !root.is_absolute() {
+        bail!("媒体资源路径必须为绝对路径");
+    }
+    if !tokio::fs::try_exists(&root).await? {
+        bail!("媒体资源路径不存在");
+    }
+    if !tokio::fs::metadata(&root).await?.is_dir() {
+        bail!("媒体资源路径必须为目录");
+    }
+
+    let scanned_at = Utc::now().to_rfc3339();
+    let mut files = Vec::new();
+    let mut videos = 0_u32;
+    let mut subtitles = 0_u32;
+    let mut seen_paths = HashSet::new();
+
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let mut rd = match tokio::fs::read_dir(&dir).await {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(path = %dir.display(), error = %e, "读取媒体目录失败，已跳过");
+                continue;
+            }
+        };
+
+        while let Ok(Some(ent)) = rd.next_entry().await {
+            let child = ent.path();
+            let md = match ent.metadata().await {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!(path = %child.display(), error = %e, "读取媒体文件元数据失败，已跳过");
+                    continue;
+                }
+            };
+
+            if md.is_dir() {
+                stack.push(child);
+                continue;
+            }
+            if !md.is_file() || !is_supported_media_file(&child) {
+                continue;
+            }
+
+            let file_type = match media_file_type(&child) {
+                Some(v) => v,
+                None => continue,
+            };
+            let Some(file_name) = file_name_string(&child) else {
+                continue;
+            };
+            let file_path = child.to_string_lossy().to_string();
+            let modified_at = metadata_modified_at(&md);
+
+            if is_subtitle_file(&child) {
+                subtitles = subtitles.saturating_add(1);
+            } else {
+                videos = videos.saturating_add(1);
+            }
+            seen_paths.insert(file_path.clone());
+            files.push(ScannedMediaFile {
+                file_name,
+                file_path,
+                file_size: i64::try_from(md.len()).context("文件大小超出 SQLite INTEGER 范围")?,
+                modified_at,
+                file_type,
+                scanned_at: scanned_at.clone(),
+            });
+        }
+    }
+
+    let mut tx = pool.begin().await?;
+    for file in &files {
+        sqlx::query(
+            r#"
+            INSERT INTO media_files (
+                root_id, file_name, file_path, file_size, modified_at, file_type, scanned_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            ON CONFLICT(file_path) DO UPDATE SET
+                root_id = excluded.root_id,
+                file_name = excluded.file_name,
+                file_size = excluded.file_size,
+                modified_at = excluded.modified_at,
+                file_type = excluded.file_type,
+                scanned_at = excluded.scanned_at,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            "#,
+        )
+        .bind(root_id)
+        .bind(&file.file_name)
+        .bind(&file.file_path)
+        .bind(file.file_size)
+        .bind(&file.modified_at)
+        .bind(file.file_type.as_str())
+        .bind(&file.scanned_at)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    let removed = sqlx::query("DELETE FROM media_files WHERE root_id = ?1 AND scanned_at <> ?2")
+        .bind(root_id)
+        .bind(&scanned_at)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+    sqlx::query(
+        r#"
+        UPDATE media_resource_roots
+        SET last_scanned_at = ?2,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE id = ?1
+        "#,
+    )
+    .bind(root_id)
+    .bind(&scanned_at)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(MediaLibraryScanRes {
+        scanned: u32::try_from(seen_paths.len()).unwrap_or(u32::MAX),
+        videos,
+        subtitles,
+        removed: u32::try_from(removed).unwrap_or(u32::MAX),
+    })
+}
+
+/// 单次扫描收集到的媒体文件。
+struct ScannedMediaFile {
+    file_name: String,
+    file_path: String,
+    file_size: i64,
+    modified_at: String,
+    file_type: MediaFileType,
+    scanned_at: String,
+}
+
+async fn find_media_root(pool: &SqlitePool, id: i64) -> Result<MediaRootRecord> {
+    sqlx::query_as::<_, MediaRootRecord>(
+        r#"
+        SELECT id, path, name, created_at, updated_at, last_scanned_at
+        FROM media_resource_roots
+        WHERE id = ?1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("媒体资源目录不存在"))
+}
+
+async fn normalize_existing_dir(raw: &str) -> Result<PathBuf> {
+    let path_text = raw.trim();
+    if path_text.is_empty() {
+        bail!("path 不能为空");
+    }
+    let path = PathBuf::from(path_text);
+    if !path.is_absolute() {
+        bail!("path 必须为绝对路径");
+    }
+    if !tokio::fs::try_exists(&path).await? {
+        bail!("path 不存在");
+    }
+    let meta = tokio::fs::metadata(&path).await?;
+    if !meta.is_dir() {
+        bail!("path 必须为目录");
+    }
+    tokio::fs::canonicalize(&path)
+        .await
+        .with_context(|| format!("规范化路径失败: {}", path.display()))
+}
+
+async fn ensure_not_overlapping(
+    pool: &SqlitePool,
+    new_path: &Path,
+    exclude_id: Option<i64>,
+) -> Result<()> {
+    let roots = list_media_roots(pool).await?;
+    for root in roots {
+        if exclude_id == Some(i64::from(root.id)) {
+            continue;
+        }
+        let existing = PathBuf::from(&root.path);
+        if paths_overlap(new_path, &existing) {
+            bail!(
+                "媒体资源路径不能互相包含：{} 与 {}",
+                new_path.display(),
+                root.path
+            );
+        }
+    }
+    Ok(())
+}
+
+fn paths_overlap(a: &Path, b: &Path) -> bool {
+    a == b || a.starts_with(b) || b.starts_with(a)
+}
+
+fn default_root_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
+fn file_name_string(path: &Path) -> Option<String> {
+    path.file_name()
+        .and_then(OsStr::to_str)
+        .map(ToOwned::to_owned)
+}
+
+fn metadata_modified_at(md: &std::fs::Metadata) -> String {
+    let modified = md.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+    DateTime::<Utc>::from(modified).to_rfc3339()
+}
+
+fn media_root_to_api(row: MediaRootRecord) -> Result<MediaRootRow> {
+    Ok(MediaRootRow {
+        id: i54(row.id, "媒体资源目录 id 超出 JS 安全整数范围")?,
+        path: row.path,
+        name: row.name,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        last_scanned_at: row.last_scanned_at,
+    })
+}
+
+fn media_file_to_api(row: MediaFileRecord) -> Result<MediaFileRow> {
+    Ok(MediaFileRow {
+        id: i54(row.id, "媒体文件 id 超出 JS 安全整数范围")?,
+        root_id: i54(row.root_id, "媒体资源目录 id 超出 JS 安全整数范围")?,
+        file_name: row.file_name,
+        file_path: row.file_path,
+        file_size: u53(
+            u64::try_from(row.file_size).context("文件大小不能为负数")?,
+            "文件大小超出 JS 安全整数范围",
+        )?,
+        modified_at: row.modified_at,
+        file_type: MediaFileType::from_db(&row.file_type),
+        scanned_at: row.scanned_at,
+    })
+}
+
+fn push_media_file_filters<'a>(
+    builder: &mut QueryBuilder<'a, Sqlite>,
+    root_id: Option<i64>,
+    file_type: Option<&'a str>,
+    keyword: Option<&'a str>,
+) {
+    if root_id.is_none() && file_type.is_none() && keyword.is_none() {
+        return;
+    }
+
+    let mut has_filter = false;
+    if let Some(root_id) = root_id {
+        push_where_or_and(builder, &mut has_filter);
+        builder.push("root_id = ");
+        builder.push_bind(root_id);
+    }
+    if let Some(file_type) = file_type {
+        push_where_or_and(builder, &mut has_filter);
+        builder.push("file_type = ");
+        builder.push_bind(file_type);
+    }
+    if let Some(keyword) = keyword {
+        push_where_or_and(builder, &mut has_filter);
+        builder.push("(file_name LIKE ");
+        builder.push_bind(keyword);
+        builder.push(" OR file_path LIKE ");
+        builder.push_bind(keyword);
+        builder.push(")");
+    }
+}
+
+fn push_where_or_and(builder: &mut QueryBuilder<'_, Sqlite>, has_filter: &mut bool) {
+    if *has_filter {
+        builder.push(" AND ");
+    } else {
+        builder.push(" WHERE ");
+        *has_filter = true;
+    }
+}
+
+fn i54(value: i64, msg: &'static str) -> Result<I54> {
+    I54::try_from(value).map_err(|_| anyhow::anyhow!(msg))
+}
+
+fn u53(value: u64, msg: &'static str) -> Result<U53> {
+    U53::try_from(value).map_err(|_| anyhow::anyhow!(msg))
+}

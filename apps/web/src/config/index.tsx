@@ -1,6 +1,7 @@
 import {
   HomeOutlined,
   PlaySquareOutlined,
+  FolderOpenOutlined,
   SettingOutlined,
   UnorderedListOutlined,
   VideoCameraOutlined,
@@ -16,6 +17,11 @@ export const menu = [
     name: '本地视频',
     path: '/video-folder-scan',
     icon: <VideoCameraOutlined />,
+  },
+  {
+    name: '媒体库',
+    path: '/media-library',
+    icon: <FolderOpenOutlined />,
   },
   {
     name: 'Stash 库',

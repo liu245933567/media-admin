@@ -66,6 +66,7 @@ export function videoFolderScanQueryKey(rootDir: string) {
 }
 
 export * from './job'
+export * from './media-library'
 export * from './settings'
 export * from './stash'
 export * from './subtitle'

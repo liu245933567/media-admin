@@ -17,8 +17,9 @@ use tokio_util::sync::CancellationToken;
 use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
 use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
 use super::types::{
-    FfmpegSetupDownloadTask, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain,
-    SubtitleTranslateJob, VideoSubtitleGenerateTask, WhisperModelDownloadTask,
+    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE,
+    GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
+    VideoSubtitleGenerateTask, WhisperModelDownloadTask,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +41,7 @@ const DEFAULT_MAX_CONCURRENCY: usize = 8;
 const DEFAULT_GROUP_WHISPER: usize = 1;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
 const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
+const DEFAULT_GROUP_MEDIA_SCAN: usize = 1;
 
 /// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
 struct SchedulerConcurrencyLimits {
@@ -47,6 +49,7 @@ struct SchedulerConcurrencyLimits {
     whisper: usize,
     translate: usize,
     setup_download: usize,
+    media_scan: usize,
 }
 
 fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
@@ -58,6 +61,7 @@ fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
             "TASKMILL_GROUP_SETUP_DOWNLOAD",
             DEFAULT_GROUP_SETUP_DOWNLOAD,
         ),
+        media_scan: env_usize("TASKMILL_GROUP_MEDIA_SCAN", DEFAULT_GROUP_MEDIA_SCAN),
     }
 }
 
@@ -66,6 +70,12 @@ fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
 pub struct SetupDownloadDeps {
     pub http_client: reqwest::Client,
     pub staging_lock: Arc<Mutex<()>>,
+}
+
+/// 媒体库扫描 executor 共享依赖。
+#[derive(Clone)]
+pub struct MediaLibraryScanDeps {
+    pub db: ma_db::SqlitePool,
 }
 
 fn env_usize(name: &str, default: usize) -> usize {
@@ -81,12 +91,13 @@ pub struct TaskmillRuntime {
     pub domain: DomainHandle<MediaJobsDomain>,
     pub cancellation: CancellationToken,
     pub setup_download_deps: SetupDownloadDeps,
+    pub media_library_scan_deps: MediaLibraryScanDeps,
     exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
 impl TaskmillRuntime {
     /// 连接独立 SQLite，并构造 Taskmill 调度器与 typed domain。
-    pub async fn setup() -> anyhow::Result<Self> {
+    pub async fn setup(db: ma_db::SqlitePool) -> anyhow::Result<Self> {
         let db_path = taskmill_sqlite_path().context("解析 TASKMILL_SQLITE / 默认路径")?;
         if let Some(parent) = db_path.parent() {
             let parent_display = parent.display().to_string();
@@ -102,6 +113,7 @@ impl TaskmillRuntime {
             group_whisper = limits.whisper,
             group_translate = limits.translate,
             group_setup_download = limits.setup_download,
+            group_media_scan = limits.media_scan,
             "taskmill 并发：全局与各资源组上限"
         );
 
@@ -115,6 +127,9 @@ impl TaskmillRuntime {
         };
         let whisper_dl_exec = WhisperModelDownloadExecutor::new(setup_download_deps.clone());
         let ffmpeg_dl_exec = FfmpegSetupDownloadExecutor::new(setup_download_deps.clone());
+        let media_library_scan_deps = MediaLibraryScanDeps { db };
+        let media_scan_exec =
+            super::spawn::MediaLibraryScanExecutor::new(media_library_scan_deps.clone());
 
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
@@ -122,6 +137,7 @@ impl TaskmillRuntime {
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
                     .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
+                    .task::<MediaLibraryScanTask>(media_scan_exec)
                     .task::<WhisperModelDownloadTask>(whisper_dl_exec)
                     .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
             )
@@ -129,6 +145,7 @@ impl TaskmillRuntime {
             .group_concurrency(GROUP_WHISPER, limits.whisper)
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
+            .group_concurrency(GROUP_MEDIA_SCAN, limits.media_scan)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()
@@ -173,6 +190,7 @@ impl TaskmillRuntime {
             domain,
             cancellation,
             setup_download_deps,
+            media_library_scan_deps,
             exec_event_log,
         })
     }
@@ -195,6 +213,17 @@ impl TaskmillRuntime {
             .submit(input)
             .await
             .context("提交字幕翻译任务失败")
+    }
+
+    /// 入队媒体库扫描。
+    pub async fn enqueue_media_library_scan(
+        &self,
+        input: MediaLibraryScanTask,
+    ) -> anyhow::Result<SubmitOutcome> {
+        self.domain
+            .submit(input)
+            .await
+            .context("提交媒体库扫描任务失败")
     }
 
     /// 入队 Whisper 模型下载。

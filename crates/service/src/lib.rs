@@ -1,6 +1,7 @@
 pub mod app_config;
 pub mod fs;
 pub mod media_paths;
+pub mod media_library;
 pub mod job;
 pub mod setup_download;
 pub mod stash;

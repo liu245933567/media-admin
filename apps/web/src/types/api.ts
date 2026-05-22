@@ -170,6 +170,72 @@ export interface FsReadTextRes {
 	content: string;
 }
 
+/** 媒体文件类型。 */
+export enum MediaFileType {
+	Video = "Video",
+	Subtitle = "Subtitle",
+}
+
+/** 已扫描入库的媒体文件列表行。 */
+export interface MediaFileRow {
+	id: number;
+	root_id: number;
+	file_name: string;
+	file_path: string;
+	file_size: number;
+	modified_at: string;
+	file_type: MediaFileType;
+	scanned_at: string;
+}
+
+/** 媒体文件分页查询结果。 */
+export interface MediaFilesPageRes {
+	data: MediaFileRow[];
+	total: number;
+}
+
+/** 媒体文件分页查询条件。 */
+export interface MediaFilesQuery {
+	root_id?: number;
+	file_type?: MediaFileType;
+	q?: string;
+	current?: number;
+	page_size?: number;
+}
+
+/** 媒体库扫描结果摘要。 */
+export interface MediaLibraryScanRes {
+	scanned: number;
+	videos: number;
+	subtitles: number;
+	removed: number;
+}
+
+/**
+ * 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+ * 扫描媒体资源根目录并将视频/字幕文件写入业务库。
+ */
+export interface MediaLibraryScanTask {
+	root_id: number;
+	root_path: string;
+}
+
+/** 新增媒体资源根目录请求。 */
+export interface MediaRootCreateReq {
+	path: string;
+	name?: string;
+}
+
+/** 媒体资源根目录列表行。 */
+export interface MediaRootRow {
+	id: number;
+	path: string;
+	name: string;
+	created_at: string;
+	updated_at: string;
+	last_scanned_at?: string;
+}
+
 export interface PageParams {
 	current: number;
 	page_size: number;
@@ -449,7 +515,7 @@ export interface SubtitleGenerateReq {
 	config?: SubtitleGenerateConfig;
 }
 
-/** 字幕翻译任务（可独立提交，或由生成任务链式入队）。 */
+/** 字幕翻译任务（可独立提交，或由 [`VideoSubtitleGenerateTask`] 完成后异步入队，不阻塞生成任务）。 */
 export interface SubtitleTranslateJob {
 	source_srt_path: string;
 	config: SubtitleTranslateConfig;

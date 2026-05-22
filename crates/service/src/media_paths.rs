@@ -4,6 +4,8 @@ use std::path::Path;
 
 use anyhow::{Result, bail};
 
+use crate::media_library::MediaFileType;
+
 /// 是否为支持流式播放的视频文件。
 pub fn is_video_file(path: &Path) -> bool {
     matches!(
@@ -12,6 +14,30 @@ pub fn is_video_file(path: &Path) -> bool {
             "mp4" | "mkv" | "mov" | "avi" | "webm" | "flv" | "m4v" | "ts" | "wmv" | "m2ts" | "mts"
         )
     )
+}
+
+/// 是否为支持入库的字幕文件。
+pub fn is_subtitle_file(path: &Path) -> bool {
+    matches!(
+        ext_lower(path),
+        Some("srt" | "ass" | "vtt" | "sub" | "smi" | "ssa")
+    )
+}
+
+/// 是否为支持入库的媒体文件（视频或字幕）。
+pub fn is_supported_media_file(path: &Path) -> bool {
+    is_video_file(path) || is_subtitle_file(path)
+}
+
+/// 根据扩展名识别媒体文件类型。
+pub fn media_file_type(path: &Path) -> Option<MediaFileType> {
+    if is_video_file(path) {
+        Some(MediaFileType::Video)
+    } else if is_subtitle_file(path) {
+        Some(MediaFileType::Subtitle)
+    } else {
+        None
+    }
 }
 
 /// 按扩展名返回 `Content-Type`。
@@ -61,6 +87,12 @@ fn ext_lower(path: &Path) -> Option<&'static str> {
         "wmv" => Some("wmv"),
         "m2ts" => Some("m2ts"),
         "mts" => Some("mts"),
+        "srt" => Some("srt"),
+        "ass" => Some("ass"),
+        "vtt" => Some("vtt"),
+        "sub" => Some("sub"),
+        "smi" => Some("smi"),
+        "ssa" => Some("ssa"),
         _ => None,
     }
 }

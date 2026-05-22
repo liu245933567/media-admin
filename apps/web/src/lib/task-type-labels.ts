@@ -2,6 +2,7 @@
 export const TASK_TYPE_LABELS: Record<string, string> = {
   'video-subtitle-generate': '字幕生成',
   'subtitle-translate': '字幕翻译',
+  'media-library-scan': '媒体库扫描',
   'whisper-model-download': '下载 Whisper 模型',
   'ffmpeg-setup-download': '下载 FFmpeg',
   /** 旧三段子任务链，仅历史 SQLite 记录展示 */
