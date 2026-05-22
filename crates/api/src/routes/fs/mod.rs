@@ -11,10 +11,9 @@ use axum_extra::extract::WithRejection;
 use futures_util::StreamExt;
 use ma_service::fs::{
     FsDeleteReq, FsDeleteRes, FsListItem, FsListReq, FsReadTextReq, FsReadTextRes,
-    VideoPlaybackProbeRes, VideoTranscodeStatusRes,
-    delete_subtitle_file, get_fs_list, probe_video_playback, read_text_file,
-    resolve_transcoded_video_path, start_video_transcode, stream_local_video,
-    video_transcode_status,
+    VideoPlaybackProbeRes, VideoTranscodeStatusRes, delete_subtitle_file, get_fs_list,
+    probe_video_playback, read_text_file, resolve_transcoded_video_path, start_video_transcode,
+    stream_local_video, video_transcode_status,
 };
 use serde::Deserialize;
 
@@ -25,8 +24,14 @@ pub fn routes() -> StateRouter {
         .route("/delete-subtitle", post(delete_subtitle_handler))
         .route("/video", get(video_stream_handler))
         .route("/video/probe", get(video_probe_handler))
-        .route("/video/transcode/status", get(video_transcode_status_handler))
-        .route("/video/transcode/start", post(video_transcode_start_handler))
+        .route(
+            "/video/transcode/status",
+            get(video_transcode_status_handler),
+        )
+        .route(
+            "/video/transcode/start",
+            post(video_transcode_start_handler),
+        )
         .route("/video/transcoded", get(video_transcoded_stream_handler))
 }
 
@@ -103,16 +108,14 @@ async fn video_transcoded_stream_handler(
     Query(q): Query<VideoPathQuery>,
     req_headers: HeaderMap,
 ) -> Result<Response, AppError> {
-    let cache_path = resolve_transcoded_video_path(q.path)
-        .await
-        .map_err(|e| {
-            let msg = e.to_string();
-            if msg.contains("尚未就绪") {
-                AppError::BadRequest(msg)
-            } else {
-                map_fs_video_err(e)
-            }
-        })?;
+    let cache_path = resolve_transcoded_video_path(q.path).await.map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("尚未就绪") {
+            AppError::BadRequest(msg)
+        } else {
+            map_fs_video_err(e)
+        }
+    })?;
 
     let range = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok());
     let streamed = stream_local_video(cache_path.to_string_lossy().into_owned(), range)

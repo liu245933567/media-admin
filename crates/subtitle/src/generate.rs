@@ -135,5 +135,10 @@ pub async fn write_subtitle_outcome(
     config: &SubtitleGenerateConfig,
     recognize_result: WhisperTranscribeOutput,
 ) -> Result<SubtitleGenerateOutcome> {
-    write_srt_from_recognize(video_path, recognize_result, config.translate_config.as_ref()).await
+    write_srt_from_recognize(
+        video_path,
+        recognize_result,
+        config.translate_config.as_ref(),
+    )
+    .await
 }

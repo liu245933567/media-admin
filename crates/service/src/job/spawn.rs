@@ -55,7 +55,10 @@ impl TypedExecutor<VideoSubtitleGenerateTask> for VideoSubtitleGenerateExecutor 
                 .map_err(|e| TaskError::retryable(format!("入队翻译任务失败: {e:#}")))?;
             ctx.progress().report(
                 0.95,
-                Some(format!("已入队翻译任务（独立调度）: {}", pending.source_srt_path)),
+                Some(format!(
+                    "已入队翻译任务（独立调度）: {}",
+                    pending.source_srt_path
+                )),
             );
         }
 

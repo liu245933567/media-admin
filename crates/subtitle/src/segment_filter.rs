@@ -36,9 +36,9 @@ pub fn is_meaningless_segment(text: &str, dur_cs: i64) -> bool {
         return true;
     }
 
-    if t.chars().all(|c| {
-        c.is_ascii_punctuation() || c.is_whitespace() || matches!(c, '*' | '…')
-    }) {
+    if t.chars()
+        .all(|c| c.is_ascii_punctuation() || c.is_whitespace() || matches!(c, '*' | '…'))
+    {
         return true;
     }
 

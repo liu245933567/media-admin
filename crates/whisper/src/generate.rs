@@ -7,7 +7,7 @@ use tokio::task::spawn_blocking;
 use crate::{
     engine_cache::acquire_shared_engine,
     types::{
-        VadConfig, WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeConfig,
+        VadConfig, WhisperEngineConfig, WhisperTranscribeConfig, WhisperTranscribeItem,
         WhisperTranscribeOutput,
     },
     vad::detect_vad_intervals_i16,

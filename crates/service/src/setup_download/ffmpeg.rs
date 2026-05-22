@@ -93,12 +93,7 @@ async fn download_to_file(
     mut check_cancelled: impl FnMut() -> Result<(), TaskError>,
 ) -> Result<u64> {
     progress
-        .update(
-            "downloading",
-            0,
-            None,
-            format!("开始下载 {phase_label}"),
-        )
+        .update("downloading", 0, None, format!("开始下载 {phase_label}"))
         .await;
     check_cancelled()?;
 
@@ -246,7 +241,9 @@ async fn chmod_bin_executables(dest_dir: &Path) -> Result<()> {
     let mut entries = tokio::fs::read_dir(&bin).await?;
     while let Some(entry) = entries.next_entry().await? {
         if entry.file_type().await?.is_file() {
-            tokio::fs::set_permissions(entry.path(), mode.clone()).await.ok();
+            tokio::fs::set_permissions(entry.path(), mode.clone())
+                .await
+                .ok();
         }
     }
     Ok(())
@@ -328,9 +325,7 @@ pub async fn run_ffmpeg_download(
     )
     .await?;
 
-    progress
-        .update("extracting", 0, None, "正在解压…")
-        .await;
+    progress.update("extracting", 0, None, "正在解压…").await;
     check_cancelled()?;
 
     let extract_dir = staging.join("unpack");
@@ -387,12 +382,7 @@ pub async fn run_ffmpeg_download(
     }
 
     progress
-        .update(
-            "done",
-            0,
-            None,
-            format!("已安装到 {}", dest_dir.display()),
-        )
+        .update("done", 0, None, format!("已安装到 {}", dest_dir.display()))
         .await;
 
     Ok(())

@@ -21,7 +21,7 @@ pub use submit::{
 pub use taskmill::TaskHistoryRecord;
 pub use taskmill::TaskRecord;
 pub use types::{
-    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE,
-    GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
+    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_SUBTITLE_PIPELINE,
+    GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
     VideoSubtitleGenerateTask, WhisperModelDownloadTask,
 };

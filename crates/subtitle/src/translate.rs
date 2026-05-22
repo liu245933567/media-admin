@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use ma_whisper::types::WhisperTranscribeItem;
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -15,6 +14,7 @@ use async_openai::{
     },
 };
 use futures::stream::{self, StreamExt};
+use ma_whisper::types::WhisperTranscribeItem;
 
 use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
 

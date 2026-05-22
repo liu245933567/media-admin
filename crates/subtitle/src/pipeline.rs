@@ -3,12 +3,14 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use ma_whisper::{generate::recognize_pcm_i16, wav::extract_pcm_i16_mono16k};
+use ma_whisper::{
+    decode_gate::acquire_decode_permit, generate::recognize_pcm_i16, wav::extract_pcm_i16_mono16k,
+};
 use tokio::task::spawn_blocking;
 
 use crate::{
     file::write_srt_file,
-    generate::{pending_translate_from, SubtitleGenerateOutcome},
+    generate::{SubtitleGenerateOutcome, pending_translate_from},
     segment_filter::sanitize_whisper_segments,
     types::{SubtitleGenerateConfig, SubtitleGenerateItem},
 };
@@ -34,7 +36,14 @@ pub async fn generate_subtitle_pipeline(
     let whisper_engine_config = config.whisper_engine_config.clone();
     let whisper_transcribe_config = config.whisper_transcribe_config.clone();
 
+    tracing::info!("[pipeline] 等待 Whisper 解码许可");
+    let decode_permit = acquire_decode_permit()
+        .await
+        .context("获取 Whisper 解码许可失败")?;
+    tracing::info!("[pipeline] 已获取 Whisper 解码许可，开始识别");
+
     let recognize_output = spawn_blocking(move || {
+        let _decode_permit = decode_permit;
         recognize_pcm_i16(
             &samples,
             vad_config,
@@ -56,8 +65,7 @@ pub async fn generate_subtitle_pipeline(
         detected_lang
     );
 
-    let source_srt_path =
-        write_srt_file(video_path, None, &source, detected_lang.clone()).await?;
+    let source_srt_path = write_srt_file(video_path, None, &source, detected_lang.clone()).await?;
 
     let pending_translate = pending_translate_from(
         &source_srt_path,

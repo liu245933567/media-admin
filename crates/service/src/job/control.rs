@@ -37,10 +37,7 @@ impl TaskmillRuntime {
 
     /// 取消指定任务（运行中 / 等待 / pending 等）。
     pub async fn cancel_task(&self, task_id: i64) -> anyhow::Result<bool> {
-        self.scheduler
-            .cancel(task_id)
-            .await
-            .context("取消任务失败")
+        self.scheduler.cancel(task_id).await.context("取消任务失败")
     }
 
     /// 暂停 pending / blocked 任务；运行中任务应使用取消。

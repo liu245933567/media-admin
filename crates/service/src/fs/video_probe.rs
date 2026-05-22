@@ -122,7 +122,11 @@ fn evaluate_probe(probe: &FfprobeOut) -> VideoPlaybackProbeRes {
         .and_then(|f| f.format_name.clone())
         .map(|names| names.split(',').next().unwrap_or(&names).to_string());
 
-    let direct = is_direct_playable(container.as_deref(), video_codec.as_deref(), audio_codec.as_deref());
+    let direct = is_direct_playable(
+        container.as_deref(),
+        video_codec.as_deref(),
+        audio_codec.as_deref(),
+    );
     VideoPlaybackProbeRes {
         direct_playable: direct,
         needs_transcode: !direct,

@@ -25,16 +25,14 @@ fn push_audio_extract_args(cmd: &mut tokio::process::Command) {
 pub async fn extract_pcm_i16_mono16k(input_video_path: &Path) -> Result<Vec<i16>> {
     let ffmpeg = get_ffmpeg_bin_path()?;
 
-    tracing::info!(
-        "经管道提取 PCM: {}",
-        input_video_path.display()
-    );
+    tracing::info!("经管道提取 PCM: {}", input_video_path.display());
 
     let mut cmd = tokio::process::Command::new(&ffmpeg);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    cmd.arg("-i")
+    cmd.args(["-nostdin", "-hide_banner", "-nostats", "-loglevel", "error"])
+        .arg("-i")
         .arg(input_video_path)
         .stdin(std::process::Stdio::null());
     push_audio_extract_args(&mut cmd);
@@ -51,17 +49,25 @@ pub async fn extract_pcm_i16_mono16k(input_video_path: &Path) -> Result<Vec<i16>
         .stdout
         .take()
         .ok_or_else(|| anyhow!("ffmpeg stdout 不可用"))?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("ffmpeg stderr 不可用"))?;
 
     let mut pcm_bytes = Vec::new();
-    stdout
-        .read_to_end(&mut pcm_bytes)
-        .await
-        .context("读取 ffmpeg PCM 输出失败")?;
+    let mut stderr_bytes = Vec::new();
+    let (stdout_res, stderr_res) = tokio::join!(
+        stdout.read_to_end(&mut pcm_bytes),
+        stderr.read_to_end(&mut stderr_bytes),
+    );
+    stdout_res.context("读取 ffmpeg PCM 输出失败")?;
+    stderr_res.context("读取 ffmpeg stderr 失败")?;
 
     let status = child.wait().await?;
     if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr_bytes);
         bail!(
-            "ffmpeg 退出码异常: {status}. 请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。"
+            "ffmpeg 退出码异常: {status}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。"
         );
     }
 

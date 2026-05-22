@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use tauri::{
+    Manager, WebviewUrl, WebviewWindowBuilder,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 const MAIN_WINDOW_LABEL: &str = "main";
@@ -23,13 +23,12 @@ fn show_main_window(app: &tauri::AppHandle) {
 
 /// 创建系统托盘图标与菜单。
 fn setup_system_tray(app: &tauri::AppHandle) -> Result<(), String> {
-    let show_item =
-        MenuItem::with_id(app, MENU_SHOW, "显示主窗口", true, None::<&str>)
-            .map_err(|e| format!("tray menu show: {e}"))?;
+    let show_item = MenuItem::with_id(app, MENU_SHOW, "显示主窗口", true, None::<&str>)
+        .map_err(|e| format!("tray menu show: {e}"))?;
     let quit_item = MenuItem::with_id(app, MENU_QUIT, "退出", true, None::<&str>)
         .map_err(|e| format!("tray menu quit: {e}"))?;
-    let menu = Menu::with_items(app, &[&show_item, &quit_item])
-        .map_err(|e| format!("tray menu: {e}"))?;
+    let menu =
+        Menu::with_items(app, &[&show_item, &quit_item]).map_err(|e| format!("tray menu: {e}"))?;
 
     let mut tray_builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Media Admin")

@@ -86,9 +86,7 @@ pub fn clear_engine_cache() -> usize {
 /// 启动后台空闲回收（与调度器同生命周期；重复调用无效）。
 pub fn spawn_idle_eviction_loop(cancel: CancellationToken) {
     if !eviction_enabled() {
-        tracing::info!(
-            "[whisper] WHISPER_ENGINE_CACHE_IDLE_SECS=0，跳过引擎空闲回收"
-        );
+        tracing::info!("[whisper] WHISPER_ENGINE_CACHE_IDLE_SECS=0，跳过引擎空闲回收");
         return;
     }
 
@@ -183,7 +181,9 @@ fn touch_or_insert(
 }
 
 /// 将任务可选配置解析为实际引擎配置。
-pub fn resolve_engine_config(whisper_engine_config: Option<WhisperEngineConfig>) -> WhisperEngineConfig {
+pub fn resolve_engine_config(
+    whisper_engine_config: Option<WhisperEngineConfig>,
+) -> WhisperEngineConfig {
     whisper_engine_config.unwrap_or_default()
 }
 

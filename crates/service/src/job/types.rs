@@ -14,7 +14,9 @@ impl DomainKey for MediaJobsDomain {
     const NAME: &'static str = "media-jobs";
 }
 
-/// Taskmill 资源组：字幕生成流水线（含 FFmpeg + Whisper，GPU 全局互斥）。
+/// Taskmill 资源组：字幕生成流水线（FFmpeg/PCM/VAD 准备阶段）。
+pub const GROUP_SUBTITLE_PIPELINE: &str = "media:subtitle-pipeline";
+/// Taskmill 资源组：Whisper 解码（历史保留；实际解码由进程内 permit 控制）。
 pub const GROUP_WHISPER: &str = "media:whisper";
 /// Taskmill 资源组：字幕翻译 API 调用。
 pub const GROUP_TRANSLATE: &str = "media:translate";
@@ -89,7 +91,7 @@ impl TypedTask for VideoSubtitleGenerateTask {
         TaskTypeConfig::new()
             .priority(Priority::NORMAL)
             .expected_io(IoBudget::disk(32 * 1024 * 1024, 16 * 1024 * 1024))
-            .group(GROUP_WHISPER)
+            .group(GROUP_SUBTITLE_PIPELINE)
             .on_duplicate(DuplicateStrategy::Skip)
     }
 
@@ -209,10 +211,7 @@ impl TypedTask for WhisperModelDownloadTask {
     }
 
     fn tags(&self) -> HashMap<String, String> {
-        HashMap::from([(
-            "job.kind".to_string(),
-            "whisper-model-download".to_string(),
-        )])
+        HashMap::from([("job.kind".to_string(), "whisper-model-download".to_string())])
     }
 }
 

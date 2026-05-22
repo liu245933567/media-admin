@@ -40,10 +40,7 @@ pub fn ffmpeg_tool_installed() -> bool {
 pub fn get_ffmpeg_bin_path() -> Result<String> {
     let dir = get_ffmpeg_dir();
     let candidates = if cfg!(windows) {
-        [
-            dir.join("bin/ffmpeg.exe"),
-            dir.join("ffmpeg.exe"),
-        ]
+        [dir.join("bin/ffmpeg.exe"), dir.join("ffmpeg.exe")]
     } else {
         [dir.join("bin/ffmpeg"), dir.join("ffmpeg")]
     };

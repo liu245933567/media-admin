@@ -12,7 +12,7 @@ use whisper_rs::{
 };
 
 use crate::types::{
-    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeConfig, WhisperTranscribeOutput,
+    WhisperEngineConfig, WhisperTranscribeConfig, WhisperTranscribeItem, WhisperTranscribeOutput,
 };
 
 /// 确保 `install_logging_hooks` 只调用一次（whisper-rs 是全局副作用）

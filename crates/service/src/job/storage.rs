@@ -17,8 +17,8 @@ use tokio_util::sync::CancellationToken;
 use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
 use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
 use super::types::{
-    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE,
-    GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
+    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_SUBTITLE_PIPELINE,
+    GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
     VideoSubtitleGenerateTask, WhisperModelDownloadTask,
 };
 
@@ -38,6 +38,7 @@ pub struct TimestampedSchedulerEvent {
 const EXEC_EVENT_LOG_CAP: usize = 400;
 
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
+const DEFAULT_GROUP_SUBTITLE_PIPELINE: usize = 2;
 const DEFAULT_GROUP_WHISPER: usize = 1;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
 const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
@@ -46,6 +47,7 @@ const DEFAULT_GROUP_MEDIA_SCAN: usize = 1;
 /// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
 struct SchedulerConcurrencyLimits {
     max_concurrency: usize,
+    subtitle_pipeline: usize,
     whisper: usize,
     translate: usize,
     setup_download: usize,
@@ -55,6 +57,10 @@ struct SchedulerConcurrencyLimits {
 fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
     SchedulerConcurrencyLimits {
         max_concurrency: env_usize("TASKMILL_MAX_CONCURRENCY", DEFAULT_MAX_CONCURRENCY),
+        subtitle_pipeline: env_usize(
+            "TASKMILL_GROUP_SUBTITLE_PIPELINE",
+            DEFAULT_GROUP_SUBTITLE_PIPELINE,
+        ),
         whisper: env_usize("TASKMILL_GROUP_WHISPER", DEFAULT_GROUP_WHISPER),
         translate: env_usize("TASKMILL_GROUP_TRANSLATE", DEFAULT_GROUP_TRANSLATE),
         setup_download: env_usize(
@@ -110,6 +116,7 @@ impl TaskmillRuntime {
         let limits = scheduler_concurrency_limits();
         tracing::info!(
             max_concurrency = limits.max_concurrency,
+            group_subtitle_pipeline = limits.subtitle_pipeline,
             group_whisper = limits.whisper,
             group_translate = limits.translate,
             group_setup_download = limits.setup_download,
@@ -142,10 +149,12 @@ impl TaskmillRuntime {
                     .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
             )
             .max_concurrency(limits.max_concurrency)
+            .group_concurrency(GROUP_SUBTITLE_PIPELINE, limits.subtitle_pipeline)
             .group_concurrency(GROUP_WHISPER, limits.whisper)
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
             .group_concurrency(GROUP_MEDIA_SCAN, limits.media_scan)
+            .group_minimum_slots(GROUP_TRANSLATE, 1)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()

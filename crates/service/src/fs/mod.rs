@@ -180,9 +180,9 @@ mod video_probe;
 mod video_stream;
 mod video_transcode;
 
-pub use video_probe::{probe_video_playback, VideoPlaybackProbeRes};
-pub use video_stream::{stream_local_video, LocalVideoStream};
+pub use video_probe::{VideoPlaybackProbeRes, probe_video_playback};
+pub use video_stream::{LocalVideoStream, stream_local_video};
 pub use video_transcode::{
-    resolve_transcoded_video_path, start_video_transcode, video_transcode_status,
-    VideoTranscodePhase, VideoTranscodeStatusRes,
+    VideoTranscodePhase, VideoTranscodeStatusRes, resolve_transcoded_video_path,
+    start_video_transcode, video_transcode_status,
 };
