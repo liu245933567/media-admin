@@ -1,10 +1,11 @@
-import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import type { MediaVideoRow } from '@/api'
-import { PlayCircleOutlined } from '@ant-design/icons'
-import { Drawer, Table, Tag, Typography } from 'antd'
+import { Chip, Drawer, Spinner } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useEffect, useMemo, useState } from 'react'
 import { formatBytes } from '@/utils'
 import { getParentPath } from '@/utils/video-path'
+import { DataTable } from './data-table'
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -50,117 +51,150 @@ export function VideoPlaylistDrawer({
       setPage(maxPage)
   }, [open, items.length, page, pageSize])
 
-  const columns = useMemo<ColumnsType<MediaVideoRow>>(() => [
+  const pageItems = useMemo(
+    () => items.slice((page - 1) * pageSize, page * pageSize),
+    [items, page, pageSize],
+  )
+
+  const columns = useMemo<ColumnDef<MediaVideoRow, unknown>[]>(() => [
     {
-      title: '视频',
-      dataIndex: 'file_name',
-      ellipsis: true,
-      render: (_, row) => (
+      header: '视频',
+      accessorKey: 'file_name',
+      cell: ({ row }) => (
         <span className="flex min-w-0 items-center gap-1.5">
-          {row.file_path === currentVideoPath && (
-            <Tag color="blue" className="mr-0 shrink-0">
+          {row.original.file_path === currentVideoPath && (
+            <Chip color="accent" size="sm" variant="soft">
               播放中
-            </Tag>
+            </Chip>
           )}
-          <Typography.Text ellipsis={{ tooltip: row.file_name }}>
-            {row.file_name}
-          </Typography.Text>
+          <span className="truncate" title={row.original.file_name}>{row.original.file_name}</span>
         </span>
       ),
     },
     {
-      title: '字幕',
-      width: 64,
-      align: 'center',
-      render: (_, row) => {
-        const n = row.subtitle_count ?? 0
-        return n > 0 ? `${n}` : '—'
+      header: '字幕',
+      id: 'subtitle_count',
+      cell: ({ row }) => {
+        const n = row.original.subtitle_count ?? 0
+        return n > 0 ? `${n}` : '-'
       },
     },
     {
-      title: '目录',
-      ellipsis: true,
-      width: 140,
-      render: (_, row) => {
-        const parent = getParentPath(row.file_path)
+      header: '目录',
+      id: 'parent',
+      cell: ({ row }) => {
+        const parent = getParentPath(row.original.file_path)
         return (
-          <Typography.Text type="secondary" ellipsis={{ tooltip: parent }} className="text-xs">
-            {parent || '—'}
-          </Typography.Text>
+          <span className="block max-w-[140px] truncate text-xs text-muted" title={parent}>
+            {parent || '-'}
+          </span>
         )
       },
     },
     {
-      title: '大小',
-      width: 88,
-      align: 'right',
-      render: (_, row) => (
-        <span className="text-xs text-[var(--ant-color-text-secondary)]">
-          {formatBytes(Number(row.file_size))}
+      header: '大小',
+      id: 'file_size',
+      cell: ({ row }) => (
+        <span className="text-xs text-muted">
+          {formatBytes(Number(row.original.file_size))}
         </span>
       ),
     },
   ], [currentVideoPath])
 
-  const pagination: TablePaginationConfig = {
-    current: page,
-    pageSize,
-    total: items.length,
-    showSizeChanger: true,
-    pageSizeOptions: [10, 20, 50, 100],
-    showTotal: total => `共 ${total} 个视频`,
-    onChange: (nextPage, nextSize) => {
-      setPage(nextPage)
-      if (nextSize !== pageSize)
-        setPageSize(nextSize)
-    },
-  }
+  const totalPage = Math.max(1, Math.ceil(items.length / pageSize))
 
   return (
-    <Drawer
-      title="选集"
-      placement="right"
-      width={Math.min(520, typeof window !== 'undefined' ? window.innerWidth * 0.92 : 520)}
-      open={open}
-      onClose={onClose}
-      destroyOnHidden
-      styles={{ body: { padding: '12px 16px' } }}
-    >
-      {rootName && (
-        <Typography.Paragraph
-          type="secondary"
-          ellipsis={{ tooltip: rootName }}
-          className="mb-3! text-xs"
-        >
-          媒体路径：
-          {rootName}
-        </Typography.Paragraph>
-      )}
-      <Table<MediaVideoRow>
-        rowKey="file_path"
-        size="small"
-        loading={loading}
-        columns={columns}
-        dataSource={items}
-        pagination={pagination}
-        onRow={record => ({
-          className: [
-            'cursor-pointer',
-            record.file_path === currentVideoPath
-              ? '[&>td]:bg-[var(--ant-color-primary-bg)]!'
-              : 'hover:[&>td]:bg-[var(--ant-color-fill-tertiary)]!',
-          ].join(' '),
-          onClick: () => {
-            if (record.file_path !== currentVideoPath)
-              onSelect(record)
-          },
-        })}
-        locale={{ emptyText: '暂无视频，请先在设置页添加媒体路径并扫描' }}
-      />
-      <Typography.Text type="secondary" className="mt-2 block text-xs">
-        <PlayCircleOutlined className="mr-1" />
-        点击行切换播放
-      </Typography.Text>
-    </Drawer>
+    <Drawer.Backdrop isOpen={open} onOpenChange={nextOpen => !nextOpen && onClose()}>
+      <Drawer.Content placement="right" className="sm:max-w-[520px]">
+        <Drawer.Dialog>
+          <Drawer.CloseTrigger />
+          <Drawer.Header>
+            <Drawer.Heading>选集</Drawer.Heading>
+          </Drawer.Header>
+          <Drawer.Body className="gap-3">
+            {rootName && (
+              <p className="m-0 truncate text-xs text-muted" title={rootName}>
+                媒体路径：
+                {rootName}
+              </p>
+            )}
+            {loading
+              ? (
+                  <div className="flex items-center gap-2 py-3 text-sm text-muted">
+                    <Spinner size="sm" />
+                    加载中...
+                  </div>
+                )
+              : null}
+            <div className="flex flex-col gap-2">
+              <DataTable
+                ariaLabel="视频选集"
+                columns={columns}
+                data={pageItems}
+                emptyText="暂无视频，请先在设置页添加媒体路径并扫描"
+                getRowId={row => row.file_path}
+                minWidth={460}
+                onRowPress={(row) => {
+                  if (row.file_path !== currentVideoPath)
+                    onSelect(row)
+                }}
+                showPagination={false}
+              />
+              <div className="flex items-center justify-between gap-2 text-xs text-muted">
+                <span>
+                  共
+                  {' '}
+                  {items.length}
+                  {' '}
+                  个视频
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded px-2 py-1 hover:bg-surface-secondary disabled:opacity-40"
+                    disabled={page <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  >
+                    上一页
+                  </button>
+                  <span>
+                    {page}
+                    {' '}
+                    /
+                    {' '}
+                    {totalPage}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded px-2 py-1 hover:bg-surface-secondary disabled:opacity-40"
+                    disabled={page >= totalPage}
+                    onClick={() => setPage(p => Math.min(totalPage, p + 1))}
+                  >
+                    下一页
+                  </button>
+                  <select
+                    className="rounded border border-border bg-surface px-1 py-1"
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value))
+                      setPage(1)
+                    }}
+                  >
+                    {[10, 20, 50, 100].map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <p className="m-0 flex items-center gap-1 text-xs text-muted">
+              <Icon className="size-3" icon="lucide:circle-play" />
+              点击行切换播放
+            </p>
+          </Drawer.Body>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   )
 }

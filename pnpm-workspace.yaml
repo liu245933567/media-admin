@@ -1,7 +1,9 @@
 packages:
   - 'apps/*'
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  '@heroui-pro/react': true
+  '@zowe/secrets-for-zowe-sdk': true
+  esbuild: true
 minimumReleaseAgeExclude:
   - '@eslint-react/ast@5.8.4'
   - '@eslint-react/core@5.8.4'

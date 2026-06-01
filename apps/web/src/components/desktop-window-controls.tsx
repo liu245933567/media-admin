@@ -1,7 +1,7 @@
 import type { ThemeMode } from '@/stores/theme-store'
-import { CompressOutlined, DesktopOutlined, ExpandOutlined, MoonOutlined, PoweroffOutlined, SunOutlined } from '@ant-design/icons'
+import { Button, Dropdown, Tooltip } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Button, Dropdown, Tooltip } from 'antd'
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/stores/theme-store'
 import { isTauri } from '@/utils/is-tauri'
@@ -33,50 +33,69 @@ export function DesktopWindowControls() {
   const win = isTauri() ? getCurrentWindow() : undefined
 
   const themeTriggerIcon
-    = theme === 'dark' ? <MoonOutlined /> : theme === 'light' ? <SunOutlined /> : <DesktopOutlined />
+    = theme === 'dark' ? 'lucide:moon' : theme === 'light' ? 'lucide:sun' : 'lucide:monitor'
 
   return (
-    <div className="flex gap-2 pr-4">
-      <Dropdown
-        key="theme"
-        menu={{
-          items: [
-            { key: 'light', icon: <SunOutlined />, label: '浅色' },
-            { key: 'dark', icon: <MoonOutlined />, label: '深色' },
-            { key: 'system', icon: <DesktopOutlined />, label: '系统' },
-          ],
-          selectedKeys: [theme],
-          onClick: ({ key }) => setTheme(key as ThemeMode),
-        }}
-      >
-        <Button type="text" icon={themeTriggerIcon} shape="circle" />
+    <div className="flex gap-2">
+      <Dropdown>
+        <Dropdown.Trigger>
+          <Button isIconOnly aria-label="切换主题" variant="ghost">
+            <Icon icon={themeTriggerIcon} className="size-4" />
+          </Button>
+        </Dropdown.Trigger>
+        <Dropdown.Popover>
+          <Dropdown.Menu
+            selectedKeys={[theme]}
+            selectionMode="single"
+            onAction={key => setTheme(String(key) as ThemeMode)}
+          >
+            <Dropdown.Item id="light" textValue="浅色">
+              <Icon icon="lucide:sun" className="size-4" />
+              浅色
+              <Dropdown.ItemIndicator />
+            </Dropdown.Item>
+            <Dropdown.Item id="dark" textValue="深色">
+              <Icon icon="lucide:moon" className="size-4" />
+              深色
+              <Dropdown.ItemIndicator />
+            </Dropdown.Item>
+            <Dropdown.Item id="system" textValue="系统">
+              <Icon icon="lucide:monitor" className="size-4" />
+              系统
+              <Dropdown.ItemIndicator />
+            </Dropdown.Item>
+          </Dropdown.Menu>
+        </Dropdown.Popover>
       </Dropdown>
 
       {isTauri()
         ? (
-            <Tooltip title={maximized ? '还原' : '最大化'} key="s">
+            <Tooltip delay={0} key="s">
               <Button
-                type="text"
-                shape="circle"
+                isIconOnly
                 aria-label={maximized ? '还原窗口' : '最大化窗口'}
-                icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
-                onClick={() => void win?.toggleMaximize()}
-              />
+                variant="ghost"
+                onPress={() => void win?.toggleMaximize()}
+              >
+                <Icon icon={maximized ? 'lucide:minimize-2' : 'lucide:maximize-2'} className="size-4" />
+              </Button>
+              <Tooltip.Content>{maximized ? '还原' : '最大化'}</Tooltip.Content>
             </Tooltip>
           )
         : null}
 
       {isTauri()
         ? (
-            <Tooltip title="关闭" key="c">
+            <Tooltip delay={0} key="c">
               <Button
-                type="text"
-                shape="circle"
-                danger
+                isIconOnly
                 aria-label="关闭窗口"
-                icon={<PoweroffOutlined />}
-                onClick={() => void win?.close()}
-              />
+                variant="danger-soft"
+                onPress={() => void win?.close()}
+              >
+                <Icon icon="lucide:power" className="size-4" />
+              </Button>
+              <Tooltip.Content>关闭</Tooltip.Content>
             </Tooltip>
           )
         : null}

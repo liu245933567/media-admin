@@ -1,6 +1,7 @@
-import { PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { Button } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { App, Button } from 'antd'
+import { useAppToast } from './app-toast'
 
 export interface QueueControlsProps {
   onChanged?: () => void
@@ -14,7 +15,7 @@ export interface QueueControlsProps {
 type QueueStatus = 'RUNNING' | 'PAUSING' | 'PAUSED' | 'UNKNOWN'
 
 export function QueueControls(props: QueueControlsProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
 
   const queueStatusQuery = useQuery({
     queryKey: props.statusQueryKey,
@@ -57,10 +58,10 @@ export function QueueControls(props: QueueControlsProps) {
       {(status === 'PAUSED') && (
         <Button
           key="start"
-          icon={<PlayCircleOutlined />}
-          loading={resumeMutation.isPending}
-          onClick={() => resumeMutation.mutate()}
+          isPending={resumeMutation.isPending}
+          onPress={() => resumeMutation.mutate()}
         >
+          <Icon className="size-4" icon="lucide:circle-play" />
           开始任务队列
         </Button>
       )}
@@ -68,11 +69,12 @@ export function QueueControls(props: QueueControlsProps) {
       {(status === 'RUNNING' || status === 'PAUSING' || status === 'UNKNOWN') && (
         <Button
           key="pause"
-          icon={<PauseCircleOutlined />}
-          loading={pausingOrLoading}
-          disabled={status === 'PAUSING' || pauseMutation.isPending || queueStatusQuery.isFetching}
-          onClick={() => pauseMutation.mutate()}
+          variant="outline"
+          isPending={pausingOrLoading}
+          isDisabled={status === 'PAUSING' || pauseMutation.isPending || queueStatusQuery.isFetching}
+          onPress={() => pauseMutation.mutate()}
         >
+          <Icon className="size-4" icon="lucide:circle-pause" />
           暂停任务队列
         </Button>
       )}

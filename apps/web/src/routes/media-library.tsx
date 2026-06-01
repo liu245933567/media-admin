@@ -1,27 +1,21 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-components'
+import type { ColumnDef } from '@tanstack/react-table'
 import type { MediaSubtitleRow, MediaVideoRow } from '@/api'
-import { DownOutlined } from '@ant-design/icons'
-import { PageContainer, ProTable } from '@ant-design/pro-components'
+import { Button, Chip, Input, Label, ListBox, Popover, Select } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import {
-  App,
-  Button,
-  Dropdown,
-  List,
-  Popover,
-  Space,
-  Tag,
-  Typography,
-} from 'antd'
 import dayjs from 'dayjs'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   deleteVideosMediaLibrary,
   getListRootsMediaLibraryQueryKey,
   listFilesMediaLibrary,
   listRootsMediaLibrary,
 } from '@/api'
+import { AppPage } from '@/components/app-page'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
+import { DataTable } from '@/components/data-table'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
@@ -32,9 +26,9 @@ export const Route = createFileRoute('/media-library')({
 })
 
 function PageComponent() {
-  const { message, modal } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
   const navigate = useNavigate()
-  const filesActionRef = useRef<ActionType>(null)
   const [selectedRows, setSelectedRows] = useState<MediaVideoRow[]>([])
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath]
@@ -42,22 +36,34 @@ function PageComponent() {
   const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<
     MediaVideoRow[] | undefined
   >()
+  const [rootId, setRootId] = useState<string | null>(null)
+  const [q, setQ] = useState('')
+  const [hasSubtitle, setHasSubtitle] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   const rootsQuery = useQuery({
     queryKey: getListRootsMediaLibraryQueryKey(),
     queryFn: listRootsMediaLibrary,
   })
 
-  const rootOptions = useMemo(() => {
-    return (rootsQuery.data ?? []).map(root => ({
-      label: root.name,
-      value: Number(root.id),
-    }))
-  }, [rootsQuery.data])
+  const filesQuery = useQuery({
+    queryKey: ['media-library-files', { rootId, q, hasSubtitle, page, pageSize }],
+    queryFn: () => listFilesMediaLibrary({
+      root_id: rootId ? Number(rootId) : undefined,
+      q: q || undefined,
+      has_subtitle:
+        hasSubtitle == null
+          ? undefined
+          : hasSubtitle === 'true',
+      current: page,
+      page_size: pageSize,
+    }),
+  })
 
   const reloadList = useCallback(() => {
-    filesActionRef.current?.reload()
-  }, [])
+    void filesQuery.refetch()
+  }, [filesQuery])
 
   const deleteVideosMutation = useMutation({
     mutationFn: (body: Parameters<typeof deleteVideosMediaLibrary>[0]) => deleteVideosMediaLibrary(body),
@@ -76,32 +82,31 @@ function PageComponent() {
       if (!rows.length) {
         return
       }
-      modal.confirm({
+      confirm({
         title: rows.length > 1 ? '批量删除视频' : '删除此视频',
-        content: (
+        description: (
           <div className="space-y-2">
-            <Typography.Paragraph className="mb-0">
+            <p className="m-0">
               将从磁盘删除
-              <Typography.Text strong className="mx-1">
+              <strong className="mx-1">
                 {rows.length}
-              </Typography.Text>
+              </strong>
               个视频，并同步删除与视频相关的字幕文件。
-            </Typography.Paragraph>
-            <Typography.Paragraph className="mb-0 text-neutral-500">
+            </p>
+            <p className="m-0 text-neutral-500">
               此操作不可恢复。
-            </Typography.Paragraph>
+            </p>
           </div>
         ),
-        okText: '删除',
-        cancelText: '取消',
-        okButtonProps: { danger: true },
-        onOk: () =>
+        confirmText: '删除',
+        danger: true,
+        onConfirm: () =>
           deleteVideosMutation.mutateAsync({
             video_paths: rows.map(row => row.file_path),
           }),
       })
     },
-    [deleteVideosMutation, modal],
+    [confirm, deleteVideosMutation],
   )
 
   const openSubtitleCreateSingle = useCallback((videoPath: string) => {
@@ -116,109 +121,95 @@ function PageComponent() {
     setSubtitleTaskCreateOpen(true)
   }, [])
 
-  const fileColumns = useMemo<ProColumns<MediaVideoRow>[]>(
+  const fileColumns = useMemo<ColumnDef<MediaVideoRow, unknown>[]>(
     () => [
       {
-        title: '文件名',
-        dataIndex: 'file_name',
-        ellipsis: true,
-        copyable: true,
+        header: '文件名',
+        accessorKey: 'file_name',
+        cell: ({ row }) => (
+          <span className="block max-w-[260px] truncate" title={row.original.file_name}>
+            {row.original.file_name}
+          </span>
+        ),
       },
       {
-        title: '资源路径',
-        dataIndex: 'root_id',
-        width: 180,
-        valueType: 'select',
-        fieldProps: {
-          options: rootOptions,
-          showSearch: true,
-          optionFilterProp: 'label',
-        },
-        render: (_, row) => {
+        header: '资源路径',
+        accessorKey: 'root_id',
+        cell: ({ row }) => {
           const root = (rootsQuery.data ?? []).find(
-            item => Number(item.id) === Number(row.root_id),
+            item => Number(item.id) === Number(row.original.root_id),
           )
-          return root?.name ?? row.root_id
+          return root?.name ?? row.original.root_id
         },
       },
       {
-        title: '是否有字幕',
-        dataIndex: 'has_subtitle',
-        hideInTable: true,
-        valueType: 'select',
-        valueEnum: {
-          true: { text: '有字幕' },
-          false: { text: '无字幕' },
-        },
-      },
-      {
-        title: '字幕数量',
-        dataIndex: 'subtitle_count',
-        width: 110,
-        search: false,
-        render: (_, row) => (
+        header: '字幕数量',
+        accessorKey: 'subtitle_count',
+        enableSorting: false,
+        cell: ({ row }) => (
           <SubtitleCountPopover
-            videoName={row.file_name}
-            subtitles={row.subtitles ?? []}
-            onChanged={() => filesActionRef.current?.reload()}
+            videoName={row.original.file_name}
+            subtitles={row.original.subtitles ?? []}
+            onChanged={reloadList}
           />
         ),
       },
       {
-        title: '大小',
-        dataIndex: 'file_size',
-        width: 120,
-        search: false,
-        render: (_, row) => formatBytes(Number(row.file_size)),
+        header: '大小',
+        accessorKey: 'file_size',
+        cell: ({ row }) => formatBytes(Number(row.original.file_size)),
       },
       {
-        title: '修改时间',
-        dataIndex: 'modified_at',
-        width: 180,
-        search: false,
-        render: (_, row) =>
-          dayjs(row.modified_at).format('YYYY-MM-DD HH:mm:ss'),
+        header: '修改时间',
+        accessorKey: 'modified_at',
+        cell: ({ row }) =>
+          dayjs(row.original.modified_at).format('YYYY-MM-DD HH:mm:ss'),
       },
       {
-        title: '完整路径',
-        dataIndex: 'file_path',
-        ellipsis: true,
-        copyable: true,
-        search: false,
+        header: '完整路径',
+        accessorKey: 'file_path',
+        cell: ({ row }) => (
+          <span className="block max-w-[360px] truncate font-mono text-xs" title={row.original.file_path}>
+            {row.original.file_path}
+          </span>
+        ),
       },
       {
-        title: '操作',
-        valueType: 'option',
-        width: 110,
-        render: (_, row) => (
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'play', label: '播放' },
-                { key: 'delete', label: '删除此视频', danger: true },
-                { key: 'generate', label: '生成字幕' },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'play') {
-                  void navigate({
-                    to: '/video-play',
-                    search: buildVideoPlaySearch(row),
-                  })
-                }
-                if (key === 'delete') {
-                  confirmDeleteVideos([row])
-                }
-                if (key === 'generate') {
-                  openSubtitleCreateSingle(row.file_path)
-                }
-              },
-            }}
-          >
-            <Button type="link" className="m-0! p-0!">
-              操作
-              <DownOutlined />
+        header: '操作',
+        id: 'action',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="tertiary"
+              onPress={() => {
+                void navigate({
+                  to: '/video-play',
+                  search: buildVideoPlaySearch(row.original),
+                })
+              }}
+            >
+              <Icon className="size-4" icon="lucide:play" />
             </Button>
-          </Dropdown>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="tertiary"
+              onPress={() => openSubtitleCreateSingle(row.original.file_path)}
+            >
+              <Icon className="size-4" icon="lucide:captions" />
+            </Button>
+            <Button
+              isIconOnly
+              size="sm"
+              variant="danger-soft"
+              onPress={() => confirmDeleteVideos([row.original])}
+            >
+              <Icon className="size-4" icon="lucide:trash-2" />
+            </Button>
+          </div>
         ),
       },
     ],
@@ -226,13 +217,16 @@ function PageComponent() {
       confirmDeleteVideos,
       navigate,
       openSubtitleCreateSingle,
-      rootOptions,
+      reloadList,
       rootsQuery.data,
     ],
   )
 
+  const total = Number(filesQuery.data?.total ?? 0)
+  const totalPage = Math.max(1, Math.ceil(total / pageSize))
+
   return (
-    <PageContainer title={false}>
+    <AppPage title="媒体库">
       <SubtitleTaskCreateDrawerForm
         open={subtitleTaskCreateOpen}
         onOpenChange={(open) => {
@@ -244,59 +238,155 @@ function PageComponent() {
         }}
         initialVideoPath={subtitleTaskCreateInitialPath}
         bulkSourceRows={subtitleTaskBulkRows?.map(mediaVideoToScanItem)}
+        onCreated={reloadList}
       />
-      <Space orientation="vertical" size={16} className="w-full">
-        <ProTable<MediaVideoRow>
-          rowKey="id"
-          actionRef={filesActionRef}
-          columns={fileColumns}
-          request={async (params) => {
-            const hasSubtitle = params.has_subtitle
-            const res = await listFilesMediaLibrary({
-              root_id: params.root_id ? Number(params.root_id) : undefined,
-              q: params.file_name,
-              has_subtitle:
-                hasSubtitle === undefined
-                  ? undefined
-                  : hasSubtitle === true || hasSubtitle === 'true',
-              current: params.current,
-              page_size: params.pageSize,
-            })
-            return {
-              data: res.data,
-              total: Number(res.total),
-              success: true,
-            }
-          }}
-          search={{ filterType: 'light' }}
-          options={{ density: false, setting: false }}
-          pagination={{ showSizeChanger: true }}
-          rowSelection={{
-            selectedRowKeys: selectedRows.map(row => row.id),
-            onChange: (_, rows) => setSelectedRows(rows),
-          }}
-          toolBarRender={() => [
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_220px_180px_auto] md:items-end">
+          <div className="flex flex-col gap-1">
+            <Label>文件名</Label>
+            <Input
+              value={q}
+              placeholder="搜索文件名"
+              variant="secondary"
+              onChange={(event) => {
+                setQ(event.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
+          <Select
+            selectedKey={rootId}
+            onSelectionChange={(key) => {
+              setRootId(key as string | null)
+              setPage(1)
+            }}
+          >
+            <Label>资源路径</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="" textValue="全部">
+                  全部
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {(rootsQuery.data ?? []).map(root => (
+                  <ListBox.Item key={root.id} id={String(root.id)} textValue={root.name}>
+                    {root.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <Select
+            selectedKey={hasSubtitle}
+            onSelectionChange={(key) => {
+              setHasSubtitle(key as string | null)
+              setPage(1)
+            }}
+          >
+            <Label>是否有字幕</Label>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="" textValue="全部">
+                  全部
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="true" textValue="有字幕">
+                  有字幕
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="false" textValue="无字幕">
+                  无字幕
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+          <div className="flex gap-2">
             <Button
-              key="bulk-delete"
-              danger
-              disabled={!selectedRows.length}
-              loading={deleteVideosMutation.isPending}
-              onClick={() => confirmDeleteVideos(selectedRows)}
+              variant="danger-soft"
+              isDisabled={!selectedRows.length}
+              isPending={deleteVideosMutation.isPending}
+              onPress={() => confirmDeleteVideos(selectedRows)}
             >
               批量删除
-            </Button>,
+            </Button>
             <Button
-              key="bulk-generate"
-              type="primary"
-              disabled={!selectedRows.length}
-              onClick={() => openSubtitleCreateBulk(selectedRows)}
+              isDisabled={!selectedRows.length}
+              onPress={() => openSubtitleCreateBulk(selectedRows)}
             >
               批量生成字幕
-            </Button>,
-          ]}
+            </Button>
+          </div>
+        </div>
+        <DataTable
+          ariaLabel="媒体文件"
+          columns={fileColumns}
+          data={filesQuery.data?.data ?? []}
+          emptyText="暂无媒体文件"
+          enableRowSelection
+          getRowId={row => String(row.id)}
+          loading={filesQuery.isFetching}
+          minWidth={1120}
+          onRowSelectionChange={setSelectedRows}
+          showPagination={false}
         />
-      </Space>
-    </PageContainer>
+        <div className="flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            共
+            {' '}
+            {total}
+            {' '}
+            个视频
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="tertiary"
+              isDisabled={page <= 1}
+              onPress={() => setPage(prev => Math.max(1, prev - 1))}
+            >
+              上一页
+            </Button>
+            <span>
+              {page}
+              {' '}
+              /
+              {' '}
+              {totalPage}
+            </span>
+            <Button
+              size="sm"
+              variant="tertiary"
+              isDisabled={page >= totalPage}
+              onPress={() => setPage(prev => Math.min(totalPage, prev + 1))}
+            >
+              下一页
+            </Button>
+            <select
+              className="rounded border border-border bg-surface px-2 py-1"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value))
+                setPage(1)
+              }}
+            >
+              {[10, 20, 50, 100].map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </AppPage>
   )
 }
 
@@ -319,47 +409,38 @@ function SubtitleCountPopover({
   onChanged: () => void
 }) {
   if (!subtitles.length) {
-    return <Tag>0</Tag>
+    return <Chip size="sm" variant="soft">0</Chip>
   }
 
-  const content = (
-    <List
-      size="small"
-      dataSource={subtitles}
-      className="min-w-64 max-w-[28rem]"
-      renderItem={subtitle => (
-        <List.Item
-          actions={[
-            <SubtitleDetailModal
-              key="detail"
-              subtitlePath={subtitle.file_path}
-              onDeleted={onChanged}
-              trigger={({ setOpen }) => (
-                <Button
-                  type="link"
-                  size="small"
-                  className="m-0! p-0!"
-                  onClick={() => setOpen(true)}
-                >
-                  详情
-                </Button>
-              )}
-            />,
-          ]}
-        >
-          <Typography.Text ellipsis={{ tooltip: subtitle.file_name }}>
-            {subtitleDisplayName(videoName, subtitle.file_name)}
-          </Typography.Text>
-        </List.Item>
-      )}
-    />
-  )
-
   return (
-    <Popover content={content} trigger="hover">
-      <Tag color="blue" className="cursor-pointer">
+    <Popover>
+      <Button size="sm" variant="tertiary">
         {subtitles.length}
-      </Tag>
+      </Button>
+      <Popover.Content>
+        <div className="flex min-w-64 max-w-[28rem] flex-col gap-2 p-2">
+          {subtitles.map(subtitle => (
+            <div key={subtitle.id} className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate text-sm" title={subtitle.file_name}>
+                {subtitleDisplayName(videoName, subtitle.file_name)}
+              </span>
+              <SubtitleDetailModal
+                subtitlePath={subtitle.file_path}
+                onDeleted={onChanged}
+                trigger={({ setOpen }) => (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => setOpen(true)}
+                  >
+                    详情
+                  </Button>
+                )}
+              />
+            </div>
+          ))}
+        </div>
+      </Popover.Content>
     </Popover>
   )
 }

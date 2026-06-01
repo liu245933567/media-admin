@@ -1,18 +1,9 @@
-import type { ColumnsType } from 'antd/es/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, WhisperModelItem } from '@/api'
 import type { WhisperModelOption } from '@/components/subtitle-pipeline-form-groups'
 import type { SetupDownloadUiProgress, WhisperModelDownloadProgress } from '@/lib/setup-download-taskmill'
+import { Button, Card, Chip, ProgressBar } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  App,
-  Button,
-  Card,
-  Modal,
-  Progress,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   downloadWhisperSetup,
@@ -24,6 +15,9 @@ import {
   snapshotJobs,
 } from '@/api'
 import { buildWhisperDownloadProgressByModelId, hasActiveWhisperDownloads, listActiveWhisperDownloadTasks, mapSetupDownloadFromHistory, mapSetupDownloadFromSnapshot, uiProgressPercent } from '@/lib/setup-download-taskmill'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
+import { DataTable } from './data-table'
 
 const whisperModelsQueryKey = getListWhisperModelsSetupQueryKey()
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
@@ -55,7 +49,8 @@ export function useWhisperModelFilenameOptions(): {
 
 /** 设置页：Whisper 模型列表与 Taskmill 下载进度。 */
 export function WhisperModelsSetupCard() {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
   const queryClient = useQueryClient()
 
   const whisperModelsQuery = useQuery({
@@ -203,9 +198,9 @@ export function WhisperModelsSetupCard() {
     if (!item || item.local_ready) {
       return
     }
-    Modal.confirm({
+    confirm({
       title: '下载 Whisper 模型',
-      content: (
+      description: (
         <div className="space-y-2 text-neutral-700">
           <p>
             将清理未完成下载后，从暂存目录下载并写入模型目录：
@@ -216,83 +211,82 @@ export function WhisperModelsSetupCard() {
           </p>
         </div>
       ),
-      okText: '开始下载',
-      cancelText: '取消',
-      onOk: () => startWhisperModelDownload(modelId),
+      confirmText: '开始下载',
+      onConfirm: () => startWhisperModelDownload(modelId),
     })
-  }, [models, startWhisperModelDownload])
+  }, [confirm, models, startWhisperModelDownload])
 
-  const whisperModelColumns: ColumnsType<WhisperModelItem> = useMemo(
+  const whisperModelColumns: ColumnDef<WhisperModelItem, unknown>[] = useMemo(
     () => [
       {
-        title: '模型',
-        dataIndex: 'label',
-        key: 'label',
-        render: (_, row) => (
+        header: '模型',
+        accessorKey: 'label',
+        cell: ({ row }) => (
           <div>
-            <div className="font-medium">{row.label}</div>
-            <div className="text-xs text-neutral-500">{row.description}</div>
+            <div className="font-medium">{row.original.label}</div>
+            <div className="text-xs text-neutral-500">{row.original.description}</div>
           </div>
         ),
       },
       {
-        title: '文件名',
-        dataIndex: 'filename',
-        key: 'filename',
-        width: 200,
-        render: (filename: string) => (
-          <Typography.Text code className="text-xs">
-            {filename}
-          </Typography.Text>
+        header: '文件名',
+        accessorKey: 'filename',
+        cell: ({ row }) => (
+          <code className="rounded bg-surface-secondary px-1 py-0.5 text-xs">
+            {row.original.filename}
+          </code>
         ),
       },
       {
-        title: '大小',
-        dataIndex: 'size_hint',
-        key: 'size_hint',
-        width: 100,
+        header: '大小',
+        accessorKey: 'size_hint',
       },
       {
-        title: '状态',
-        key: 'status',
-        width: 280,
-        render: (_, row) => {
-          const dl = whisperProgressByModelId.get(row.id)
+        header: '状态',
+        id: 'status',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const dl = whisperProgressByModelId.get(row.original.id)
           if (dl) {
             return (
               <div className="min-w-[200px]">
-                <Progress
-                  percent={uiProgressPercent(dl)}
-                  size="small"
-                  status={dl.status === 'error' ? 'exception' : 'active'}
-                />
-                <Typography.Text type="secondary" className="mt-1 block text-xs">
+                <ProgressBar
+                  aria-label="模型下载进度"
+                  color={dl.status === 'error' ? 'danger' : 'accent'}
+                  size="sm"
+                  value={uiProgressPercent(dl)}
+                >
+                  <ProgressBar.Track>
+                    <ProgressBar.Fill />
+                  </ProgressBar.Track>
+                </ProgressBar>
+                <span className="mt-1 block text-xs text-muted">
                   {dl.message}
-                </Typography.Text>
+                </span>
               </div>
             )
           }
-          if (row.local_ready) {
-            return <Tag color="success">已就绪</Tag>
+          if (row.original.local_ready) {
+            return <Chip color="success" size="sm" variant="soft">已就绪</Chip>
           }
-          return <Tag>未安装</Tag>
+          return <Chip size="sm" variant="soft">未安装</Chip>
         },
       },
       {
-        title: '操作',
-        key: 'action',
-        width: 100,
-        render: (_, row) => {
-          const dl = whisperProgressByModelId.get(row.id)
+        header: '操作',
+        id: 'action',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const dl = whisperProgressByModelId.get(row.original.id)
           const isThisDownloading = dl?.status === 'running'
-          const blocked = row.local_ready || (anyWhisperDownloadActive && !isThisDownloading)
+          const blocked = row.original.local_ready || (anyWhisperDownloadActive && !isThisDownloading)
           return (
             <Button
-              type="link"
-              size="small"
-              disabled={blocked}
-              loading={isThisDownloading}
-              onClick={() => openWhisperDownloadModal(row.id)}
+              size="sm"
+              variant="tertiary"
+              isDisabled={blocked}
+              isPending={isThisDownloading}
+              onPress={() => openWhisperDownloadModal(row.original.id)}
             >
               下载
             </Button>
@@ -304,19 +298,25 @@ export function WhisperModelsSetupCard() {
   )
 
   return (
-    <Card title="Whisper 模型" variant="borderless" className="shadow-sm">
-      <Typography.Paragraph className="mb-3 text-sm text-neutral-600">
-        状态与后台 Taskmill 下载任务同步；进行中的任务会在表格中显示进度。
-      </Typography.Paragraph>
-      <Table<WhisperModelItem>
-        rowKey="id"
-        size="small"
-        loading={whisperModelsQuery.isPending}
-        columns={whisperModelColumns}
-        dataSource={models}
-        pagination={false}
-        scroll={{ x: 720 }}
-      />
+    <Card>
+      <Card.Header>
+        <Card.Title>Whisper 模型</Card.Title>
+      </Card.Header>
+      <Card.Content className="flex flex-col gap-3">
+        <p className="m-0 text-sm text-neutral-600">
+          状态与后台 Taskmill 下载任务同步；进行中的任务会在表格中显示进度。
+        </p>
+        <DataTable
+          ariaLabel="Whisper 模型"
+          columns={whisperModelColumns}
+          data={models}
+          emptyText="暂无模型"
+          getRowId={row => row.id}
+          loading={whisperModelsQuery.isPending}
+          minWidth={760}
+          showPagination={false}
+        />
+      </Card.Content>
     </Card>
   )
 }

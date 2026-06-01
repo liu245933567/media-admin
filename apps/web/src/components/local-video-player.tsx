@@ -1,8 +1,8 @@
 import type Player from 'video.js/dist/types/player'
 import type VjsHtmlTrackElement from 'video.js/dist/types/tracks/html-track-element'
 import type { VideoJsPlaylistNavOptions } from '@/lib/videojs-playlist-controls'
+import { Alert, Button, ProgressBar, Spinner } from '@heroui/react'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { Alert, Button, Progress, Spin } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import videojs from 'video.js'
 import {
@@ -294,10 +294,6 @@ export function LocalVideoPlayer({
     && transcodePhase !== 'ready'
     && transcodePhase !== 'failed'
 
-  const alertClass = fillViewport
-    ? 'border-white/10 bg-zinc-900/90 text-white [&_.ant-alert-message]:text-white [&_.ant-alert-description]:text-white/70'
-    : ''
-
   return (
     <div
       className={
@@ -315,36 +311,37 @@ export function LocalVideoPlayer({
           }
         >
           {probeQuery.isError && (
-            <Alert
-              type="error"
-              showIcon
-              className={alertClass}
-              title="无法分析视频"
-              description={probeQuery.error.message}
-            />
+            <Alert status="danger" className={fillViewport ? 'border-white/10 bg-zinc-900/90 text-white' : ''}>
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>无法分析视频</Alert.Title>
+                <Alert.Description>{probeQuery.error.message}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
           {needsTranscode && transcodePhase === 'failed' && (
-            <Alert
-              type="error"
-              showIcon
-              className={alertClass}
-              title="转码失败"
-              description={transcodeStatusQuery.data?.message ?? '请确认已安装 FFmpeg 后重试'}
-              action={(
-                <Button
-                  size="small"
-                  onClick={() => {
-                    transcodeStartRequested.current = false
-                    void startVideoTranscodeFs({ path: videoPath }).then(() => {
-                      transcodeStartRequested.current = true
-                      void transcodeStatusQuery.refetch()
-                    })
-                  }}
-                >
-                  重试
-                </Button>
-              )}
-            />
+            <Alert status="danger" className={fillViewport ? 'border-white/10 bg-zinc-900/90 text-white' : ''}>
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>转码失败</Alert.Title>
+                <Alert.Description>
+                  {transcodeStatusQuery.data?.message ?? '请确认已安装 FFmpeg 后重试'}
+                </Alert.Description>
+              </Alert.Content>
+              <Button
+                size="sm"
+                variant="danger"
+                onPress={() => {
+                  transcodeStartRequested.current = false
+                  void startVideoTranscodeFs({ path: videoPath }).then(() => {
+                    transcodeStartRequested.current = true
+                    void transcodeStatusQuery.refetch()
+                  })
+                }}
+              >
+                重试
+              </Button>
+            </Alert>
           )}
           {showTranscodeProgress && (
             <div className={fillViewport ? 'rounded-lg bg-zinc-900/90 px-3 py-2 text-white' : ''}>
@@ -360,10 +357,14 @@ export function LocalVideoPlayer({
                   </span>
                 )}
               </p>
-              <Progress
-                percent={Math.round((transcodeStatusQuery.data?.progress ?? 0) * 100)}
-                status="active"
-              />
+              <ProgressBar
+                aria-label="转码进度"
+                value={Math.round((transcodeStatusQuery.data?.progress ?? 0) * 100)}
+              >
+                <ProgressBar.Track>
+                  <ProgressBar.Fill />
+                </ProgressBar.Track>
+              </ProgressBar>
             </div>
           )}
         </div>
@@ -378,10 +379,10 @@ export function LocalVideoPlayer({
       >
         {!playbackSrc && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
-            <Spin
-              tip={needsTranscode ? '等待转码完成…' : '加载视频…'}
-              className={fillViewport ? '[&_.ant-spin-text]:text-white/70!' : ''}
-            />
+            <div className="flex flex-col items-center gap-2 text-white/70">
+              <Spinner color="current" />
+              <span className="text-sm">{needsTranscode ? '等待转码完成...' : '加载视频...'}</span>
+            </div>
           </div>
         )}
         <video

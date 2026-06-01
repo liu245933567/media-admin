@@ -1,4 +1,4 @@
-import type { ColumnsType } from 'antd/es/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import type {
   TaskmillJobSnapshot,
   TaskmillSerdeDuration,
@@ -6,30 +6,18 @@ import type {
   TaskmillTaskRecord,
   TaskmillTaskStatus,
 } from '@/api'
+import { Button, Card, Chip, ProgressBar, Spinner, Tooltip } from '@heroui/react'
 import { useMutation } from '@tanstack/react-query'
-import {
-  App,
-  Button,
-  Card,
-  Col,
-  Descriptions,
-  Empty,
-  Popconfirm,
-  Progress,
-  Row,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
 import { useMemo } from 'react'
 import { cancelTaskJobs } from '@/api'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
+import { DataTable } from './data-table'
 import { transStatus } from './taskmill-active-tasks-panel'
 
 function formatDuration(d: TaskmillSerdeDuration | null | undefined): string {
   if (!d)
-    return '—'
+    return '-'
   const totalMs = d.secs * 1000 + Math.floor(d.nanos / 1_000_000)
   if (totalMs < 1000)
     return `${totalMs} ms`
@@ -41,15 +29,54 @@ function formatDuration(d: TaskmillSerdeDuration | null | undefined): string {
   return `${m}m ${rs.toFixed(0)}s`
 }
 
-function statusColor(status: TaskmillTaskStatus): string {
-  const map: Record<TaskmillTaskStatus, string> = {
-    running: 'processing',
+function statusColor(status: TaskmillTaskStatus): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
+  const map: Record<TaskmillTaskStatus, 'default' | 'accent' | 'success' | 'warning' | 'danger'> = {
+    running: 'success',
     pending: 'default',
     paused: 'warning',
-    waiting: 'blue',
-    blocked: 'orange',
+    waiting: 'accent',
+    blocked: 'warning',
   }
   return map[status]
+}
+
+function PercentBar({
+  ariaLabel,
+  value,
+  color = 'accent',
+}: {
+  ariaLabel: string
+  value: number
+  color?: 'default' | 'accent' | 'success' | 'warning' | 'danger'
+}) {
+  return (
+    <ProgressBar aria-label={ariaLabel} color={color} size="sm" value={value}>
+      <ProgressBar.Track>
+        <ProgressBar.Fill />
+      </ProgressBar.Track>
+    </ProgressBar>
+  )
+}
+
+function StatCard({
+  title,
+  value,
+  danger,
+}: {
+  title: string
+  value: React.ReactNode
+  danger?: boolean
+}) {
+  return (
+    <Card className="h-full">
+      <Card.Content className="p-4">
+        <div className="text-xs text-muted">{title}</div>
+        <div className={danger ? 'mt-1 text-2xl font-semibold tabular-nums text-danger' : 'mt-1 text-2xl font-semibold tabular-nums'}>
+          {value}
+        </div>
+      </Card.Content>
+    </Card>
+  )
 }
 
 export interface TaskmillSnapshotPanelProps {
@@ -63,7 +90,8 @@ export function TaskmillSnapshotPanel({
   loading,
   onChanged,
 }: TaskmillSnapshotPanelProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => cancelTaskJobs(id),
@@ -81,285 +109,266 @@ export function TaskmillSnapshotPanel({
     },
   })
 
-  const runningColumns: ColumnsType<TaskmillTaskRecord> = useMemo(() => {
+  const runningColumns: ColumnDef<TaskmillTaskRecord, unknown>[] = useMemo(() => {
     if (!data)
       return []
     const { progress, byte_progress: byteProgress } = data.scheduler
 
     return [
+      { header: 'ID', accessorKey: 'id' },
       {
-        title: 'ID',
-        dataIndex: 'id',
-        width: 72,
-        fixed: 'left' as const,
-      },
-      {
-        title: '类型',
-        dataIndex: 'task_type',
-        width: 200,
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[180px]">
-            {t}
-          </Typography.Text>
+        header: '类型',
+        accessorKey: 'task_type',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[180px] truncate">{row.original.task_type}</span>
+            <Tooltip.Content>{row.original.task_type}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '标签',
-        dataIndex: 'label',
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[220px]">
-            {t}
-          </Typography.Text>
+        header: '标签',
+        accessorKey: 'label',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[220px] truncate">{row.original.label}</span>
+            <Tooltip.Content>{row.original.label}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '状态',
-        dataIndex: 'status',
-        width: 96,
-        render: (s: TaskmillTaskStatus) => (
-          <Tag color={statusColor(s)}>{transStatus(s)}</Tag>
+        header: '状态',
+        accessorKey: 'status',
+        cell: ({ row }) => (
+          <Chip color={statusColor(row.original.status)} size="sm" variant="soft">
+            {transStatus(row.original.status)}
+          </Chip>
         ),
       },
+      { header: '优先级', accessorKey: 'priority' },
       {
-        title: '优先级',
-        dataIndex: 'priority',
-        width: 88,
-      },
-      {
-        title: '进度',
-        key: 'prog',
-        width: 140,
-        render: (_: unknown, row: TaskmillTaskRecord) => {
-          const ep = progress.find(p => p.header.task_id === row.id)
+        header: '进度',
+        id: 'progress',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const ep = progress.find(p => p.header.task_id === row.original.id)
           if (ep) {
             return (
-              <Progress
-                percent={Math.round(ep.percent * 1000) / 10}
-                size="small"
-                status="active"
-              />
+              <div className="min-w-28">
+                <PercentBar ariaLabel="任务进度" value={Math.round(ep.percent * 1000) / 10} />
+              </div>
             )
           }
-          const bp = byteProgress.find(p => p.task_id === row.id)
+          const bp = byteProgress.find(p => p.task_id === row.original.id)
           if (bp?.bytes_total) {
             const pct = Math.min(
               100,
               Math.round((bp.bytes_completed / bp.bytes_total) * 1000) / 10,
             )
-            return <Progress percent={pct} size="small" />
+            return (
+              <div className="min-w-28">
+                <PercentBar ariaLabel="字节进度" value={pct} />
+              </div>
+            )
           }
-          return <Typography.Text type="secondary">—</Typography.Text>
+          return <span className="text-muted">-</span>
         },
       },
       {
-        title: '操作',
-        key: 'action',
-        width: 88,
-        fixed: 'right' as const,
-        render: (_: unknown, row: TaskmillTaskRecord) => (
-          <Popconfirm
-            title="取消此任务？"
-            onConfirm={() => cancelMutation.mutate(row.id)}
+        header: '操作',
+        id: 'action',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            size="sm"
+            variant="danger-soft"
+            isDisabled={cancelMutation.isPending}
+            onPress={() => confirm({
+              title: '取消此任务？',
+              confirmText: '取消任务',
+              danger: true,
+              onConfirm: () => cancelMutation.mutateAsync(row.original.id),
+            })}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              disabled={cancelMutation.isPending}
-            >
-              取消
-            </Button>
-          </Popconfirm>
+            取消
+          </Button>
         ),
       },
     ]
-  }, [data, cancelMutation])
+  }, [cancelMutation, confirm, data])
+
+  const byteColumns: ColumnDef<TaskmillTaskProgress, unknown>[] = useMemo(
+    () => [
+      { header: '任务', accessorKey: 'task_id' },
+      {
+        header: '标签',
+        accessorKey: 'label',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[220px] truncate">{row.original.label}</span>
+            <Tooltip.Content>{row.original.label}</Tooltip.Content>
+          </Tooltip>
+        ),
+      },
+      {
+        header: '字节',
+        id: 'bytes',
+        cell: ({ row }) => {
+          const total = row.original.bytes_total
+          const cur = row.original.bytes_completed
+          if (total) {
+            return `${cur} / ${total}`
+          }
+          return String(cur)
+        },
+      },
+      {
+        header: '吞吐 (B/s)',
+        accessorKey: 'throughput_bps',
+        cell: ({ row }) => row.original.throughput_bps.toFixed(0),
+      },
+      {
+        header: '已耗时',
+        accessorKey: 'elapsed',
+        cell: ({ row }) => formatDuration(row.original.elapsed),
+      },
+      {
+        header: 'ETA',
+        accessorKey: 'eta',
+        cell: ({ row }) => formatDuration(row.original.eta),
+      },
+    ],
+    [],
+  )
 
   if (loading && !data) {
-    return <Typography.Paragraph type="secondary">加载中…</Typography.Paragraph>
+    return (
+      <div className="flex items-center gap-2 py-6 text-sm text-muted">
+        <Spinner size="sm" />
+        加载中...
+      </div>
+    )
   }
 
   if (!data) {
-    return <Empty description="暂无快照数据" />
+    return (
+      <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted">
+        暂无快照数据
+      </div>
+    )
   }
 
   const { scheduler, metrics } = data
 
   return (
-    <Space orientation="vertical" size="large" className="w-full">
-      <Row gutter={[16, 16]}>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="运行中" value={metrics.running} suffix={`/ ${metrics.max_concurrency}`} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="等待调度" value={metrics.pending} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="已完成" value={metrics.completed} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic
-              title="失败"
-              value={metrics.failed}
-              styles={{
-                content: { color: metrics.failed ? '#cf1322' : undefined },
-              }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="已入队" value={metrics.submitted} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="已派发" value={metrics.dispatched} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="阻塞" value={metrics.blocked} />
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} md={6}>
-          <Card size="small" className="h-full shadow-sm">
-            <Statistic title="背压" value={metrics.pressure} precision={2} />
-          </Card>
-        </Col>
-      </Row>
+    <div className="flex w-full flex-col gap-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="运行中" value={`${metrics.running} / ${metrics.max_concurrency}`} />
+        <StatCard title="等待调度" value={metrics.pending} />
+        <StatCard title="已完成" value={metrics.completed} />
+        <StatCard title="失败" value={metrics.failed} danger={metrics.failed > 0} />
+        <StatCard title="已入队" value={metrics.submitted} />
+        <StatCard title="已派发" value={metrics.dispatched} />
+        <StatCard title="阻塞" value={metrics.blocked} />
+        <StatCard title="背压" value={metrics.pressure.toFixed(2)} />
+      </div>
 
-      <Card size="small" title="调度器背压" className="shadow-sm">
-        <Space orientation="vertical" className="w-full" size="middle">
-          <div>
-            <Typography.Text type="secondary" className="text-xs">
-              综合
-            </Typography.Text>
-            <Progress
-              percent={Math.round(scheduler.pressure * 1000) / 10}
-              status={scheduler.pressure > 0.85 ? 'exception' : 'active'}
+      <Card>
+        <Card.Header>
+          <Card.Title>调度器背压</Card.Title>
+        </Card.Header>
+        <Card.Content className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <div className="text-xs text-muted">综合</div>
+            <PercentBar
+              ariaLabel="综合背压"
+              color={scheduler.pressure > 0.85 ? 'danger' : 'accent'}
+              value={Math.round(scheduler.pressure * 1000) / 10}
             />
           </div>
           {scheduler.pressure_breakdown.length > 0 && (
             <div className="flex flex-col gap-2">
-              <Typography.Text type="secondary" className="text-xs">
-                按来源
-              </Typography.Text>
+              <div className="text-xs text-muted">按来源</div>
               {scheduler.pressure_breakdown.map(([name, v]) => (
                 <div key={name} className="flex items-center gap-3">
-                  <Typography.Text className="w-40 shrink-0 truncate text-xs" title={name}>
+                  <span className="w-40 shrink-0 truncate text-xs" title={name}>
                     {name}
-                  </Typography.Text>
-                  <Progress
-                    className="min-w-0 flex-1"
-                    percent={Math.round(v * 1000) / 10}
-                    size="small"
-                  />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <PercentBar ariaLabel={`${name} 背压`} value={Math.round(v * 1000) / 10} />
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </Space>
+        </Card.Content>
       </Card>
 
-      <Descriptions
-        bordered
-        size="small"
-        column={{ xs: 1, sm: 2, md: 3 }}
-        title="队列概览"
-      >
-        <Descriptions.Item label="pending">{scheduler.pending_count}</Descriptions.Item>
-        <Descriptions.Item label="paused">{scheduler.paused_count}</Descriptions.Item>
-        <Descriptions.Item label="waiting">{scheduler.waiting_count}</Descriptions.Item>
-        <Descriptions.Item label="blocked">{scheduler.blocked_count}</Descriptions.Item>
-        <Descriptions.Item label="max_concurrency">{scheduler.max_concurrency}</Descriptions.Item>
-        <Descriptions.Item label="全局暂停">
-          {scheduler.is_paused ? <Tag color="red">是</Tag> : <Tag>否</Tag>}
-        </Descriptions.Item>
-      </Descriptions>
+      <Card>
+        <Card.Header>
+          <Card.Title>队列概览</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <dt className="text-xs text-muted">pending</dt>
+              <dd className="m-0 font-medium tabular-nums">{scheduler.pending_count}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">paused</dt>
+              <dd className="m-0 font-medium tabular-nums">{scheduler.paused_count}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">waiting</dt>
+              <dd className="m-0 font-medium tabular-nums">{scheduler.waiting_count}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">blocked</dt>
+              <dd className="m-0 font-medium tabular-nums">{scheduler.blocked_count}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">max_concurrency</dt>
+              <dd className="m-0 font-medium tabular-nums">{scheduler.max_concurrency}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">全局暂停</dt>
+              <dd className="m-0">
+                {scheduler.is_paused
+                  ? <Chip color="danger" size="sm" variant="soft">是</Chip>
+                  : <Chip size="sm" variant="soft">否</Chip>}
+              </dd>
+            </div>
+          </dl>
+        </Card.Content>
+      </Card>
 
-      <div>
-        <Typography.Title level={5} className="mb-2 mt-0">
-          运行中任务
-        </Typography.Title>
-        <Table<TaskmillTaskRecord>
-          size="small"
-          rowKey="id"
-          loading={loading}
-          pagination={false}
-          dataSource={scheduler.running}
+      <section className="flex flex-col gap-3">
+        <h3 className="m-0 text-base font-semibold">运行中任务</h3>
+        <DataTable
+          ariaLabel="运行中任务"
           columns={runningColumns}
-          locale={{ emptyText: '当前无运行中任务' }}
+          data={scheduler.running}
+          emptyText="当前无运行中任务"
+          getRowId={row => String(row.id)}
+          loading={loading}
+          minWidth={860}
+          showPagination={false}
         />
-      </div>
+      </section>
 
       {scheduler.byte_progress.length > 0 && (
-        <div>
-          <Typography.Title level={5} className="mb-2 mt-0">
-            字节进度
-          </Typography.Title>
-          <Table<TaskmillTaskProgress>
-            size="small"
-            rowKey="task_id"
-            pagination={false}
-            scroll={{ x: 800 }}
-            dataSource={scheduler.byte_progress}
-            columns={[
-              { title: '任务', dataIndex: 'task_id', width: 72 },
-              {
-                title: '标签',
-                dataIndex: 'label',
-                ellipsis: true,
-                render: (t: string) => (
-                  <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[200px]">
-                    {t}
-                  </Typography.Text>
-                ),
-              },
-              {
-                title: '字节',
-                key: 'bytes',
-                render: (_: unknown, r: TaskmillTaskProgress) => {
-                  const total = r.bytes_total
-                  const cur = r.bytes_completed
-                  if (total) {
-                    return `${cur} / ${total}`
-                  }
-                  return String(cur)
-                },
-              },
-              {
-                title: '吞吐 (B/s)',
-                dataIndex: 'throughput_bps',
-                width: 120,
-                render: (v: number) => v.toFixed(0),
-              },
-              {
-                title: '已耗时',
-                dataIndex: 'elapsed',
-                width: 100,
-                render: (e: TaskmillSerdeDuration) => formatDuration(e),
-              },
-              {
-                title: 'ETA',
-                dataIndex: 'eta',
-                width: 100,
-                render: (e: TaskmillSerdeDuration | null) => formatDuration(e ?? undefined),
-              },
-            ]}
+        <section className="flex flex-col gap-3">
+          <h3 className="m-0 text-base font-semibold">字节进度</h3>
+          <DataTable
+            ariaLabel="字节进度"
+            columns={byteColumns}
+            data={scheduler.byte_progress}
+            getRowId={row => String(row.task_id)}
+            minWidth={800}
+            showPagination={false}
           />
-        </div>
+        </section>
       )}
-
-    </Space>
+    </div>
   )
 }

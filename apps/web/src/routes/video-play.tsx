@@ -1,9 +1,9 @@
 import type { MediaVideoRow } from '@/api'
 import type { VideoPlaySearch } from '@/lib/video-play-search'
-import { UnorderedListOutlined } from '@ant-design/icons'
+import { Button } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { Button, Result, Typography } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   getListFilesMediaLibraryQueryKey,
@@ -135,16 +135,16 @@ function PageComponent() {
   if (!videoPath) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6">
-        <Result
-          status="warning"
-          title="缺少视频路径"
-          subTitle="请从媒体库列表点击播放进入"
-          extra={(
-            <Link to="/media-library">
-              <Button type="primary">返回媒体库</Button>
-            </Link>
-          )}
-        />
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <Icon className="size-10 text-warning" icon="lucide:triangle-alert" />
+          <div>
+            <h1 className="m-0 text-xl font-semibold">缺少视频路径</h1>
+            <p className="mt-2 text-sm text-muted">请从媒体库列表点击播放进入</p>
+          </div>
+          <Link to="/media-library">
+            <Button>返回媒体库</Button>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -154,46 +154,40 @@ function PageComponent() {
       <header className="z-20 flex shrink-0 items-center gap-2 border-b border-white/10 bg-zinc-950/95 px-3 py-2 text-white backdrop-blur-sm">
         <Link to="/media-library">
           <Button
-            type="text"
-            className="text-white/85! hover:text-white!"
+            variant="ghost"
+            className="text-white/85 hover:text-white"
           >
             返回
           </Button>
         </Link>
         <div className="min-w-0 flex-1 px-1">
-          <Typography.Text
-            ellipsis={{ tooltip: videoName }}
-            className="block text-sm font-medium text-white"
-          >
+          <div className="block truncate text-sm font-medium text-white" title={videoName}>
             {videoName}
-          </Typography.Text>
+          </div>
           {parentDir && (
-            <Typography.Text
-              ellipsis={{ tooltip: parentDir }}
-              className="block text-xs text-white/45"
-            >
+            <div className="block truncate text-xs text-white/45" title={parentDir}>
               {parentDir}
-            </Typography.Text>
+            </div>
           )}
         </div>
         {mediaRootId != null
           ? (
               <Button
-                type="text"
-                icon={<UnorderedListOutlined />}
-                className="text-white/85! hover:text-white!"
-                onClick={() => setPlaylistDrawerOpen(true)}
+                variant="ghost"
+                className="text-white/85 hover:text-white"
+                onPress={() => setPlaylistDrawerOpen(true)}
               >
+                <Icon className="size-4" icon="lucide:list-video" />
                 <span className="hidden sm:inline">列表</span>
               </Button>
             )
           : (
               <Link to="/media-library">
                 <Button
-                  type="text"
-                  icon={<UnorderedListOutlined />}
-                  className="text-white/85! hover:text-white!"
+                  variant="ghost"
+                  className="text-white/85 hover:text-white"
                 >
+                  <Icon className="size-4" icon="lucide:list-video" />
                   <span className="hidden sm:inline">列表</span>
                 </Button>
               </Link>

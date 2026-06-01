@@ -1,20 +1,21 @@
 import type { ReactNode } from 'react'
+import type { Control, FieldValues } from 'react-hook-form'
+import { Label, Switch } from '@heroui/react'
 import {
-  ProFormDigit,
-  ProFormGroup,
-  ProFormSelect,
-  ProFormSwitch,
-  ProFormText,
-  ProFormTextArea,
-} from '@ant-design/pro-components'
-import { Space, Switch, Typography } from 'antd'
+  RhfNumberField,
+  RhfSelectField,
+  RhfSwitchField,
+  RhfTextAreaField,
+  RhfTextField,
+} from './rhf-heroui-fields'
 
 export interface WhisperModelOption {
   label: string
   value: string
 }
 
-export interface SubtitlePipelineFormGroupsProps {
+export interface SubtitlePipelineFormGroupsProps<TFieldValues extends FieldValues = FieldValues> {
+  control: Control<TFieldValues>
   whisperModelFilenameOptions: WhisperModelOption[]
   whisperModelsLoading?: boolean
   /** 是否渲染翻译参数分组 */
@@ -45,21 +46,25 @@ function GroupTitleWithInherit(props: {
   onInheritChange?: (v: boolean) => void
 }) {
   if (props.onInheritChange === undefined)
-    return <span>{props.title}</span>
+    return <h3 className="m-0 text-base font-semibold">{props.title}</h3>
   return (
-    <Space align="center" wrap>
-      <span>{props.title}</span>
-      <Space size="small" align="center">
-        <Switch checked={props.inherit} onChange={props.onInheritChange} size="small" />
-        <Typography.Text type="secondary" className="text-xs">
-          继承全局设置
-        </Typography.Text>
-      </Space>
-    </Space>
+    <div className="flex flex-wrap items-center gap-3">
+      <h3 className="m-0 text-base font-semibold">{props.title}</h3>
+      <Switch isSelected={props.inherit} onChange={props.onInheritChange}>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+        <Switch.Content>
+          <Label className="text-xs text-muted">继承全局设置</Label>
+        </Switch.Content>
+      </Switch>
+    </div>
   )
 }
 
-export function SubtitlePipelineFormGroups(props: SubtitlePipelineFormGroupsProps) {
+export function SubtitlePipelineFormGroups<TFieldValues extends FieldValues>(
+  props: SubtitlePipelineFormGroupsProps<TFieldValues>,
+) {
   const v = props.variant ?? 'task'
   const apiKeyPlaceholder
     = v === 'setting' ? '留空则保存时不覆盖已存密钥' : '留空则使用服务端 TRANSLATE_OPENAI_API_KEY'
@@ -68,231 +73,94 @@ export function SubtitlePipelineFormGroups(props: SubtitlePipelineFormGroupsProp
       ? '设置页保存时若留空，将保留数据库中已保存的 API Key。'
       : '仅在任务中填写；不会回显已保存的密钥，编辑任务时请按需重新填写。'
 
-  const engineRules = props.disabledWhisperEngine
-    ? []
-    : [{ required: true, message: '请选择模型文件' }]
-
-  const translateTargetRules = props.disabledTranslate
-    ? []
-    : [{ required: true, message: '请输入目标语言' }]
-
   return (
-    <>
-      <ProFormGroup
-        title={(
-          <GroupTitleWithInherit
-            title="VAD 配置"
-            inherit={props.inheritVad}
-            onInheritChange={props.onInheritVadChange}
-          />
-        )}
-      >
-        <ProFormDigit
-          name={['vad_config', 'frame_ms']}
-          label="帧长(ms)"
-          min={10}
-          max={30}
-          fieldProps={{ precision: 0, disabled: props.disabledVad }}
-          colProps={{ span: 8 }}
+    <div className="flex flex-col gap-6">
+      <section className="flex flex-col gap-4">
+        <GroupTitleWithInherit
+          title="VAD 配置"
+          inherit={props.inheritVad}
+          onInheritChange={props.onInheritVadChange}
         />
-        <ProFormDigit
-          name={['vad_config', 'mode']}
-          label="模式(0-3)"
-          min={0}
-          max={3}
-          fieldProps={{ precision: 0, disabled: props.disabledVad }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'padding_ms']}
-          label="Padding(ms)"
-          min={0}
-          fieldProps={{ precision: 0, disabled: props.disabledVad }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'min_speech_ms']}
-          label="最短语音段(ms)"
-          min={0}
-          fieldProps={{ precision: 0, disabled: props.disabledVad }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['vad_config', 'max_segment_ms']}
-          label="单段最大长度(ms)"
-          min={0}
-          fieldProps={{ precision: 0, disabled: props.disabledVad }}
-          colProps={{ span: 8 }}
-        />
-      </ProFormGroup>
+        <div className="grid gap-4 md:grid-cols-3">
+          <RhfNumberField control={props.control} name={'vad_config.frame_ms' as never} label="帧长(ms)" minValue={10} maxValue={30} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.mode' as never} label="模式(0-3)" minValue={0} maxValue={3} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.padding_ms' as never} label="Padding(ms)" minValue={0} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.min_speech_ms' as never} label="最短语音段(ms)" minValue={0} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.max_segment_ms' as never} label="单段最大长度(ms)" minValue={0} disabled={props.disabledVad} />
+        </div>
+      </section>
 
-      <ProFormGroup
-        title={(
-          <GroupTitleWithInherit
-            title="Whisper 引擎配置"
-            inherit={props.inheritWhisperEngine}
-            onInheritChange={props.onInheritWhisperEngineChange}
+      <section className="flex flex-col gap-4">
+        <GroupTitleWithInherit
+          title="Whisper 引擎配置"
+          inherit={props.inheritWhisperEngine}
+          onInheritChange={props.onInheritWhisperEngineChange}
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <RhfSelectField
+            control={props.control}
+            name={'whisper_engine_config.model_filename' as never}
+            label="模型文件"
+            placeholder="请选择模型文件"
+            loading={props.whisperModelsLoading}
+            options={props.whisperModelFilenameOptions}
+            disabled={props.disabledWhisperEngine}
           />
-        )}
-      >
-        <ProFormSelect
-          name={['whisper_engine_config', 'model_filename']}
-          label="模型文件"
-          placeholder="请选择模型文件"
-          rules={engineRules}
-          options={props.whisperModelFilenameOptions}
-          fieldProps={{
-            showSearch: true,
-            loading: props.whisperModelsLoading,
-            optionFilterProp: 'label',
-            disabled: props.disabledWhisperEngine,
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSwitch
-          name={['whisper_engine_config', 'use_gpu']}
-          label="使用 GPU"
-          fieldProps={{ disabled: props.disabledWhisperEngine }}
-          colProps={{ span: 6 }}
-        />
-        <ProFormSwitch
-          name={['whisper_engine_config', 'flash_attn']}
-          label="启用 Flash Attention"
-          fieldProps={{ disabled: props.disabledWhisperEngine }}
-          colProps={{ span: 6 }}
-        />
-      </ProFormGroup>
+          <div className="flex flex-col justify-end gap-3 pb-1">
+            <RhfSwitchField control={props.control} name={'whisper_engine_config.use_gpu' as never} label="使用 GPU" disabled={props.disabledWhisperEngine} />
+            <RhfSwitchField control={props.control} name={'whisper_engine_config.flash_attn' as never} label="启用 Flash Attention" disabled={props.disabledWhisperEngine} />
+          </div>
+        </div>
+      </section>
 
-      <ProFormGroup
-        title={(
-          <GroupTitleWithInherit
-            title="Whisper 识别参数"
-            inherit={props.inheritWhisperTranscribe}
-            onInheritChange={props.onInheritWhisperTranscribeChange}
-          />
-        )}
-      >
-        <ProFormText
-          name={['whisper_transcribe_config', 'language']}
-          label="语言代码"
-          placeholder="留空表示 None；可填 auto / zh / en ..."
-          fieldProps={{ disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
+      <section className="flex flex-col gap-4">
+        <GroupTitleWithInherit
+          title="Whisper 识别参数"
+          inherit={props.inheritWhisperTranscribe}
+          onInheritChange={props.onInheritWhisperTranscribeChange}
         />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'beam_size']}
-          label="beam_size"
-          min={1}
-          fieldProps={{ precision: 0, disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'greedy_best_of']}
-          label="greedy_best_of"
-          min={1}
-          fieldProps={{ precision: 0, disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormDigit
-          name={['whisper_transcribe_config', 'n_threads']}
-          label="CPU 线程数"
-          min={0}
-          fieldProps={{ precision: 0, disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSwitch
-          name={['whisper_transcribe_config', 'auto_gain']}
-          label="自动增益"
-          fieldProps={{ disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSwitch
-          name={['whisper_transcribe_config', 'anti_hallucination']}
-          label="抗幻觉参数组合"
-          fieldProps={{ disabled: props.disabledWhisperTranscribe }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormTextArea
-          name={['whisper_transcribe_config', 'initial_prompt']}
+        <div className="grid gap-4 md:grid-cols-3">
+          <RhfTextField control={props.control} name={'whisper_transcribe_config.language' as never} label="语言代码" placeholder="留空表示 None；可填 auto / zh / en ..." disabled={props.disabledWhisperTranscribe} />
+          <RhfNumberField control={props.control} name={'whisper_transcribe_config.beam_size' as never} label="beam_size" minValue={1} disabled={props.disabledWhisperTranscribe} />
+          <RhfNumberField control={props.control} name={'whisper_transcribe_config.greedy_best_of' as never} label="greedy_best_of" minValue={1} disabled={props.disabledWhisperTranscribe} />
+          <RhfNumberField control={props.control} name={'whisper_transcribe_config.n_threads' as never} label="CPU 线程数" minValue={0} disabled={props.disabledWhisperTranscribe} />
+          <RhfSwitchField control={props.control} name={'whisper_transcribe_config.auto_gain' as never} label="自动增益" disabled={props.disabledWhisperTranscribe} />
+          <RhfSwitchField control={props.control} name={'whisper_transcribe_config.anti_hallucination' as never} label="抗幻觉参数组合" disabled={props.disabledWhisperTranscribe} />
+        </div>
+        <RhfTextAreaField
+          control={props.control}
+          name={'whisper_transcribe_config.initial_prompt' as never}
           label="初始 Prompt"
           placeholder="可选：专有名词、人名、风格示例等"
-          fieldProps={{ autoSize: { minRows: 2, maxRows: 6 }, disabled: props.disabledWhisperTranscribe }}
+          disabled={props.disabledWhisperTranscribe}
+          rows={3}
         />
-      </ProFormGroup>
+      </section>
 
       {props.translateToggleSlot !== undefined && props.translateToggleSlot !== null
-        ? <div className="my-3">{props.translateToggleSlot}</div>
+        ? <div>{props.translateToggleSlot}</div>
         : null}
 
       {props.showTranslateGroup
         ? (
-            <ProFormGroup
-              title={(
-                <GroupTitleWithInherit
-                  title="翻译设置"
-                  inherit={props.inheritTranslate}
-                  onInheritChange={props.onInheritTranslateChange}
-                />
-              )}
-            >
-              <ProFormText
-                name={['translate_config', 'base_url']}
-                label="API Base URL"
-                placeholder="留空则使用服务端 TRANSLATE_OPENAI_BASE"
-                extra="OpenAI 兼容接口根地址，默认与硅基流动一致时可保留表单默认值。"
-                fieldProps={{ disabled: props.disabledTranslate }}
-                colProps={{ span: 12 }}
+            <section className="flex flex-col gap-4">
+              <GroupTitleWithInherit
+                title="翻译设置"
+                inherit={props.inheritTranslate}
+                onInheritChange={props.onInheritTranslateChange}
               />
-              <ProFormText
-                name={['translate_config', 'api_key']}
-                label="API Key"
-                placeholder={apiKeyPlaceholder}
-                fieldProps={{
-                  type: 'password',
-                  autoComplete: 'new-password',
-                  disabled: props.disabledTranslate,
-                }}
-                extra={apiKeyExtra}
-                colProps={{ span: 12 }}
-              />
-              <ProFormText
-                name={['translate_config', 'target_language']}
-                label="目标语言"
-                placeholder="例如：Chinese / English / Japanese"
-                rules={translateTargetRules}
-                fieldProps={{ disabled: props.disabledTranslate }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormText
-                name={['translate_config', 'model']}
-                label="翻译模型"
-                placeholder="例如：tencent/Hunyuan-MT-7B"
-                fieldProps={{ disabled: props.disabledTranslate }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormDigit
-                name={['translate_config', 'concurrency']}
-                label="并发数"
-                min={1}
-                fieldProps={{ precision: 0, disabled: props.disabledTranslate }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormDigit
-                name={['translate_config', 'batch_size']}
-                label="批大小"
-                min={1}
-                fieldProps={{ precision: 0, disabled: props.disabledTranslate }}
-                colProps={{ span: 8 }}
-              />
-              <ProFormSwitch
-                name={['translate_config', 'remove_source_srt']}
-                label="翻译完成后删除原文 SRT"
-                fieldProps={{ disabled: props.disabledTranslate }}
-                colProps={{ span: 8 }}
-              />
-            </ProFormGroup>
+              <div className="grid gap-4 md:grid-cols-2">
+                <RhfTextField control={props.control} name={'translate_config.base_url' as never} label="API Base URL" placeholder="留空则使用服务端 TRANSLATE_OPENAI_BASE" description="OpenAI 兼容接口根地址，默认与硅基流动一致时可保留表单默认值。" disabled={props.disabledTranslate} />
+                <RhfTextField control={props.control} name={'translate_config.api_key' as never} label="API Key" placeholder={apiKeyPlaceholder} type="password" description={apiKeyExtra} disabled={props.disabledTranslate} />
+                <RhfTextField control={props.control} name={'translate_config.target_language' as never} label="目标语言" placeholder="例如：Chinese / English / Japanese" disabled={props.disabledTranslate} />
+                <RhfTextField control={props.control} name={'translate_config.model' as never} label="翻译模型" placeholder="例如：tencent/Hunyuan-MT-7B" disabled={props.disabledTranslate} />
+                <RhfNumberField control={props.control} name={'translate_config.concurrency' as never} label="并发数" minValue={1} disabled={props.disabledTranslate} />
+                <RhfNumberField control={props.control} name={'translate_config.batch_size' as never} label="批大小" minValue={1} disabled={props.disabledTranslate} />
+                <RhfSwitchField control={props.control} name={'translate_config.remove_source_srt' as never} label="翻译完成后删除原文 SRT" disabled={props.disabledTranslate} />
+              </div>
+            </section>
           )
         : null}
-    </>
+    </div>
   )
 }

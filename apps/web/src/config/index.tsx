@@ -1,35 +1,27 @@
-import {
-  FolderOpenOutlined,
-  HomeOutlined,
-  PlaySquareOutlined,
-  SettingOutlined,
-  UnorderedListOutlined,
-} from '@ant-design/icons'
-
 export const menu = [
   {
     name: '首页',
     path: '/',
-    icon: <HomeOutlined />,
+    icon: 'lucide:house',
   },
   {
     name: '媒体库',
     path: '/media-library',
-    icon: <FolderOpenOutlined />,
+    icon: 'lucide:folder-open',
   },
   {
     name: 'Stash 库',
     path: '/stash-scenes',
-    icon: <PlaySquareOutlined />,
+    icon: 'lucide:play-square',
   },
   {
     name: '任务管理',
     path: '/tasks',
-    icon: <UnorderedListOutlined />,
+    icon: 'lucide:list-checks',
   },
   {
     name: '设置',
     path: '/setting',
-    icon: <SettingOutlined />,
+    icon: 'lucide:settings',
   },
 ]

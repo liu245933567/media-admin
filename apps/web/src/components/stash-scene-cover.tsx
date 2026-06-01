@@ -1,4 +1,4 @@
-import { Spin } from 'antd'
+import { Spinner } from '@heroui/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const HOVER_DELAY_MS = 200
@@ -221,7 +221,7 @@ export function StashSceneCover({ screenshot, preview }: StashSceneCoverProps) {
 
       {screenshot && !imageLoaded && !imageError && (
         <CoverOverlay>
-          <Spin size="small" />
+          <Spinner size="sm" />
         </CoverOverlay>
       )}
 

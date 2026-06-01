@@ -1,21 +1,24 @@
-import type { ColumnsType } from 'antd/es/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import type { TaskmillTaskRecord, TaskmillTaskStatus } from '@/api'
+import { Button, Chip, Tooltip } from '@heroui/react'
 import { useMutation } from '@tanstack/react-query'
-import { App, Button, Popconfirm, Space, Table, Tag, Typography } from 'antd'
 import { useMemo } from 'react'
 import {
   cancelTaskJobs,
   pauseTaskJobs,
   resumeTaskJobs,
 } from '@/api'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
+import { DataTable } from './data-table'
 
-function statusColor(status: TaskmillTaskStatus): string {
-  const map: Record<TaskmillTaskStatus, string> = {
-    running: 'processing',
+function statusColor(status: TaskmillTaskStatus): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
+  const map: Record<TaskmillTaskStatus, 'default' | 'accent' | 'success' | 'warning' | 'danger'> = {
+    running: 'success',
     pending: 'default',
     paused: 'warning',
-    waiting: 'blue',
-    blocked: 'orange',
+    waiting: 'accent',
+    blocked: 'warning',
   }
   return map[status]
 }
@@ -62,7 +65,8 @@ export function TaskmillActiveTasksPanel({
   loading,
   onChanged,
 }: TaskmillActiveTasksPanelProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => cancelTaskJobs(id),
@@ -105,94 +109,94 @@ export function TaskmillActiveTasksPanel({
   const actionPending
     = cancelMutation.isPending || pauseMutation.isPending || resumeMutation.isPending
 
-  const columns: ColumnsType<TaskmillTaskRecord> = useMemo(
+  const columns: ColumnDef<TaskmillTaskRecord, unknown>[] = useMemo(
     () => [
-      { title: 'ID', dataIndex: 'id', width: 72, fixed: 'left' },
+      { header: 'ID', accessorKey: 'id', size: 72 },
       {
-        title: '类型',
-        dataIndex: 'task_type',
-        width: 200,
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[180px]">
-            {transJobType(t)}
-          </Typography.Text>
-        ),
-        filters: Object.entries(JOB_TYPE_LABELS).map(([key, value]) => ({
-          text: value,
-          value: key,
-        })),
-        onFilter: (value, record) => record.task_type === value,
-      },
-      {
-        title: '标签',
-        dataIndex: 'label',
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[220px]">
-            {t}
-          </Typography.Text>
+        header: '类型',
+        accessorKey: 'task_type',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[180px] truncate">{transJobType(row.original.task_type)}</span>
+            <Tooltip.Content>{row.original.task_type}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '状态',
-        dataIndex: 'status',
-        width: 96,
-        render: (s: TaskmillTaskStatus) => (
-          <Tag color={statusColor(s)}>{transStatus(s)}</Tag>
+        header: '标签',
+        accessorKey: 'label',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[220px] truncate">{row.original.label}</span>
+            <Tooltip.Content>{row.original.label}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '操作',
-        key: 'action',
-        width: 200,
-        fixed: 'right',
-        render: (_, row) => {
+        header: '状态',
+        accessorKey: 'status',
+        cell: ({ row }) => (
+          <Chip color={statusColor(row.original.status)} size="sm" variant="soft">
+            {transStatus(row.original.status)}
+          </Chip>
+        ),
+      },
+      {
+        header: '操作',
+        id: 'action',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const task = row.original
           const cancelBtn = (
-            <Popconfirm
-              title="取消此任务？"
-              description="运行中的任务将停止并记入历史。"
-              onConfirm={() => cancelMutation.mutate(row.id)}
+            <Button
+              size="sm"
+              variant="danger-soft"
+              isDisabled={actionPending}
+              onPress={() => confirm({
+                title: '取消此任务？',
+                description: '运行中的任务将停止并记入历史。',
+                confirmText: '取消任务',
+                danger: true,
+                onConfirm: () => cancelMutation.mutateAsync(task.id),
+              })}
             >
-              <Button type="link" size="small" danger disabled={actionPending}>
-                取消
-              </Button>
-            </Popconfirm>
+              取消
+            </Button>
           )
 
-          if (row.status === 'running' || row.status === 'waiting') {
+          if (task.status === 'running' || task.status === 'waiting') {
             return cancelBtn
           }
-          if (row.status === 'paused') {
+          if (task.status === 'paused') {
             return (
-              <Space size="small">
+              <div className="flex items-center gap-2">
                 <Button
-                  type="link"
-                  size="small"
-                  disabled={actionPending}
-                  loading={resumeMutation.isPending}
-                  onClick={() => resumeMutation.mutate(row.id)}
+                  size="sm"
+                  variant="tertiary"
+                  isDisabled={actionPending}
+                  isPending={resumeMutation.isPending}
+                  onPress={() => resumeMutation.mutate(task.id)}
                 >
                   恢复
                 </Button>
                 {cancelBtn}
-              </Space>
+              </div>
             )
           }
-          if (row.status === 'pending' || row.status === 'blocked') {
+          if (task.status === 'pending' || task.status === 'blocked') {
             return (
-              <Space size="small">
+              <div className="flex items-center gap-2">
                 <Button
-                  type="link"
-                  size="small"
-                  disabled={actionPending}
-                  loading={pauseMutation.isPending}
-                  onClick={() => pauseMutation.mutate(row.id)}
+                  size="sm"
+                  variant="tertiary"
+                  isDisabled={actionPending}
+                  isPending={pauseMutation.isPending}
+                  onPress={() => pauseMutation.mutate(task.id)}
                 >
                   暂停
                 </Button>
                 {cancelBtn}
-              </Space>
+              </div>
             )
           }
           return null
@@ -203,14 +207,14 @@ export function TaskmillActiveTasksPanel({
   )
 
   return (
-    <Table<TaskmillTaskRecord>
-      size="small"
-      rowKey="id"
+    <DataTable
+      ariaLabel="活跃任务"
       loading={loading}
       columns={columns}
-      dataSource={items ?? []}
-      pagination={{ showSizeChanger: true }}
-      locale={{ emptyText: '当前无活跃任务' }}
+      data={items ?? []}
+      emptyText="当前无活跃任务"
+      getRowId={row => String(row.id)}
+      minWidth={820}
     />
   )
 }

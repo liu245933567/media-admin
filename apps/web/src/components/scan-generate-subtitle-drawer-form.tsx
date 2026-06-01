@@ -5,10 +5,11 @@ import type {
   SubtitleTranslateConfig,
   VadConfig,
 } from '@/api'
-import { DrawerForm } from '@ant-design/pro-components'
+import { Alert, Button, Checkbox, Drawer, Label } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, App, AutoComplete, Checkbox, Form } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 import {
   generateDefaultsJobs,
   getGenerateDefaultsJobsQueryKey,
@@ -19,11 +20,21 @@ import {
   listWhisperModelsSetup,
   scanGenerateJobs,
 } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { RhfTextField } from '@/components/rhf-heroui-fields'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 
 type ScanGenerateSubtitleFormValues = SubtitleGenerateConfig & {
   folder_path?: string
 }
+
+const scanGenerateSchema = z.object({
+  folder_path: z.string().optional(),
+  vad_config: z.any().optional(),
+  whisper_engine_config: z.any().optional(),
+  whisper_transcribe_config: z.any().optional(),
+  translate_config: z.any().optional(),
+})
 
 const DEFAULT_VAD_CONFIG: VadConfig = {
   frame_ms: 30,
@@ -87,13 +98,20 @@ export function ScanGenerateSubtitleDrawerForm({
   onOpenChange,
   onCreated,
 }: ScanGenerateSubtitleDrawerFormProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
   const [folderOptions, setFolderOptions] = useState<{ label: string, value: string }[]>([])
   const [inheritVad, setInheritVad] = useState(true)
   const [inheritWhisperEngine, setInheritWhisperEngine] = useState(true)
   const [inheritWhisperTranscribe, setInheritWhisperTranscribe] = useState(true)
   const [inheritTranslate, setInheritTranslate] = useState(true)
   const [enableTranslate, setEnableTranslate] = useState(true)
+
+  const form = useForm<ScanGenerateSubtitleFormValues>({
+    defaultValues: {
+      folder_path: '',
+      vad_config: DEFAULT_VAD_CONFIG,
+    },
+  })
 
   const rootsQuery = useQuery({
     queryKey: getListRootsMediaLibraryQueryKey(),
@@ -148,7 +166,7 @@ export function ScanGenerateSubtitleDrawerForm({
     [whisperModelsQuery.data?.items],
   )
 
-  const initialValues = useMemo((): Partial<ScanGenerateSubtitleFormValues> => {
+  const initialValues = useMemo((): ScanGenerateSubtitleFormValues => {
     const c = defaultsQuery.data?.config
     if (!c) {
       return {
@@ -162,6 +180,11 @@ export function ScanGenerateSubtitleDrawerForm({
       vad_config: c.vad_config ?? DEFAULT_VAD_CONFIG,
     }
   }, [defaultsQuery.data?.config])
+
+  useEffect(() => {
+    if (open)
+      form.reset(initialValues)
+  }, [form, initialValues, open])
 
   const buildConfig = useCallback(
     (values: ScanGenerateSubtitleFormValues): SubtitleGenerateConfig => {
@@ -218,118 +241,137 @@ export function ScanGenerateSubtitleDrawerForm({
     }
   }, [rootsQuery.data])
 
-  const formKey = defaultsQuery.isSuccess
-    ? String(defaultsQuery.dataUpdatedAt)
-    : defaultsQuery.isError
-      ? 'err'
-      : 'pending'
+  async function handleSubmit(values: ScanGenerateSubtitleFormValues) {
+    try {
+      const parsed = scanGenerateSchema.safeParse(values)
+      if (!parsed.success) {
+        message.error(parsed.error.issues[0]?.message ?? '表单校验失败')
+        return
+      }
+      const nextFolderPath = (values.folder_path ?? '').trim()
+      if (!nextFolderPath) {
+        message.error('请输入文件夹路径')
+        return
+      }
+      if (!isMediaRootOrChild(nextFolderPath, rootsQuery.data ?? [])) {
+        message.error('文件夹必须是已配置媒体文件夹或其子文件夹')
+        return
+      }
+
+      const res = await scanGenerateJobs({
+        folder_path: nextFolderPath,
+        config: buildConfig(values),
+        skip_if_exists: true,
+      })
+      const failed = res.failed ?? []
+      if (failed.length) {
+        message.warning(`已扫描 ${res.scan.scanned} 个文件，发现 ${res.without_subtitles} 个无字幕视频，提交 ${res.submitted.length} 个，失败 ${failed.length} 个`)
+        console.error('[scan subtitle generate] failed:', failed)
+      }
+      else {
+        message.success(`已扫描 ${res.scan.scanned} 个文件，提交 ${res.submitted.length} 个字幕生成任务`)
+      }
+      onCreated?.()
+      onOpenChange(false)
+    }
+    catch (e) {
+      message.error((e as Error).message || '创建失败')
+    }
+  }
+
+  const folderPath = form.watch('folder_path') ?? ''
+  const filteredFolderOptions = folderOptions.filter(option =>
+    option.value.toLocaleLowerCase().includes(folderPath.toLocaleLowerCase()),
+  )
 
   return (
-    <DrawerForm<ScanGenerateSubtitleFormValues>
-      key={formKey}
-      title="扫描并生成字幕"
-      open={open}
-      onOpenChange={onOpenChange}
-      grid
-      drawerProps={{ destroyOnHidden: true }}
-      initialValues={initialValues}
-      submitter={{
-        searchConfig: { submitText: '扫描并提交' },
-        submitButtonProps: { disabled: defaultsQuery.isPending },
-      }}
-      onFinish={async (values) => {
-        try {
-          const nextFolderPath = (values.folder_path ?? '').trim()
-          if (!nextFolderPath) {
-            message.error('请输入文件夹路径')
-            return false
-          }
-          if (!isMediaRootOrChild(nextFolderPath, rootsQuery.data ?? [])) {
-            message.error('文件夹必须是已配置媒体文件夹或其子文件夹')
-            return false
-          }
+    <Drawer.Backdrop isOpen={open} onOpenChange={onOpenChange}>
+      <Drawer.Content placement="right" className="sm:max-w-[960px]">
+        <Drawer.Dialog>
+          <Drawer.CloseTrigger />
+          <Drawer.Header>
+            <Drawer.Heading>扫描并生成字幕</Drawer.Heading>
+          </Drawer.Header>
+          <form onSubmit={form.handleSubmit(handleSubmit)}>
+            <Drawer.Body>
+              <div className="flex flex-col gap-5">
+                <Alert status="accent">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>将先扫描指定媒体文件夹并更新媒体库，再把无字幕视频批量加入字幕生成队列。</Alert.Title>
+                  </Alert.Content>
+                </Alert>
+                <RhfTextField
+                  control={form.control}
+                  name="folder_path"
+                  label="文件夹路径"
+                  placeholder="输入或选择已配置媒体文件夹或其子文件夹"
+                />
+                {filteredFolderOptions.length > 0
+                  ? (
+                      <div className="flex max-h-36 flex-col overflow-auto rounded-lg border border-border bg-surface-secondary p-1 text-sm">
+                        {filteredFolderOptions.map(option => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="rounded px-2 py-1 text-left hover:bg-surface"
+                            onClick={() => {
+                              form.setValue('folder_path', option.value, { shouldValidate: true })
+                              void loadFolderSuggestions(option.value)
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  : null}
 
-          const res = await scanGenerateJobs({
-            folder_path: nextFolderPath,
-            config: buildConfig(values),
-            skip_if_exists: true,
-          })
-          const failed = res.failed ?? []
-          if (failed.length) {
-            message.warning(`已扫描 ${res.scan.scanned} 个文件，发现 ${res.without_subtitles} 个无字幕视频，提交 ${res.submitted.length} 个，失败 ${failed.length} 个`)
-            console.error('[scan subtitle generate] failed:', failed)
-          }
-          else {
-            message.success(`已扫描 ${res.scan.scanned} 个文件，提交 ${res.submitted.length} 个字幕生成任务`)
-          }
-          onCreated?.()
-          return true
-        }
-        catch (e) {
-          message.error((e as Error).message || '创建失败')
-          return false
-        }
-      }}
-    >
-      <Alert
-        className="mb-4"
-        type="info"
-        showIcon
-        message="将先扫描指定媒体文件夹并更新媒体库，再把无字幕视频批量加入字幕生成队列。"
-      />
-      <Form.Item
-        name="folder_path"
-        label="文件夹路径"
-        rules={[
-          { required: true, message: '请输入文件夹路径' },
-          {
-            validator: async (_, value) => {
-              const next = String(value ?? '').trim()
-              if (!next)
-                throw new Error('请输入文件夹路径')
-              if (!isMediaRootOrChild(next, rootsQuery.data ?? []))
-                throw new Error('文件夹必须是已配置媒体文件夹或其子文件夹')
-            },
-          },
-        ]}
-      >
-        <AutoComplete
-          options={folderOptions}
-          placeholder="输入或选择已配置媒体文件夹或其子文件夹"
-          onSearch={(value) => {
-            void loadFolderSuggestions(value)
-          }}
-          filterOption={(inputValue, option) =>
-            String(option?.value ?? '').toLocaleLowerCase().includes(inputValue.toLocaleLowerCase())}
-        />
-      </Form.Item>
-
-      <SubtitlePipelineFormGroups
-        whisperModelFilenameOptions={whisperModelFilenameOptions}
-        whisperModelsLoading={whisperModelsQuery.isPending}
-        showTranslateGroup={enableTranslate}
-        disabledVad={inheritVad}
-        disabledWhisperEngine={inheritWhisperEngine}
-        disabledWhisperTranscribe={inheritWhisperTranscribe}
-        disabledTranslate={inheritTranslate}
-        inheritVad={inheritVad}
-        onInheritVadChange={setInheritVad}
-        inheritWhisperEngine={inheritWhisperEngine}
-        onInheritWhisperEngineChange={setInheritWhisperEngine}
-        inheritWhisperTranscribe={inheritWhisperTranscribe}
-        onInheritWhisperTranscribeChange={setInheritWhisperTranscribe}
-        inheritTranslate={inheritTranslate}
-        onInheritTranslateChange={setInheritTranslate}
-        variant="task"
-        translateToggleSlot={(
-          <Checkbox
-            checked={enableTranslate}
-            onChange={e => setEnableTranslate(e.target.checked)}
-          >
-            启用翻译
-          </Checkbox>
-        )}
-      />
-    </DrawerForm>
+                <SubtitlePipelineFormGroups
+                  control={form.control}
+                  whisperModelFilenameOptions={whisperModelFilenameOptions}
+                  whisperModelsLoading={whisperModelsQuery.isPending}
+                  showTranslateGroup={enableTranslate}
+                  disabledVad={inheritVad}
+                  disabledWhisperEngine={inheritWhisperEngine}
+                  disabledWhisperTranscribe={inheritWhisperTranscribe}
+                  disabledTranslate={inheritTranslate}
+                  inheritVad={inheritVad}
+                  onInheritVadChange={setInheritVad}
+                  inheritWhisperEngine={inheritWhisperEngine}
+                  onInheritWhisperEngineChange={setInheritWhisperEngine}
+                  inheritWhisperTranscribe={inheritWhisperTranscribe}
+                  onInheritWhisperTranscribeChange={setInheritWhisperTranscribe}
+                  inheritTranslate={inheritTranslate}
+                  onInheritTranslateChange={setInheritTranslate}
+                  variant="task"
+                  translateToggleSlot={(
+                    <Checkbox
+                      isSelected={enableTranslate}
+                      onChange={setEnableTranslate}
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <Checkbox.Content>
+                        <Label>启用翻译</Label>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  )}
+                />
+              </div>
+            </Drawer.Body>
+            <Drawer.Footer>
+              <Button variant="secondary" onPress={() => onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" isDisabled={defaultsQuery.isPending} isPending={form.formState.isSubmitting}>
+                扫描并提交
+              </Button>
+            </Drawer.Footer>
+          </form>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   )
 }

@@ -1,7 +1,7 @@
 import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, TaskmillTaskRecord } from '@/api'
 import type { SetupDownloadUiProgress } from '@/lib/setup-download-taskmill'
+import { Button, Card, ProgressBar, Spinner } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Modal, Progress, Space, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import {
   activeTasksJobs,
@@ -20,6 +20,8 @@ import {
   mapSetupDownloadFromSnapshot,
   uiProgressPercent,
 } from '@/lib/setup-download-taskmill'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
 
 const ffmpegSetupStatusQueryKey = getFfmpegStatusSetupQueryKey()
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
@@ -28,7 +30,8 @@ const taskmillActiveParams = { limit: 50 } as const
 
 /** 设置页：FFmpeg 安装状态与 Taskmill 下载进度。 */
 export function FfmpegSetupCard() {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
   const queryClient = useQueryClient()
 
   const ffmpegSetupQuery = useQuery({
@@ -117,9 +120,9 @@ export function FfmpegSetupCard() {
   ])
 
   function openFfmpegDownloadModal() {
-    Modal.confirm({
+    confirm({
       title: '下载 FFmpeg',
-      content: (
+      description: (
         <div className="space-y-2 text-neutral-700">
           <p>将清理未完成下载后，按当前系统自动选择构建（BtbN FFmpeg-Builds），并安装到配置的工具目录。</p>
           <p className="text-sm text-neutral-500">
@@ -131,9 +134,8 @@ export function FfmpegSetupCard() {
           </p>
         </div>
       ),
-      okText: '开始下载',
-      cancelText: '取消',
-      onOk: () => {
+      confirmText: '开始下载',
+      onConfirm: () => {
         setFfmpegBusy(true)
         setFfmpegProgress(null)
         return (async () => {
@@ -162,49 +164,59 @@ export function FfmpegSetupCard() {
   const ffmpegDownloadBlocked = Boolean(ffmpegSetupQuery.data?.local_ready)
 
   return (
-    <Card title="FFmpeg" variant="borderless" className="shadow-sm">
-      <Space orientation="vertical" size="middle" className="w-full">
-        <Spin spinning={ffmpegSetupQuery.isPending}>
-          <Typography.Paragraph className="mb-0 text-neutral-600">
-            为字幕流水线下载与当前系统匹配的静态构建，并写入 ffmpeg 工具目录。
-            {ffmpegDownloadBlocked
-              ? (
-                  <Typography.Text type="success" className="ml-2 text-sm">
-                    已就绪
-                  </Typography.Text>
-                )
-              : null}
-          </Typography.Paragraph>
-        </Spin>
-        <Button
-          type="primary"
-          onClick={openFfmpegDownloadModal}
-          disabled={ffmpegBusy || ffmpegDownloadBlocked}
-          loading={ffmpegBusy}
-        >
-          下载 FFmpeg（当前平台）
-        </Button>
-        {ffmpegDownloadBlocked
-          ? (
-              <Typography.Text type="secondary" className="text-sm">
-                当前服务器工具目录中已存在 FFmpeg，无需重复下载。
-              </Typography.Text>
-            )
-          : null}
-        {ffmpegProgress
-          ? (
-              <div className="rounded border border-neutral-200 p-3">
-                <Progress
-                  percent={uiProgressPercent(ffmpegProgress)}
-                  status={ffmpegProgress.status === 'error' ? 'exception' : 'active'}
-                />
-                <Typography.Paragraph className="mb-0 mt-2 text-xs text-neutral-600">
-                  {ffmpegProgress.message}
-                </Typography.Paragraph>
-              </div>
-            )
-          : null}
-      </Space>
+    <Card>
+      <Card.Header>
+        <Card.Title>FFmpeg</Card.Title>
+      </Card.Header>
+      <Card.Content>
+        <div className="flex w-full flex-col gap-4">
+          <div className="flex items-start gap-2">
+            {ffmpegSetupQuery.isPending ? <Spinner size="sm" /> : null}
+            <p className="m-0 text-neutral-600">
+              为字幕流水线下载与当前系统匹配的静态构建，并写入 ffmpeg 工具目录。
+              {ffmpegDownloadBlocked
+                ? (
+                    <span className="ml-2 text-sm text-success">
+                      已就绪
+                    </span>
+                  )
+                : null}
+            </p>
+          </div>
+          <Button
+            onPress={openFfmpegDownloadModal}
+            isDisabled={ffmpegBusy || ffmpegDownloadBlocked}
+            isPending={ffmpegBusy}
+          >
+            下载 FFmpeg（当前平台）
+          </Button>
+          {ffmpegDownloadBlocked
+            ? (
+                <span className="text-sm text-muted">
+                  当前服务器工具目录中已存在 FFmpeg，无需重复下载。
+                </span>
+              )
+            : null}
+          {ffmpegProgress
+            ? (
+                <div className="rounded-lg border border-border p-3">
+                  <ProgressBar
+                    aria-label="FFmpeg 下载进度"
+                    color={ffmpegProgress.status === 'error' ? 'danger' : 'accent'}
+                    value={uiProgressPercent(ffmpegProgress)}
+                  >
+                    <ProgressBar.Track>
+                      <ProgressBar.Fill />
+                    </ProgressBar.Track>
+                  </ProgressBar>
+                  <p className="mb-0 mt-2 text-xs text-neutral-600">
+                    {ffmpegProgress.message}
+                  </p>
+                </div>
+              )
+            : null}
+        </div>
+      </Card.Content>
     </Card>
   )
 }

@@ -1,15 +1,12 @@
 import type { SubtitleTranslateConfig, SubtitleTranslateJobReq } from '@/api'
-import {
-  DrawerForm,
-  ProFormDigit,
-  ProFormGroup,
-  ProFormSwitch,
-  ProFormText,
-} from '@ant-design/pro-components'
+import { Button, Checkbox, Drawer, Label } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
-import { App, Checkbox } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, translateJobs } from '@/api'
+import { useAppToast } from './app-toast'
+import { RhfNumberField, RhfSwitchField, RhfTextField } from './rhf-heroui-fields'
 
 export interface SubtitleTranslateTaskCreateDrawerFormProps {
   open: boolean
@@ -21,11 +18,35 @@ type TranslateFormValues = {
   source_srt_path: string
 } & SubtitleTranslateConfig
 
+const translateFormSchema = z.object({
+  source_srt_path: z.string().min(1, '请输入字幕文件路径'),
+  base_url: z.string(),
+  api_key: z.string(),
+  model: z.string(),
+  target_language: z.string(),
+  concurrency: z.number().min(1),
+  batch_size: z.number().min(1),
+  remove_source_srt: z.boolean(),
+})
+
 export function SubtitleTranslateTaskCreateDrawerForm(
   props: SubtitleTranslateTaskCreateDrawerFormProps,
 ) {
-  const { message } = App.useApp()
+  const message = useAppToast()
   const [inheritGlobal, setInheritGlobal] = useState(true)
+
+  const form = useForm<TranslateFormValues>({
+    defaultValues: {
+      source_srt_path: '',
+      base_url: '',
+      api_key: '',
+      model: '',
+      target_language: 'Chinese',
+      concurrency: 4,
+      batch_size: 8,
+      remove_source_srt: false,
+    },
+  })
 
   const appCfgQuery = useQuery({
     queryKey: getGetAppConfigSettingsQueryKey(),
@@ -44,7 +65,7 @@ export function SubtitleTranslateTaskCreateDrawerForm(
     }
   }, [appCfgQuery.isError, appCfgQuery.error, message])
 
-  const initialValues = useMemo((): Partial<TranslateFormValues> => {
+  const initialValues = useMemo((): TranslateFormValues => {
     const t = appCfgQuery.data?.translate_config
     return {
       source_srt_path: '',
@@ -58,109 +79,99 @@ export function SubtitleTranslateTaskCreateDrawerForm(
     }
   }, [appCfgQuery.data])
 
-  const formKey = appCfgQuery.isSuccess
-    ? String(appCfgQuery.dataUpdatedAt)
-    : appCfgQuery.isError
-      ? 'err'
-      : 'pending'
+  useEffect(() => {
+    if (props.open) {
+      setInheritGlobal(true)
+      form.reset(initialValues)
+    }
+  }, [form, initialValues, props.open])
+
+  async function handleSubmit(values: TranslateFormValues) {
+    const parsed = translateFormSchema.safeParse(values)
+    if (!parsed.success) {
+      message.error(parsed.error.issues[0]?.message ?? '表单校验失败')
+      return
+    }
+    const source_srt_path = values.source_srt_path.trim()
+    if (!source_srt_path) {
+      message.error('请输入字幕文件路径')
+      return
+    }
+    const body: SubtitleTranslateJobReq = inheritGlobal
+      ? { source_srt_path, config: undefined }
+      : {
+          source_srt_path,
+          config: {
+            base_url: values.base_url ?? '',
+            api_key: values.api_key ?? '',
+            model: values.model ?? '',
+            target_language: values.target_language ?? '',
+            concurrency: values.concurrency ?? 4,
+            batch_size: values.batch_size ?? 8,
+            remove_source_srt: values.remove_source_srt ?? false,
+          },
+        }
+    try {
+      await translateJobs(body)
+      message.success('已提交翻译任务')
+      props.onCreated?.()
+      props.onOpenChange(false)
+    }
+    catch (e) {
+      message.error((e as Error).message || '提交失败')
+    }
+  }
 
   return (
-    <DrawerForm<TranslateFormValues>
-      key={formKey}
-      title="新增字幕翻译任务"
-      open={props.open}
-      onOpenChange={(open) => {
-        if (open)
-          setInheritGlobal(true)
-        props.onOpenChange(open)
-      }}
-      grid
-      drawerProps={{ destroyOnClose: true }}
-      initialValues={initialValues}
-      submitter={{
-        searchConfig: { submitText: '提交' },
-        submitButtonProps: { disabled: appCfgQuery.isPending },
-      }}
-      onFinish={async (values) => {
-        const source_srt_path = values.source_srt_path.trim()
-        if (!source_srt_path) {
-          message.error('请输入字幕文件路径')
-          return false
-        }
-        const body: SubtitleTranslateJobReq = inheritGlobal
-          ? { source_srt_path, config: undefined }
-          : {
-              source_srt_path,
-              config: {
-                base_url: values.base_url ?? '',
-                api_key: values.api_key ?? '',
-                model: values.model ?? '',
-                target_language: values.target_language ?? '',
-                concurrency: values.concurrency ?? 4,
-                batch_size: values.batch_size ?? 8,
-                remove_source_srt: values.remove_source_srt ?? false,
-              },
-            }
-        try {
-          await translateJobs(body)
-          message.success('已提交翻译任务')
-          props.onCreated?.()
-          return true
-        }
-        catch (e) {
-          message.error((e as Error).message || '提交失败')
-          return false
-        }
-      }}
-    >
-      <ProFormText
-        name="source_srt_path"
-        label="源 SRT 路径"
-        rules={[{ required: true, message: '请输入字幕文件路径' }]}
-      />
-      <div className="mb-3">
-        <Checkbox checked={inheritGlobal} onChange={e => setInheritGlobal(e.target.checked)}>
-          继承全局设置
-        </Checkbox>
-      </div>
-      <ProFormGroup title="翻译配置">
-        <ProFormText name="base_url" label="API Base URL" fieldProps={{ disabled: inheritGlobal }} />
-        <ProFormText
-          name="api_key"
-          label="API Key"
-          fieldProps={{
-            type: 'password',
-            autoComplete: 'new-password',
-            disabled: inheritGlobal,
-          }}
-        />
-        <ProFormText name="model" label="模型" fieldProps={{ disabled: inheritGlobal }} />
-        <ProFormText
-          name="target_language"
-          label="目标语言"
-          rules={inheritGlobal ? [] : [{ required: true, message: '请输入目标语言' }]}
-          fieldProps={{ disabled: inheritGlobal }}
-        />
-        <ProFormDigit
-          name="concurrency"
-          label="并发数"
-          min={1}
-          max={32}
-          fieldProps={{ precision: 0, disabled: inheritGlobal }}
-        />
-        <ProFormDigit
-          name="batch_size"
-          label="批量条数"
-          min={1}
-          max={64}
-          fieldProps={{ precision: 0, disabled: inheritGlobal }}
-        />
-        <ProFormSwitch
-          name="remove_source_srt"
-          label="完成后删除原文 SRT"
-          fieldProps={{ disabled: inheritGlobal }}
-        />
-      </ProFormGroup>
-    </DrawerForm>
+    <Drawer.Backdrop isOpen={props.open} onOpenChange={props.onOpenChange}>
+      <Drawer.Content placement="right" className="sm:max-w-[760px]">
+        <Drawer.Dialog>
+          <Drawer.CloseTrigger />
+          <Drawer.Header>
+            <Drawer.Heading>新增字幕翻译任务</Drawer.Heading>
+          </Drawer.Header>
+          <form onSubmit={form.handleSubmit(handleSubmit)}>
+            <Drawer.Body>
+              <div className="flex flex-col gap-5">
+                <RhfTextField
+                  control={form.control}
+                  name="source_srt_path"
+                  label="源 SRT 路径"
+                  placeholder="请输入字幕文件路径"
+                />
+                <Checkbox isSelected={inheritGlobal} onChange={setInheritGlobal}>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  <Checkbox.Content>
+                    <Label>继承全局设置</Label>
+                  </Checkbox.Content>
+                </Checkbox>
+                <section className="flex flex-col gap-4">
+                  <h3 className="m-0 text-base font-semibold">翻译配置</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <RhfTextField control={form.control} name="base_url" label="API Base URL" disabled={inheritGlobal} />
+                    <RhfTextField control={form.control} name="api_key" label="API Key" type="password" disabled={inheritGlobal} />
+                    <RhfTextField control={form.control} name="model" label="模型" disabled={inheritGlobal} />
+                    <RhfTextField control={form.control} name="target_language" label="目标语言" disabled={inheritGlobal} />
+                    <RhfNumberField control={form.control} name="concurrency" label="并发数" minValue={1} maxValue={32} disabled={inheritGlobal} />
+                    <RhfNumberField control={form.control} name="batch_size" label="批量条数" minValue={1} maxValue={64} disabled={inheritGlobal} />
+                    <RhfSwitchField control={form.control} name="remove_source_srt" label="完成后删除原文 SRT" disabled={inheritGlobal} />
+                  </div>
+                </section>
+              </div>
+            </Drawer.Body>
+            <Drawer.Footer>
+              <Button variant="secondary" onPress={() => props.onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" isDisabled={appCfgQuery.isPending} isPending={form.formState.isSubmitting}>
+                提交
+              </Button>
+            </Drawer.Footer>
+          </form>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   )
 }

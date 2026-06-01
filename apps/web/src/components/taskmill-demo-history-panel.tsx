@@ -1,28 +1,33 @@
-import type { ColumnsType } from 'antd/es/table'
+import type { ColumnDef } from '@tanstack/react-table'
 import type {
   TaskmillHistoryStatus,
   TaskmillTaskHistoryRecord,
 } from '@/api'
+import { Button, Chip, Tooltip } from '@heroui/react'
 import { useMutation } from '@tanstack/react-query'
-import { App, Button, Popconfirm, Table, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
+import relativeTime from 'dayjs/plugin/relativeTime'
 import { useMemo } from 'react'
 import { deleteHistoryJobs } from '@/api'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
+import { DataTable } from './data-table'
 import { transJobType, transStatus } from './taskmill-active-tasks-panel'
 
 dayjs.extend(duration)
+dayjs.extend(relativeTime)
 
-function historyStatusColor(s: TaskmillHistoryStatus): string {
-  const map: Record<TaskmillHistoryStatus, string> = {
+function historyStatusColor(s: TaskmillHistoryStatus): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
+  const map: Record<TaskmillHistoryStatus, 'default' | 'accent' | 'success' | 'warning' | 'danger'> = {
     completed: 'success',
-    failed: 'error',
+    failed: 'danger',
     cancelled: 'default',
-    superseded: 'processing',
+    superseded: 'accent',
     expired: 'warning',
-    dependency_failed: 'orange',
-    dead_letter: 'magenta',
+    dependency_failed: 'danger',
+    dead_letter: 'danger',
   }
   return map[s]
 }
@@ -38,7 +43,8 @@ export function TaskmillHistoryPanel({
   loading,
   onChanged,
 }: TaskmillHistoryPanelProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteHistoryJobs(id),
@@ -56,95 +62,97 @@ export function TaskmillHistoryPanel({
     },
   })
 
-  const columns: ColumnsType<TaskmillTaskHistoryRecord> = useMemo(
+  const columns: ColumnDef<TaskmillTaskHistoryRecord, unknown>[] = useMemo(
     () => [
-      { title: 'ID', dataIndex: 'id', fixed: 'left' },
+      { header: 'ID', accessorKey: 'id' },
       {
-        title: '类型',
-        dataIndex: 'task_type',
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[200px]">
-            {transJobType(t)}
-          </Typography.Text>
+        header: '类型',
+        accessorKey: 'task_type',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[200px] truncate">{transJobType(row.original.task_type)}</span>
+            <Tooltip.Content>{row.original.task_type}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '标签',
-        dataIndex: 'label',
-        ellipsis: true,
-        render: (t: string) => (
-          <Typography.Text ellipsis={{ tooltip: t }} className="max-w-[240px]">
-            {t}
-          </Typography.Text>
+        header: '标签',
+        accessorKey: 'label',
+        cell: ({ row }) => (
+          <Tooltip>
+            <span className="block max-w-[240px] truncate">{row.original.label}</span>
+            <Tooltip.Content>{row.original.label}</Tooltip.Content>
+          </Tooltip>
         ),
       },
       {
-        title: '状态',
-        dataIndex: 'status',
-        render: (s: TaskmillHistoryStatus) => (
-          <Tag color={historyStatusColor(s)}>{transStatus(s)}</Tag>
+        header: '状态',
+        accessorKey: 'status',
+        cell: ({ row }) => (
+          <Chip color={historyStatusColor(row.original.status)} size="sm" variant="soft">
+            {transStatus(row.original.status)}
+          </Chip>
         ),
       },
       {
-        title: '完成时间',
-        dataIndex: 'completed_at',
-        width: 170,
-        render: (t: string) => formatTaskmillTime(t),
+        header: '完成时间',
+        accessorKey: 'completed_at',
+        cell: ({ row }) => formatTaskmillTime(row.original.completed_at),
       },
       {
-        title: '耗时 (ms)',
-        dataIndex: 'duration_ms',
-        render: (v: number | null) => (v == null ? '—' : dayjs.duration(v).humanize()),
+        header: '耗时',
+        accessorKey: 'duration_ms',
+        cell: ({ row }) => row.original.duration_ms == null ? '-' : dayjs.duration(row.original.duration_ms).humanize(),
       },
       {
-        title: '错误',
-        dataIndex: 'last_error',
-        ellipsis: true,
-        render: (t: string | null) =>
-          t
+        header: '错误',
+        accessorKey: 'last_error',
+        cell: ({ row }) =>
+          row.original.last_error
             ? (
-                <Typography.Text type="danger" ellipsis={{ tooltip: t }} className="max-w-[200px]">
-                  {t}
-                </Typography.Text>
+                <Tooltip>
+                  <span className="block max-w-[200px] truncate text-danger">{row.original.last_error}</span>
+                  <Tooltip.Content>{row.original.last_error}</Tooltip.Content>
+                </Tooltip>
               )
             : (
-                <Typography.Text type="secondary">—</Typography.Text>
+                <span className="text-muted">-</span>
               ),
       },
       {
-        title: '操作',
-        key: 'action',
-        width: 100,
-        fixed: 'right' as const,
-        render: (_: unknown, row: TaskmillTaskHistoryRecord) => (
-          <Popconfirm
-            title="删除此历史记录？"
-            description="仅从数据库移除记录，不可恢复。"
-            onConfirm={() => deleteMutation.mutate(row.id)}
+        header: '操作',
+        id: 'action',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            size="sm"
+            variant="danger-soft"
+            isDisabled={deleteMutation.isPending}
+            onPress={() => confirm({
+              title: '删除此历史记录？',
+              description: '仅从数据库移除记录，不可恢复。',
+              confirmText: '删除',
+              danger: true,
+              onConfirm: () => deleteMutation.mutateAsync(row.original.id),
+            })}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              disabled={deleteMutation.isPending}
-            >
-              删除
-            </Button>
-          </Popconfirm>
+            删除
+          </Button>
         ),
       },
     ],
-    [deleteMutation],
+    [confirm, deleteMutation],
   )
 
   return (
-    <Table<TaskmillTaskHistoryRecord>
-      size="small"
-      rowKey="id"
+    <DataTable
+      ariaLabel="历史任务"
       loading={loading}
       columns={columns}
-      dataSource={items}
+      data={items ?? []}
+      emptyText="暂无历史记录"
+      getRowId={row => String(row.id)}
+      minWidth={960}
     />
   )
 }

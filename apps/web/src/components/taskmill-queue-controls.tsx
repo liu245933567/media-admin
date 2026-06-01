@@ -1,7 +1,7 @@
 import type { TaskmillJobSnapshot } from '@/api'
-import { PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { Button } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button } from 'antd'
 import {
   getActiveTasksJobsQueryKey,
   getSnapshotJobsQueryKey,
@@ -9,6 +9,7 @@ import {
   resumeSchedulerJobs,
   snapshotJobs,
 } from '@/api'
+import { useAppToast } from './app-toast'
 
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
 
@@ -17,7 +18,7 @@ export interface TaskmillQueueControlsProps {
 }
 
 export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
   const queryClient = useQueryClient()
 
   const snapshotQuery = useQuery({
@@ -61,19 +62,20 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
       {isPaused
         ? (
             <Button
-              icon={<PlayCircleOutlined />}
-              loading={resumeMutation.isPending}
-              onClick={() => resumeMutation.mutate()}
+              isPending={resumeMutation.isPending}
+              onPress={() => resumeMutation.mutate()}
             >
+              <Icon className="size-4" icon="lucide:circle-play" />
               恢复任务调度
             </Button>
           )
         : (
             <Button
-              icon={<PauseCircleOutlined />}
-              loading={pauseMutation.isPending}
-              onClick={() => pauseMutation.mutate()}
+              variant="outline"
+              isPending={pauseMutation.isPending}
+              onPress={() => pauseMutation.mutate()}
             >
+              <Icon className="size-4" icon="lucide:circle-pause" />
               暂停任务调度
             </Button>
           )}

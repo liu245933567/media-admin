@@ -1,10 +1,15 @@
-import { ProFormGroup, ProFormText } from '@ant-design/pro-components'
+import type { Control, FieldValues } from 'react-hook-form'
+import { RhfTextField } from './rhf-heroui-fields'
 
-export interface StashConfigFormGroupProps {
+export interface StashConfigFormGroupProps<TFieldValues extends FieldValues = FieldValues> {
+  control: Control<TFieldValues>
   variant?: 'setting' | 'task'
 }
 
-export function StashConfigFormGroup({ variant = 'setting' }: StashConfigFormGroupProps) {
+export function StashConfigFormGroup<TFieldValues extends FieldValues>({
+  control,
+  variant = 'setting',
+}: StashConfigFormGroupProps<TFieldValues>) {
   const apiKeyPlaceholder
     = variant === 'setting' ? '留空则保存时不覆盖已存 ApiKey' : undefined
   const apiKeyExtra
@@ -13,23 +18,25 @@ export function StashConfigFormGroup({ variant = 'setting' }: StashConfigFormGro
       : undefined
 
   return (
-    <ProFormGroup title="Stash 连接">
-      <ProFormText
-        name={['stash_config', 'base_url']}
-        label="Base URL"
-        placeholder="http://127.0.0.1:9999"
-        rules={[{ required: true, message: '请输入 Stash 服务地址' }]}
-        extra="Stash 实例根地址，无需带 /graphql 后缀。"
-        colProps={{ span: 12 }}
-      />
-      <ProFormText
-        name={['stash_config', 'api_key']}
-        label="ApiKey"
-        placeholder={apiKeyPlaceholder}
-        fieldProps={{ type: 'password', autoComplete: 'new-password' }}
-        extra={apiKeyExtra}
-        colProps={{ span: 12 }}
-      />
-    </ProFormGroup>
+    <section className="flex flex-col gap-4">
+      <h3 className="m-0 text-base font-semibold">Stash 连接</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        <RhfTextField
+          control={control}
+          name={'stash_config.base_url' as never}
+          label="Base URL"
+          placeholder="http://127.0.0.1:9999"
+          description="Stash 实例根地址，无需带 /graphql 后缀。"
+        />
+        <RhfTextField
+          control={control}
+          name={'stash_config.api_key' as never}
+          label="ApiKey"
+          placeholder={apiKeyPlaceholder}
+          type="password"
+          description={apiKeyExtra}
+        />
+      </div>
+    </section>
   )
 }

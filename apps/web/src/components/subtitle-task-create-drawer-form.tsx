@@ -4,10 +4,11 @@ import type {
   SubtitleTranslateConfig,
   VadConfig,
 } from '@/api'
-import { DrawerForm, ProFormText } from '@ant-design/pro-components'
+import { Alert, Button, Checkbox, Drawer, Label } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, App, Checkbox } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 import {
   generateBulkJobs,
   generateDefaultsJobs,
@@ -16,6 +17,8 @@ import {
   getListWhisperModelsSetupQueryKey,
   listWhisperModelsSetup,
 } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { RhfTextField } from '@/components/rhf-heroui-fields'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 
 export interface SubtitleTaskBulkSourceRow {
@@ -37,6 +40,14 @@ export interface SubtitleTaskCreateDrawerFormProps {
 type SubtitleGenerateFormValues = SubtitleGenerateConfig & {
   video_path?: string
 }
+
+const subtitleGenerateSchema = z.object({
+  video_path: z.string().optional(),
+  vad_config: z.any().optional(),
+  whisper_engine_config: z.any().optional(),
+  whisper_transcribe_config: z.any().optional(),
+  translate_config: z.any().optional(),
+})
 
 function nullToUndefined<T>(value: T | null | undefined): T | undefined {
   return value ?? undefined
@@ -62,7 +73,7 @@ const INHERIT_TRANSLATE_CONFIG: SubtitleTranslateConfig = {
 }
 
 export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerFormProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
   const isBulk = Boolean(props.bulkSourceRows?.length)
 
   const [skipDiskSubtitle, setSkipDiskSubtitle] = useState(true)
@@ -70,6 +81,14 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   const [inheritWhisperEngine, setInheritWhisperEngine] = useState(true)
   const [inheritWhisperTranscribe, setInheritWhisperTranscribe] = useState(true)
   const [inheritTranslate, setInheritTranslate] = useState(true)
+  const [enableTranslate, setEnableTranslate] = useState(true)
+
+  const form = useForm<SubtitleGenerateFormValues>({
+    defaultValues: {
+      video_path: props.initialVideoPath?.trim() ?? '',
+      vad_config: DEFAULT_VAD_CONFIG,
+    },
+  })
 
   const targetBulkPaths = useMemo(() => {
     const rows = props.bulkSourceRows ?? []
@@ -106,9 +125,8 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
       })),
     [whisperModelsQuery.data?.items],
   )
-  const [enableTranslate, setEnableTranslate] = useState(true)
 
-  const initialValues = useMemo((): Partial<SubtitleGenerateFormValues> => {
+  const initialValues = useMemo((): SubtitleGenerateFormValues => {
     const c = defaultsQuery.data?.config
     const path = props.initialVideoPath?.trim() ?? ''
     if (!c) {
@@ -127,17 +145,18 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
     }
   }, [defaultsQuery.data, props.initialVideoPath])
 
-  const formMountKey = defaultsQuery.isSuccess
-    ? String(defaultsQuery.dataUpdatedAt)
-    : defaultsQuery.isError
-      ? 'err'
-      : 'pending'
-
-  const bulkSessionKey = props.bulkSourceRows?.length
-    ? props.bulkSourceRows.map(r => r.video_path).join('\u0001')
-    : ''
-
-  const drawerFormKey = `${formMountKey}|${props.initialVideoPath ?? ''}|${bulkSessionKey}`
+  useEffect(() => {
+    if (!props.open)
+      return
+    if (props.bulkSourceRows?.length)
+      setSkipDiskSubtitle(true)
+    setInheritVad(true)
+    setInheritWhisperEngine(true)
+    setInheritWhisperTranscribe(true)
+    setInheritTranslate(true)
+    setEnableTranslate(true)
+    form.reset(initialValues)
+  }, [form, initialValues, props.bulkSourceRows?.length, props.open])
 
   const buildConfig = useCallback(
     (values: SubtitleGenerateFormValues): SubtitleGenerateConfig => {
@@ -179,151 +198,158 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
     ],
   )
 
+  async function handleSubmit(values: SubtitleGenerateFormValues) {
+    try {
+      const parsed = subtitleGenerateSchema.safeParse(values)
+      if (!parsed.success) {
+        message.error(parsed.error.issues[0]?.message ?? '表单校验失败')
+        return
+      }
+      if (isBulk) {
+        if (!targetBulkPaths.length) {
+          message.warning('没有需要生成的条目（可能都已存在字幕文件，或请取消勾选「跳过已存在字幕文件的条目」）')
+          return
+        }
+
+        const res = await generateBulkJobs({
+          video_paths: targetBulkPaths.map(vp => vp.trim()),
+          config: buildConfig(values),
+          skip_if_exists: true,
+        })
+
+        const ok = res.submitted?.length ?? 0
+        const skipped = res.skipped?.length ?? 0
+        const failed = res.failed ?? []
+
+        if (failed.length === 0) {
+          const parts = [
+            `已添加 ${ok} 个任务`,
+            skipped ? `跳过 ${skipped} 个（已在队列中）` : '',
+          ].filter(Boolean)
+          message.success(parts.join('，'))
+        }
+        else {
+          message.warning(`已添加 ${ok} 个任务，跳过 ${skipped} 个，失败 ${failed.length} 个（打开控制台查看详情）`)
+          console.error('[bulk subtitle generate] failed:', failed)
+        }
+
+        props.onCreated?.()
+        props.onOpenChange(false)
+        return
+      }
+
+      const video_path = (values.video_path ?? '').trim()
+      if (!video_path) {
+        message.error('请输入视频路径')
+        return
+      }
+      const req: SubtitleGenerateReq = {
+        video_path,
+        config: buildConfig(values),
+      }
+      await generateJobs(req)
+      message.success('任务已添加')
+      props.onCreated?.()
+      props.onOpenChange(false)
+    }
+    catch (e) {
+      message.error((e as Error).message || '创建失败')
+    }
+  }
+
   return (
-    <DrawerForm<SubtitleGenerateFormValues>
-      key={drawerFormKey}
-      title={isBulk ? '批量新增字幕任务' : '新增字幕任务'}
-      open={props.open}
-      onOpenChange={(open) => {
-        if (open && props.bulkSourceRows?.length)
-          setSkipDiskSubtitle(true)
-        if (open) {
-          setInheritVad(true)
-          setInheritWhisperEngine(true)
-          setInheritWhisperTranscribe(true)
-          setInheritTranslate(true)
-        }
-        props.onOpenChange(open)
-      }}
-      grid
-      drawerProps={{ destroyOnHidden: true }}
-      initialValues={initialValues}
-      submitter={{
-        searchConfig: { submitText: '提交' },
-        submitButtonProps: { disabled: defaultsQuery.isPending },
-      }}
-      onFinish={async (values) => {
-        try {
-          if (isBulk) {
-            if (!targetBulkPaths.length) {
-              message.warning('没有需要生成的条目（可能都已存在字幕文件，或请取消勾选「跳过已存在字幕文件的条目」）')
-              return false
-            }
+    <Drawer.Backdrop isOpen={props.open} onOpenChange={props.onOpenChange}>
+      <Drawer.Content placement="right">
+        <Drawer.Dialog className="w-full sm:w-[960px] sm:max-w-[960px]">
+          <Drawer.CloseTrigger />
+          <Drawer.Header>
+            <Drawer.Heading>{isBulk ? '批量新增字幕任务' : '新增字幕任务'}</Drawer.Heading>
+          </Drawer.Header>
+          <form onSubmit={form.handleSubmit(handleSubmit)}>
+            <Drawer.Body>
+              <div className="flex flex-col gap-5">
+                {isBulk && (
+                  <div className="flex flex-col gap-3">
+                    <Alert status="accent">
+                      <Alert.Indicator />
+                      <Alert.Content>
+                        <Alert.Title>
+                          已选
+                          <strong className="mx-1">{props.bulkSourceRows?.length ?? 0}</strong>
+                          个视频，将创建
+                          <strong className="mx-1">{targetBulkPaths.length}</strong>
+                          个任务
+                        </Alert.Title>
+                      </Alert.Content>
+                    </Alert>
+                    <Checkbox
+                      isSelected={skipDiskSubtitle}
+                      onChange={setSkipDiskSubtitle}
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <Checkbox.Content>
+                        <Label>跳过已存在字幕文件的条目</Label>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  </div>
+                )}
 
-            const res = await generateBulkJobs({
-              video_paths: targetBulkPaths.map(vp => vp.trim()),
-              config: buildConfig(values),
-              skip_if_exists: true,
-            })
+                {!isBulk && (
+                  <RhfTextField
+                    control={form.control}
+                    name="video_path"
+                    label="视频路径"
+                    placeholder="请输入视频路径"
+                  />
+                )}
 
-            const ok = res.submitted?.length ?? 0
-            const skipped = res.skipped?.length ?? 0
-            const failed = res.failed ?? []
-
-            if (failed.length === 0) {
-              const parts = [
-                `已添加 ${ok} 个任务`,
-                skipped ? `跳过 ${skipped} 个（已在队列中）` : '',
-              ].filter(Boolean)
-              message.success(parts.join('，'))
-            }
-            else {
-              message.warning(`已添加 ${ok} 个任务，跳过 ${skipped} 个，失败 ${failed.length} 个（打开控制台查看详情）`)
-              console.error('[bulk subtitle generate] failed:', failed)
-            }
-
-            props.onCreated?.()
-            return true
-          }
-
-          const video_path = (values.video_path ?? '').trim()
-          if (!video_path) {
-            message.error('请输入视频路径')
-            return false
-          }
-          const req: SubtitleGenerateReq = {
-            video_path,
-            config: buildConfig(values),
-          }
-          await generateJobs(req)
-          message.success('任务已添加')
-          props.onCreated?.()
-          return true
-        }
-        catch (e) {
-          message.error((e as Error).message || '创建失败')
-          return false
-        }
-      }}
-    >
-      {isBulk && (
-        <div className="mb-4 flex flex-col gap-2">
-          <Alert
-            type="info"
-            showIcon
-            title={(
-              <span>
-                已选
-                <strong className="mx-1">{props.bulkSourceRows?.length ?? 0}</strong>
-                个视频，将创建
-                <strong className="mx-1">{targetBulkPaths.length}</strong>
-                个任务
-              </span>
-            )}
-          />
-          <Checkbox
-            checked={skipDiskSubtitle}
-            onChange={e => setSkipDiskSubtitle(e.target.checked)}
-          >
-            跳过已存在字幕文件的条目
-          </Checkbox>
-        </div>
-      )}
-
-      {!isBulk && (
-        <ProFormText
-          name="video_path"
-          label="视频路径"
-          placeholder="请输入视频路径"
-          rules={[
-            { required: true, message: '请输入视频路径' },
-            {
-              validator: async (_, v) => {
-                if (!v || !String(v).trim())
-                  throw new Error('请输入视频路径')
-              },
-            },
-          ]}
-        />
-      )}
-
-      <SubtitlePipelineFormGroups
-        whisperModelFilenameOptions={whisperModelFilenameOptions}
-        whisperModelsLoading={whisperModelsQuery.isPending}
-        showTranslateGroup={enableTranslate}
-        disabledVad={inheritVad}
-        disabledWhisperEngine={inheritWhisperEngine}
-        disabledWhisperTranscribe={inheritWhisperTranscribe}
-        disabledTranslate={inheritTranslate}
-        inheritVad={inheritVad}
-        onInheritVadChange={setInheritVad}
-        inheritWhisperEngine={inheritWhisperEngine}
-        onInheritWhisperEngineChange={setInheritWhisperEngine}
-        inheritWhisperTranscribe={inheritWhisperTranscribe}
-        onInheritWhisperTranscribeChange={setInheritWhisperTranscribe}
-        inheritTranslate={inheritTranslate}
-        onInheritTranslateChange={setInheritTranslate}
-        variant="task"
-        translateToggleSlot={(
-          <Checkbox
-            checked={enableTranslate}
-            onChange={e => setEnableTranslate(e.target.checked)}
-          >
-            启用翻译
-          </Checkbox>
-        )}
-      />
-
-    </DrawerForm>
+                <SubtitlePipelineFormGroups
+                  control={form.control}
+                  whisperModelFilenameOptions={whisperModelFilenameOptions}
+                  whisperModelsLoading={whisperModelsQuery.isPending}
+                  showTranslateGroup={enableTranslate}
+                  disabledVad={inheritVad}
+                  disabledWhisperEngine={inheritWhisperEngine}
+                  disabledWhisperTranscribe={inheritWhisperTranscribe}
+                  disabledTranslate={inheritTranslate}
+                  inheritVad={inheritVad}
+                  onInheritVadChange={setInheritVad}
+                  inheritWhisperEngine={inheritWhisperEngine}
+                  onInheritWhisperEngineChange={setInheritWhisperEngine}
+                  inheritWhisperTranscribe={inheritWhisperTranscribe}
+                  onInheritWhisperTranscribeChange={setInheritWhisperTranscribe}
+                  inheritTranslate={inheritTranslate}
+                  onInheritTranslateChange={setInheritTranslate}
+                  variant="task"
+                  translateToggleSlot={(
+                    <Checkbox
+                      isSelected={enableTranslate}
+                      onChange={setEnableTranslate}
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <Checkbox.Content>
+                        <Label>启用翻译</Label>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  )}
+                />
+              </div>
+            </Drawer.Body>
+            <Drawer.Footer>
+              <Button variant="secondary" onPress={() => props.onOpenChange(false)}>
+                取消
+              </Button>
+              <Button type="submit" isDisabled={defaultsQuery.isPending} isPending={form.formState.isSubmitting}>
+                提交
+              </Button>
+            </Drawer.Footer>
+          </form>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
   )
 }

@@ -1,5 +1,5 @@
 import type { TaskmillExecLogEntry } from '@/api'
-import { Space, Switch, Typography } from 'antd'
+import { Label, Switch } from '@heroui/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
@@ -102,35 +102,42 @@ export function TaskmillExecLogPanel({
   }, [lines, autoScroll])
 
   return (
-    <Space direction="vertical" size="middle" className="w-full">
+    <div className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <Switch checked={autoScroll} onChange={setAutoScroll} checkedChildren="自动滚底" unCheckedChildren="不滚底" />
-        <Typography.Text type="secondary" className="text-xs">
+        <Switch isSelected={autoScroll} onChange={setAutoScroll}>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <Label className="text-sm">自动滚底</Label>
+          </Switch.Content>
+        </Switch>
+        <p className="m-0 text-xs text-muted">
           数据来自调度器事件流（含 executor 上报的进度文案）；服务端最多保留约 400 条。卡片右上角可开关自动轮询。
-        </Typography.Text>
+        </p>
       </div>
       <div
         ref={scrollRef}
-        className="max-h-80 overflow-auto rounded border px-3 py-2 font-mono text-xs leading-relaxed"
+        className="max-h-80 overflow-auto rounded-lg border border-border bg-surface-secondary px-3 py-2 font-mono text-xs leading-relaxed"
       >
         {loading && lines.length === 0
-          ? <Typography.Text type="secondary">加载中…</Typography.Text>
+          ? <span className="text-muted">加载中...</span>
           : lines.length === 0
-            ? <Typography.Text type="secondary">暂无事件；提交任务后将出现派发与进度日志。</Typography.Text>
+            ? <span className="text-muted">暂无事件；提交任务后将出现派发与进度日志。</span>
             : lines.map((row, i) => {
                 const ts = formatTaskmillTime(row.received_at)
                 const summary = formatTaskmillExecLogSummary(row.event)
                 return (
-                  <div key={`${row.received_at}-${i}`} className="whitespace-pre-wrap break-all border-b py-1 last:border-b-0">
-                    <Typography.Text type="secondary" className="select-none">
+                  <div key={`${row.received_at}-${i}`} className="whitespace-pre-wrap break-all border-b border-border py-1 last:border-b-0">
+                    <span className="select-none text-muted">
                       {ts}
-                    </Typography.Text>
+                    </span>
                     {' '}
-                    <Typography.Text>{summary}</Typography.Text>
+                    <span>{summary}</span>
                   </div>
                 )
               })}
       </div>
-    </Space>
+    </div>
   )
 }

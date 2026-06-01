@@ -4,11 +4,10 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import { PlusOutlined } from '@ant-design/icons'
-import { PageContainer } from '@ant-design/pro-components'
+import { Button, Card, Chip, Label, Switch } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { App, Button, Card, Dropdown, Space, Switch, Tabs, Tag } from 'antd'
 import { useMemo, useState } from 'react'
 import {
   activeTasksJobs,
@@ -20,6 +19,8 @@ import {
   historyJobs,
   snapshotJobs,
 } from '@/api'
+import { AppPage } from '@/components/app-page'
+import { useAppToast } from '@/components/app-toast'
 import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
@@ -33,17 +34,20 @@ const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
 const activeQueryParams = { limit: 200 } as const
 
+type TaskTab = 'snapshot' | 'active' | 'history' | 'exec-log'
+
 export const Route = createFileRoute('/tasks')({
   component: PageComponent,
 })
 
 function PageComponent() {
-  const { message } = App.useApp()
+  const message = useAppToast()
   const [createOpen, setCreateOpen] = useState(false)
   const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [execLogAutoRefresh, setExecLogAutoRefresh] = useState(true)
   const [taskTypeFilter] = useState<string | undefined>()
+  const [activeTab, setActiveTab] = useState<TaskTab>('snapshot')
 
   const snapshotQuery = useQuery({
     queryKey: getSnapshotJobsQueryKey(),
@@ -96,45 +100,33 @@ function PageComponent() {
     void execLogQuery.refetch()
   }
 
+  const tabs: { key: TaskTab, label: string }[] = [
+    { key: 'snapshot', label: '队列与执行中' },
+    { key: 'active', label: '活跃任务' },
+    { key: 'history', label: '任务历史' },
+    { key: 'exec-log', label: '调度事件' },
+  ]
+
   return (
-    <PageContainer
+    <AppPage
       title="任务管理"
-      extra={[
-        // <Button key="refresh" loading={snapshotQuery.isFetching} onClick={refreshAll}>
-        //   刷新
-        // </Button>,
-        <TaskmillQueueControls key="queue-controls" onChanged={refreshAll} />,
-        <Dropdown
-          key="dropdown"
-          menu={{
-            items: [
-              {
-                key: 'subtitle-generate',
-                label: '字幕生成（视频 → SRT）',
-                onClick: () => setCreateOpen(true),
-              },
-              {
-                key: 'scan-subtitle-generate',
-                label: '扫描并生成字幕',
-                onClick: () => setScanGenerateOpen(true),
-              },
-              {
-                key: 'subtitle-translate',
-                label: '字幕翻译（SRT）',
-                onClick: () => setTranslateOpen(true),
-              },
-            ],
-          }}
-        >
-          <Button type="primary">
-            新建任务
-            <PlusOutlined />
+      extra={(
+        <div className="flex flex-wrap items-center gap-2">
+          <TaskmillQueueControls onChanged={refreshAll} />
+          <Button onPress={() => setCreateOpen(true)}>
+            <Icon className="size-4" icon="lucide:plus" />
+            字幕生成
           </Button>
-        </Dropdown>,
-      ]}
+          <Button variant="secondary" onPress={() => setScanGenerateOpen(true)}>
+            扫描并生成
+          </Button>
+          <Button variant="secondary" onPress={() => setTranslateOpen(true)}>
+            字幕翻译
+          </Button>
+        </div>
+      )}
     >
       <div className="flex flex-col gap-4">
-
         <SubtitleTaskCreateDrawerForm
           open={createOpen}
           onOpenChange={setCreateOpen}
@@ -160,93 +152,96 @@ function PageComponent() {
           }}
         />
 
-        <Tabs
-          tabBarExtraContent={{
-            right: (
-              <Space>
-                <Tag color={runningCount > 0 ? 'processing' : 'default'}>
-                  执行中
-                  {runningCount}
-                </Tag>
-                <Tag color={pendingCount > 0 ? 'warning' : 'default'}>
-                  排队
-                  {pendingCount}
-                </Tag>
-                <Tag color={activeCount > 0 ? 'blue' : 'default'}>
-                  活跃
-                  {activeCount}
-                </Tag>
-                {snapshotQuery.data?.scheduler.is_paused
-                  ? (
-                      <Tag color="red">调度已暂停</Tag>
-                    )
-                  : null}
-              </Space>
-            ),
-          }}
-          items={[
-            {
-              key: 'snapshot',
-              label: '队列与执行中',
-              children: (
-                <Card variant="borderless" className="shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map(tab => (
+              <Button
+                key={tab.key}
+                size="sm"
+                variant={activeTab === tab.key ? 'primary' : 'tertiary'}
+                onPress={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip color={runningCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
+              执行中
+              {runningCount}
+            </Chip>
+            <Chip color={pendingCount > 0 ? 'warning' : 'default'} size="sm" variant="soft">
+              排队
+              {pendingCount}
+            </Chip>
+            <Chip color={activeCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
+              活跃
+              {activeCount}
+            </Chip>
+            {snapshotQuery.data?.scheduler.is_paused
+              ? <Chip color="danger" size="sm" variant="soft">调度已暂停</Chip>
+              : null}
+          </div>
+        </div>
+
+        {activeTab === 'snapshot'
+          ? (
+              <Card>
+                <Card.Content>
                   <TaskmillSnapshotPanel
                     data={snapshotQuery.data}
                     loading={snapshotQuery.isLoading || snapshotQuery.isFetching}
                     onChanged={refreshAll}
                   />
-                </Card>
-              ),
-            },
-            {
-              key: 'active',
-              label: '活跃任务',
-              children: (
-                <TaskmillActiveTasksPanel
-                  items={filteredActive}
-                  loading={activeQuery.isLoading || activeQuery.isFetching}
-                  onChanged={refreshAll}
-                />
-              ),
-            },
-            {
-              key: 'history',
-              label: '任务历史',
-              children: (
-                <TaskmillHistoryPanel
-                  items={filteredHistory}
-                  loading={historyQuery.isLoading || historyQuery.isFetching}
-                  onChanged={refreshAll}
-                />
-              ),
-            },
-            {
-              key: 'exec-log',
-              label: '调度事件',
-              children: (
-                <Card
-                  variant="borderless"
-                  className="shadow-sm"
-                  extra={(
-                    <Switch
-                      size="small"
-                      checked={execLogAutoRefresh}
-                      onChange={setExecLogAutoRefresh}
-                      checkedChildren="自动刷新"
-                      unCheckedChildren="手动"
-                    />
-                  )}
-                >
+                </Card.Content>
+              </Card>
+            )
+          : null}
+
+        {activeTab === 'active'
+          ? (
+              <TaskmillActiveTasksPanel
+                items={filteredActive}
+                loading={activeQuery.isLoading || activeQuery.isFetching}
+                onChanged={refreshAll}
+              />
+            )
+          : null}
+
+        {activeTab === 'history'
+          ? (
+              <TaskmillHistoryPanel
+                items={filteredHistory}
+                loading={historyQuery.isLoading || historyQuery.isFetching}
+                onChanged={refreshAll}
+              />
+            )
+          : null}
+
+        {activeTab === 'exec-log'
+          ? (
+              <Card>
+                <Card.Header className="items-center justify-between">
+                  <Card.Title>调度事件</Card.Title>
+                  <Switch isSelected={execLogAutoRefresh} onChange={setExecLogAutoRefresh}>
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                    <Switch.Content>
+                      <Label className="text-sm">自动刷新</Label>
+                    </Switch.Content>
+                  </Switch>
+                </Card.Header>
+                <Card.Content>
                   <TaskmillExecLogPanel
                     items={execLogQuery.data}
                     loading={execLogQuery.isLoading || execLogQuery.isFetching}
                   />
-                </Card>
-              ),
-            },
-          ]}
-        />
+                </Card.Content>
+              </Card>
+            )
+          : null}
       </div>
-    </PageContainer>
+    </AppPage>
   )
 }

@@ -1,10 +1,12 @@
-import type { ProColumns } from '@ant-design/pro-components'
+import type { ColumnDef } from '@tanstack/react-table'
 import type { MediaRootRow } from '@/api'
-import { ProTable } from '@ant-design/pro-components'
+import { Button, Card, Modal } from '@heroui/react'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Form, Input, Modal, Popconfirm, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 import {
   createRootMediaLibrary,
   deleteRootMediaLibrary,
@@ -12,18 +14,36 @@ import {
   listRootsMediaLibrary,
   scanRootMediaLibrary,
 } from '@/api'
+import { useAppToast } from './app-toast'
+import { useConfirmDialog } from './confirm-dialog'
+import { DataTable } from './data-table'
+import { RhfTextField } from './rhf-heroui-fields'
 
 export interface MediaRootListCardProps {
   onChanged?: () => void
   showCreate?: boolean
 }
 
+const createRootSchema = z.object({
+  path: z.string().min(1, '请输入绝对路径'),
+  name: z.string().optional(),
+})
+
+type CreateRootValues = z.infer<typeof createRootSchema>
+
 export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootListCardProps) {
-  const { message } = App.useApp()
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
   const queryClient = useQueryClient()
   const mediaRootsQueryKey = getListRootsMediaLibraryQueryKey()
-  const [form] = Form.useForm<{ path: string, name?: string }>()
   const [createOpen, setCreateOpen] = useState(false)
+  const form = useForm<CreateRootValues>({
+    resolver: zodResolver(createRootSchema),
+    defaultValues: {
+      path: '',
+      name: '',
+    },
+  })
 
   const rootsQuery = useQuery({
     queryKey: mediaRootsQueryKey,
@@ -35,7 +55,7 @@ export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootLis
     onSuccess: async () => {
       message.success('媒体资源路径已添加')
       setCreateOpen(false)
-      form.resetFields()
+      form.reset()
       await queryClient.invalidateQueries({ queryKey: mediaRootsQueryKey })
       onChanged?.()
     },
@@ -58,107 +78,137 @@ export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootLis
     onError: error => message.error(error.message ?? '提交失败'),
   })
 
-  const columns = useMemo<ProColumns<MediaRootRow>[]>(() => [
+  const columns = useMemo<ColumnDef<MediaRootRow, unknown>[]>(() => [
     {
-      title: '名称',
-      dataIndex: 'name',
-      width: 180,
-      ellipsis: true,
+      header: '名称',
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <span className="block max-w-[180px] truncate" title={row.original.name}>
+          {row.original.name}
+        </span>
+      ),
     },
     {
-      title: '路径',
-      dataIndex: 'path',
-      ellipsis: true,
-      copyable: true,
+      header: '路径',
+      accessorKey: 'path',
+      cell: ({ row }) => (
+        <span className="block max-w-[360px] truncate font-mono text-xs" title={row.original.path}>
+          {row.original.path}
+        </span>
+      ),
     },
     {
-      title: '上次扫描',
-      dataIndex: 'last_scanned_at',
-      width: 180,
-      render: (_, row) => row.last_scanned_at
-        ? dayjs(row.last_scanned_at).format('YYYY-MM-DD HH:mm:ss')
-        : <Typography.Text type="secondary">未扫描</Typography.Text>,
+      header: '上次扫描',
+      accessorKey: 'last_scanned_at',
+      cell: ({ row }) => row.original.last_scanned_at
+        ? dayjs(row.original.last_scanned_at).format('YYYY-MM-DD HH:mm:ss')
+        : <span className="text-muted">未扫描</span>,
     },
     {
-      title: '操作',
-      valueType: 'option',
-      width: 180,
-      render: (_, row) => [
-        <Button
-          key="scan"
-          type="link"
-          className="m-0! p-0!"
-          loading={scanRootMutation.isPending}
-          onClick={() => scanRootMutation.mutate(Number(row.id))}
-        >
-          扫描
-        </Button>,
-        <Popconfirm
-          key="delete"
-          title="删除媒体资源路径"
-          description="会同时删除该路径下已扫描入库的文件记录。"
-          okText="删除"
-          cancelText="取消"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => deleteRootMutation.mutate(Number(row.id))}
-        >
-          <Button type="link" danger className="m-0! p-0!">
+      header: '操作',
+      id: 'action',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="tertiary"
+            isPending={scanRootMutation.isPending}
+            onPress={() => scanRootMutation.mutate(Number(row.original.id))}
+          >
+            扫描
+          </Button>
+          <Button
+            size="sm"
+            variant="danger-soft"
+            onPress={() => confirm({
+              title: '删除媒体资源路径',
+              description: '会同时删除该路径下已扫描入库的文件记录。',
+              confirmText: '删除',
+              danger: true,
+              onConfirm: () => deleteRootMutation.mutateAsync(Number(row.original.id)),
+            })}
+          >
             删除
           </Button>
-        </Popconfirm>,
-      ],
+        </div>
+      ),
     },
-  ], [deleteRootMutation, scanRootMutation])
+  ], [confirm, deleteRootMutation, scanRootMutation])
+
+  function handleCreate(values: CreateRootValues) {
+    createRootMutation.mutate({
+      path: values.path.trim(),
+      name: values.name?.trim() || undefined,
+    })
+  }
 
   return (
-    <Card title="媒体资源路径" variant="borderless" className="shadow-sm">
-      <Modal
-        title="添加媒体资源路径"
-        open={createOpen}
-        confirmLoading={createRootMutation.isPending}
-        okText="添加"
-        cancelText="取消"
-        onCancel={() => setCreateOpen(false)}
-        onOk={() => form.submit()}
-        afterOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            form.resetFields()
-          }
+    <Card>
+      <Modal.Backdrop
+        isOpen={createOpen}
+        onOpenChange={(nextOpen) => {
+          setCreateOpen(nextOpen)
+          if (!nextOpen)
+            form.reset()
         }}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={values => createRootMutation.mutate(values)}
-        >
-          <Form.Item
-            name="path"
-            label="路径"
-            rules={[{ required: true, message: '请输入绝对路径' }]}
-          >
-            <Input placeholder="例如 D:\Media" />
-          </Form.Item>
-          <Form.Item name="name" label="名称">
-            <Input placeholder="留空时使用文件夹名称" />
-          </Form.Item>
-        </Form>
-      </Modal>
-      <ProTable<MediaRootRow>
-        rowKey="id"
-        search={false}
-        columns={columns}
-        loading={rootsQuery.isFetching}
-        dataSource={rootsQuery.data ?? []}
-        pagination={false}
-        options={{ reload: () => rootsQuery.refetch(), density: false, setting: false }}
-        toolBarRender={() => showCreate
-          ? [
-              <Button key="create" type="primary" onClick={() => setCreateOpen(true)}>
+        <Modal.Container size="md">
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading>添加媒体资源路径</Modal.Heading>
+            </Modal.Header>
+            <form onSubmit={form.handleSubmit(handleCreate)}>
+              <Modal.Body>
+                <div className="flex flex-col gap-4">
+                  <RhfTextField
+                    control={form.control}
+                    name="path"
+                    label="路径"
+                    placeholder="例如 D:\\Media"
+                  />
+                  <RhfTextField
+                    control={form.control}
+                    name="name"
+                    label="名称"
+                    placeholder="留空时使用文件夹名称"
+                  />
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="secondary" onPress={() => setCreateOpen(false)}>
+                  取消
+                </Button>
+                <Button type="submit" isPending={createRootMutation.isPending}>
+                  添加
+                </Button>
+              </Modal.Footer>
+            </form>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+      <Card.Header className="items-center justify-between">
+        <Card.Title>媒体资源路径</Card.Title>
+        {showCreate
+          ? (
+              <Button onPress={() => setCreateOpen(true)}>
                 添加媒体资源路径
-              </Button>,
-            ]
-          : []}
-      />
+              </Button>
+            )
+          : null}
+      </Card.Header>
+      <Card.Content>
+        <DataTable
+          ariaLabel="媒体资源路径"
+          columns={columns}
+          data={rootsQuery.data ?? []}
+          emptyText="暂无媒体资源路径"
+          getRowId={row => String(row.id)}
+          loading={rootsQuery.isFetching}
+          minWidth={860}
+          showPagination={false}
+        />
+      </Card.Content>
     </Card>
   )
 }

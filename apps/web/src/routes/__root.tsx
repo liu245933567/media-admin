@@ -1,4 +1,5 @@
-import { ProLayout } from '@ant-design/pro-components'
+import { Button } from '@heroui/react'
+import { Icon } from '@iconify/react'
 import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
 // import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { DesktopWindowControls } from '@/components/desktop-window-controls'
@@ -13,51 +14,52 @@ function RootLayout() {
   const pathname = useRouterState({ select: s => s.location.pathname })
   const immersivePlay = pathname === '/video-play'
 
+  if (immersivePlay) {
+    return (
+      <div className="min-h-dvh bg-background text-foreground">
+        <Outlet />
+      </div>
+    )
+  }
+
   return (
-    <ProLayout
-      title="Media Admin"
-      logo="/favicon.ico"
-      layout="top"
-      location={{ pathname }}
-      menuRender={immersivePlay ? () => null : undefined}
-      headerRender={immersivePlay ? false : undefined}
-      contentStyle={
-        immersivePlay
-          ? { padding: 0, margin: 0, minHeight: '100vh' }
-          : undefined
-      }
-      route={{
-        name: 'root',
-        children: menu,
-      }}
-      headerContentRender={
-        isTauri()
-          ? (_props, defaultDom) => (
-              <div className="flex h-full w-full min-w-0 items-stretch">
-                <div className="shrink-0">{defaultDom}</div>
-                <div
-                  aria-hidden
-                  className="min-h-10 min-w-0 flex-1 select-none"
-                  data-tauri-drag-region
-                />
-              </div>
-            )
-          : undefined
-      }
-      menuItemRender={(item, dom) =>
-        item.path
-          ? (
-              <Link to={item.path}>
-                {dom}
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
+        <div className="flex h-14 items-center gap-3 px-4">
+          <Link to="/" className="flex items-center gap-2 pr-2 no-underline">
+            <img src="/favicon.ico" alt="" className="size-6" />
+            <span className="font-semibold text-foreground">Media Admin</span>
+          </Link>
+          <nav className="flex min-w-0 flex-1 items-center gap-1">
+            {menu.map(item => (
+              <Link key={item.path} to={item.path} className="no-underline">
+                <Button
+                  size="sm"
+                  variant={pathname === item.path ? 'secondary' : 'ghost'}
+                  className="gap-2"
+                >
+                  <Icon icon={item.icon} className="size-4" />
+                  {item.name}
+                </Button>
               </Link>
-            )
-          : dom}
-      actionsRender={() => {
-        return <DesktopWindowControls />
-      }}
-    >
-      <Outlet />
+            ))}
+            {isTauri()
+              ? (
+                  <div
+                    aria-hidden
+                    className="min-h-10 min-w-0 flex-1 select-none"
+                    data-tauri-drag-region
+                  />
+                )
+              : <div className="min-w-0 flex-1" />}
+          </nav>
+          <DesktopWindowControls />
+        </div>
+      </header>
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <Outlet />
+      </main>
       {/* {import.meta.env.DEV ? <TanStackRouterDevtools position="bottom-left" /> : null} */}
-    </ProLayout>
+    </div>
   )
 }
