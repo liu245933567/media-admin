@@ -3,11 +3,10 @@ import type {
   TaskmillHistoryStatus,
   TaskmillTaskHistoryRecord,
 } from '@/api'
-import { Button, Chip, Tooltip } from '@heroui/react'
+import { Button, Chip, Popover } from '@heroui/react'
 import { useMutation } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import { useMemo } from 'react'
 import { deleteHistoryJobs } from '@/api'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
@@ -17,7 +16,31 @@ import { DataTable } from './data-table'
 import { transJobType, transStatus } from './taskmill-active-tasks-panel'
 
 dayjs.extend(duration)
-dayjs.extend(relativeTime)
+
+function PopoverText({
+  children,
+  className,
+  content,
+}: {
+  children: React.ReactNode
+  className?: string
+  content: React.ReactNode
+}) {
+  return (
+    <Popover>
+      <Popover.Trigger className={className}>
+        {children}
+      </Popover.Trigger>
+      <Popover.Content className="max-w-[min(520px,calc(100vw-2rem))]">
+        <Popover.Dialog>
+          <div className="max-h-80 overflow-auto whitespace-pre-wrap break-all text-sm">
+            {content}
+          </div>
+        </Popover.Dialog>
+      </Popover.Content>
+    </Popover>
+  )
+}
 
 function historyStatusColor(s: TaskmillHistoryStatus): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
   const map: Record<TaskmillHistoryStatus, 'default' | 'accent' | 'success' | 'warning' | 'danger'> = {
@@ -30,6 +53,32 @@ function historyStatusColor(s: TaskmillHistoryStatus): 'default' | 'accent' | 's
     dead_letter: 'danger',
   }
   return map[s]
+}
+
+function formatDurationMs(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return '-'
+  }
+
+  const totalSeconds = Math.ceil(value / 1000)
+  if (totalSeconds <= 0) {
+    return '0s'
+  }
+
+  const d = dayjs.duration(totalSeconds, 'seconds')
+  const parts: string[] = []
+  const days = Math.floor(d.asDays())
+
+  if (days)
+    parts.push(`${days}d`)
+  if (d.hours())
+    parts.push(`${d.hours()}h`)
+  if (d.minutes())
+    parts.push(`${d.minutes()}m`)
+  if (d.seconds())
+    parts.push(`${d.seconds()}s`)
+
+  return parts.join('')
 }
 
 export interface TaskmillHistoryPanelProps {
@@ -69,20 +118,18 @@ export function TaskmillHistoryPanel({
         header: '类型',
         accessorKey: 'task_type',
         cell: ({ row }) => (
-          <Tooltip>
-            <span className="block max-w-[200px] truncate">{transJobType(row.original.task_type)}</span>
-            <Tooltip.Content>{row.original.task_type}</Tooltip.Content>
-          </Tooltip>
+          <PopoverText className="max-w-[200px] truncate" content={row.original.task_type}>
+            {transJobType(row.original.task_type)}
+          </PopoverText>
         ),
       },
       {
         header: '标签',
         accessorKey: 'label',
         cell: ({ row }) => (
-          <Tooltip>
-            <span className="block max-w-[240px] truncate">{row.original.label}</span>
-            <Tooltip.Content>{row.original.label}</Tooltip.Content>
-          </Tooltip>
+          <PopoverText className="max-w-60 truncate" content={row.original.label}>
+            {row.original.label}
+          </PopoverText>
         ),
       },
       {
@@ -102,7 +149,7 @@ export function TaskmillHistoryPanel({
       {
         header: '耗时',
         accessorKey: 'duration_ms',
-        cell: ({ row }) => row.original.duration_ms == null ? '-' : dayjs.duration(row.original.duration_ms).humanize(),
+        cell: ({ row }) => row.original.duration_ms == null ? '-' : formatDurationMs(row.original.duration_ms),
       },
       {
         header: '错误',
@@ -110,10 +157,9 @@ export function TaskmillHistoryPanel({
         cell: ({ row }) =>
           row.original.last_error
             ? (
-                <Tooltip>
-                  <span className="block max-w-[200px] truncate text-danger">{row.original.last_error}</span>
-                  <Tooltip.Content>{row.original.last_error}</Tooltip.Content>
-                </Tooltip>
+                <PopoverText className="max-w-50 truncate text-danger" content={row.original.last_error}>
+                  {row.original.last_error}
+                </PopoverText>
               )
             : (
                 <span className="text-muted">-</span>

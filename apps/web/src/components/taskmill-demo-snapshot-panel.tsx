@@ -58,6 +58,25 @@ function PercentBar({
   )
 }
 
+function TooltipText({
+  children,
+  className,
+  content,
+}: {
+  children: React.ReactNode
+  className?: string
+  content: React.ReactNode
+}) {
+  return (
+    <Tooltip delay={0}>
+      <Tooltip.Trigger className={className}>
+        {children}
+      </Tooltip.Trigger>
+      <Tooltip.Content>{content}</Tooltip.Content>
+    </Tooltip>
+  )
+}
+
 function StatCard({
   title,
   value,
@@ -120,20 +139,18 @@ export function TaskmillSnapshotPanel({
         header: '类型',
         accessorKey: 'task_type',
         cell: ({ row }) => (
-          <Tooltip>
-            <span className="block max-w-[180px] truncate">{row.original.task_type}</span>
-            <Tooltip.Content>{row.original.task_type}</Tooltip.Content>
-          </Tooltip>
+          <TooltipText className="max-w-[180px] truncate" content={row.original.task_type}>
+            {row.original.task_type}
+          </TooltipText>
         ),
       },
       {
         header: '标签',
         accessorKey: 'label',
         cell: ({ row }) => (
-          <Tooltip>
-            <span className="block max-w-[220px] truncate">{row.original.label}</span>
-            <Tooltip.Content>{row.original.label}</Tooltip.Content>
-          </Tooltip>
+          <TooltipText className="max-w-[220px] truncate" content={row.original.label}>
+            {row.original.label}
+          </TooltipText>
         ),
       },
       {
@@ -204,10 +221,9 @@ export function TaskmillSnapshotPanel({
         header: '标签',
         accessorKey: 'label',
         cell: ({ row }) => (
-          <Tooltip>
-            <span className="block max-w-[220px] truncate">{row.original.label}</span>
-            <Tooltip.Content>{row.original.label}</Tooltip.Content>
-          </Tooltip>
+          <TooltipText className="max-w-[220px] truncate" content={row.original.label}>
+            {row.original.label}
+          </TooltipText>
         ),
       },
       {
