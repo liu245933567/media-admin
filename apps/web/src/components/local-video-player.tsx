@@ -6,19 +6,20 @@ import { Alert, Button, Progress, Spin } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import videojs from 'video.js'
 import {
+  buildLocalVideoSrc,
+  buildTranscodedVideoSrc,
+  getProbeVideoFsQueryKey,
+  getVideoTranscodeStatusFsQueryKey,
+  probeVideoFs,
+  readTextFs,
+  startVideoTranscodeFs,
+  videoTranscodeStatusFs,
+} from '@/api'
+import {
   ensureVideoJsPlaylistButtons,
   refreshSubsCapsButton,
   syncVideoJsPlaylistButtons,
 } from '@/lib/videojs-playlist-controls'
-import {
-  buildLocalVideoSrc,
-  buildTranscodedVideoSrc,
-  fetchFsReadText,
-  fetchVideoPlaybackProbe,
-  fetchVideoTranscodeStatus,
-  startVideoTranscode,
-} from '@/request'
-import { VideoTranscodePhase } from '@/types/api'
 import { createSubtitleBlobUrl } from '@/utils/srt-to-vtt'
 import { resolveDefaultChineseSubtitlePath } from '@/utils/subtitle-track'
 import 'video.js/dist/video-js.css'
@@ -90,19 +91,19 @@ export function LocalVideoPlayer({
   }, [videoPath])
 
   const probeQuery = useQuery({
-    queryKey: ['video-playback-probe', videoPath],
-    queryFn: () => fetchVideoPlaybackProbe({ path: videoPath }),
+    queryKey: getProbeVideoFsQueryKey({ path: videoPath }),
+    queryFn: () => probeVideoFs({ path: videoPath }),
   })
 
   const needsTranscode = probeQuery.data?.needs_transcode === true
 
   const transcodeStatusQuery = useQuery({
-    queryKey: ['video-transcode-status', videoPath],
+    queryKey: getVideoTranscodeStatusFsQueryKey({ path: videoPath }),
     enabled: needsTranscode && probeQuery.isSuccess,
-    queryFn: () => fetchVideoTranscodeStatus({ path: videoPath }),
+    queryFn: () => videoTranscodeStatusFs({ path: videoPath }),
     refetchInterval: (query) => {
       const phase = query.state.data?.phase
-      if (phase === VideoTranscodePhase.Running || phase === VideoTranscodePhase.Idle)
+      if (phase === 'running' || phase === 'idle')
         return 1000
       return false
     },
@@ -112,9 +113,9 @@ export function LocalVideoPlayer({
     if (!needsTranscode || transcodeStartRequested.current)
       return
     const phase = transcodeStatusQuery.data?.phase
-    if (phase === VideoTranscodePhase.Idle || phase === VideoTranscodePhase.Failed) {
+    if (phase === 'idle' || phase === 'failed') {
       transcodeStartRequested.current = true
-      void startVideoTranscode({ path: videoPath }).then(() => {
+      void startVideoTranscodeFs({ path: videoPath }).then(() => {
         void transcodeStatusQuery.refetch()
       })
     }
@@ -125,7 +126,7 @@ export function LocalVideoPlayer({
       return undefined
     if (!needsTranscode)
       return buildLocalVideoSrc(videoPath)
-    if (transcodeStatusQuery.data?.phase === VideoTranscodePhase.Ready)
+    if (transcodeStatusQuery.data?.phase === 'ready')
       return buildTranscodedVideoSrc(videoPath)
     return undefined
   }, [probeQuery.isSuccess, needsTranscode, videoPath, transcodeStatusQuery.data?.phase])
@@ -135,7 +136,7 @@ export function LocalVideoPlayer({
     queries: subtitleTracks.map(track => ({
       queryKey: ['local-video-subtitle', track.path] as const,
       queryFn: async () => {
-        const res = await fetchFsReadText({ path: track.path })
+        const res = await readTextFs({ path: track.path })
         return createSubtitleBlobUrl(track.path, res.content)
       },
       staleTime: 5 * 60 * 1000,
@@ -290,8 +291,8 @@ export function LocalVideoPlayer({
 
   const transcodePhase = transcodeStatusQuery.data?.phase
   const showTranscodeProgress = needsTranscode
-    && transcodePhase !== VideoTranscodePhase.Ready
-    && transcodePhase !== VideoTranscodePhase.Failed
+    && transcodePhase !== 'ready'
+    && transcodePhase !== 'failed'
 
   const alertClass = fillViewport
     ? 'border-white/10 bg-zinc-900/90 text-white [&_.ant-alert-message]:text-white [&_.ant-alert-description]:text-white/70'
@@ -305,7 +306,7 @@ export function LocalVideoPlayer({
           : 'w-full max-w-5xl'
       }
     >
-      {(probeQuery.isError || (needsTranscode && transcodePhase === VideoTranscodePhase.Failed) || showTranscodeProgress) && (
+      {(probeQuery.isError || (needsTranscode && transcodePhase === 'failed') || showTranscodeProgress) && (
         <div
           className={
             fillViewport
@@ -322,7 +323,7 @@ export function LocalVideoPlayer({
               description={probeQuery.error.message}
             />
           )}
-          {needsTranscode && transcodePhase === VideoTranscodePhase.Failed && (
+          {needsTranscode && transcodePhase === 'failed' && (
             <Alert
               type="error"
               showIcon
@@ -334,7 +335,7 @@ export function LocalVideoPlayer({
                   size="small"
                   onClick={() => {
                     transcodeStartRequested.current = false
-                    void startVideoTranscode({ path: videoPath }).then(() => {
+                    void startVideoTranscodeFs({ path: videoPath }).then(() => {
                       transcodeStartRequested.current = true
                       void transcodeStatusQuery.refetch()
                     })

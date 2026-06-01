@@ -4,10 +4,11 @@ use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 /// 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。
 #[typeshare]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 
 pub struct AppConfig {
     pub vad_config: VadConfig,

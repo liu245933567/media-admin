@@ -1,4 +1,4 @@
-import type { TaskmillExecLogEntry } from '@/types'
+import type { TaskmillExecLogEntry } from '@/api'
 import { Space, Switch, Typography } from 'antd'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatTaskmillTime } from '@/lib/taskmill-time'

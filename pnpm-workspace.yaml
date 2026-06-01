@@ -1,5 +1,7 @@
 packages:
   - 'apps/*'
+onlyBuiltDependencies:
+  - esbuild
 minimumReleaseAgeExclude:
   - '@eslint-react/ast@5.8.4'
   - '@eslint-react/core@5.8.4'

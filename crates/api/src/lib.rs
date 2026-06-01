@@ -8,7 +8,11 @@ use tower_http::services::{ServeDir, ServeFile};
 
 mod app_config_store;
 mod error;
+mod openapi;
 mod routes;
+
+#[cfg(feature = "openapi")]
+pub use openapi::openapi_json;
 
 fn build_router(app_state: AppState) -> Router<()> {
     Router::new()

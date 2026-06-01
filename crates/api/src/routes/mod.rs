@@ -1,13 +1,13 @@
 use crate::StateRouter;
 use axum::{Router, routing::get};
-mod fs;
-mod jobs;
-mod media_library;
-mod settings;
-mod setup;
+pub(crate) mod fs;
+pub(crate) mod jobs;
+pub(crate) mod media_library;
+pub(crate) mod settings;
+pub(crate) mod setup;
 mod sse;
-mod stash;
-mod subtitle_web;
+pub(crate) mod stash;
+pub(crate) mod subtitle_web;
 
 pub fn compose() -> StateRouter {
     Router::new()

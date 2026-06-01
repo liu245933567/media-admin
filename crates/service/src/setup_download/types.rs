@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 /// Whisper 可下载项（静态目录）
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WhisperModelItem {
     pub id: String,
     pub label: String,
@@ -16,37 +17,37 @@ pub struct WhisperModelItem {
 }
 
 #[typeshare]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct WhisperModelsListRes {
     pub items: Vec<WhisperModelItem>,
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct WhisperDownloadStartReq {
     pub model_id: String,
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DownloadJobStartRes {
     pub job_id: String,
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FfmpegDownloadStartReq {}
 
 /// FFmpeg 工具目录是否已安装可执行文件
 #[typeshare]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct FfmpegSetupStatusRes {
     pub local_ready: bool,
 }
 
 /// SSE / 内部共用的进度快照（JSON）
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DownloadProgressSnapshot {
     pub phase: String,
     pub bytes_received: f64,

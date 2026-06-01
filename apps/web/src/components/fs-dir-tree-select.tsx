@@ -1,8 +1,8 @@
 import type { TreeSelectProps } from 'antd'
-import type { FsListItem } from '@/types'
+import type { FsListItem } from '@/api'
 import { App, TreeSelect } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchFsList } from '@/request'
+import { listFs } from '@/api'
 
 type DirNode = NonNullable<TreeSelectProps['treeData']>[number]
 
@@ -64,7 +64,7 @@ export function FsDirTreeSelect({
   }, [placeholder])
 
   const loadChildren = useCallback(async (parentPath?: string) => {
-    const res = await fetchFsList(parentPath ? { parent_path: parentPath } : {})
+    const res = await listFs(parentPath ? { parent_path: parentPath } : {})
     return toDirNodes(res)
   }, [])
 

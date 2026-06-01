@@ -1,19 +1,19 @@
+import type { MediaVideoRow } from '@/api'
 import type { VideoPlaySearch } from '@/lib/video-play-search'
-import type { MediaVideoRow } from '@/types/api'
 import { UnorderedListOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Button, Result, Typography } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  getListFilesMediaLibraryQueryKey,
+  getListRootsMediaLibraryQueryKey,
+  listFilesMediaLibrary,
+  listRootsMediaLibrary,
+} from '@/api'
 import { LocalVideoPlayer } from '@/components/local-video-player'
 import { VideoPlaylistDrawer } from '@/components/video-playlist-drawer'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
-import {
-  fetchMediaFiles,
-  fetchMediaRoots,
-  mediaFilesQueryKey,
-  mediaRootsQueryKey,
-} from '@/request'
 import {
   getFileName,
   getParentPath,
@@ -61,15 +61,15 @@ function PageComponent() {
 
   const mediaRootId = Number.isFinite(rootId) ? rootId : undefined
   const playlistQuery = useQuery({
-    queryKey: mediaFilesQueryKey({ root_id: mediaRootId, page_size: 1000 }),
-    queryFn: () => fetchMediaFiles({ root_id: mediaRootId, page_size: 1000 }),
+    queryKey: getListFilesMediaLibraryQueryKey({ root_id: mediaRootId, page_size: 1000 }),
+    queryFn: () => listFilesMediaLibrary({ root_id: mediaRootId, page_size: 1000 }),
     enabled: mediaRootId != null,
     staleTime: 60 * 1000,
   })
 
   const rootsQuery = useQuery({
-    queryKey: mediaRootsQueryKey,
-    queryFn: fetchMediaRoots,
+    queryKey: getListRootsMediaLibraryQueryKey(),
+    queryFn: listRootsMediaLibrary,
     staleTime: 60 * 1000,
   })
 

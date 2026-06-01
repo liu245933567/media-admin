@@ -1,17 +1,17 @@
 import type { ProColumns } from '@ant-design/pro-components'
-import type { MediaRootRow } from '@/types'
+import type { MediaRootRow } from '@/api'
 import { ProTable } from '@ant-design/pro-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Form, Input, Modal, Popconfirm, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 import {
-  createMediaRoot,
-  deleteMediaRoot,
-  enqueueMediaRootScan,
-  fetchMediaRoots,
-  mediaRootsQueryKey,
-} from '@/request'
+  createRootMediaLibrary,
+  deleteRootMediaLibrary,
+  getListRootsMediaLibraryQueryKey,
+  listRootsMediaLibrary,
+  scanRootMediaLibrary,
+} from '@/api'
 
 export interface MediaRootListCardProps {
   onChanged?: () => void
@@ -21,16 +21,17 @@ export interface MediaRootListCardProps {
 export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootListCardProps) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const mediaRootsQueryKey = getListRootsMediaLibraryQueryKey()
   const [form] = Form.useForm<{ path: string, name?: string }>()
   const [createOpen, setCreateOpen] = useState(false)
 
   const rootsQuery = useQuery({
     queryKey: mediaRootsQueryKey,
-    queryFn: fetchMediaRoots,
+    queryFn: listRootsMediaLibrary,
   })
 
   const createRootMutation = useMutation({
-    mutationFn: createMediaRoot,
+    mutationFn: (body: Parameters<typeof createRootMediaLibrary>[0]) => createRootMediaLibrary(body),
     onSuccess: async () => {
       message.success('媒体资源路径已添加')
       setCreateOpen(false)
@@ -42,7 +43,7 @@ export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootLis
   })
 
   const deleteRootMutation = useMutation({
-    mutationFn: deleteMediaRoot,
+    mutationFn: (id: number) => deleteRootMediaLibrary(id),
     onSuccess: async () => {
       message.success('媒体资源路径已删除')
       await queryClient.invalidateQueries({ queryKey: mediaRootsQueryKey })
@@ -52,7 +53,7 @@ export function MediaRootListCard({ onChanged, showCreate = true }: MediaRootLis
   })
 
   const scanRootMutation = useMutation({
-    mutationFn: enqueueMediaRootScan,
+    mutationFn: (id: number) => scanRootMediaLibrary(id),
     onSuccess: () => message.success('扫描任务已提交，可在任务管理查看进度'),
     onError: error => message.error(error.message ?? '提交失败'),
   })

@@ -12,6 +12,7 @@ use futures_util::StreamExt;
 use ma_service::stash::{StashSceneListReq, StashSceneRow, list_scenes, proxy_media};
 use ma_utils::types::PageResult;
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 pub fn routes() -> StateRouter {
     Router::new()
@@ -19,7 +20,15 @@ pub fn routes() -> StateRouter {
         .route("/media", get(media_proxy_handler))
 }
 
-async fn scenes_list_handler(
+#[utoipa::path(
+    post,
+    path = "/api/stash/scenes/list",
+    operation_id = "listScenesStash",
+    tag = "stash",
+    request_body = StashSceneListReq,
+    responses((status = 200, body = PageResult<StashSceneRow>))
+)]
+pub(crate) async fn scenes_list_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<StashSceneListReq>, AppError>,
 ) -> Result<Json<PageResult<StashSceneRow>>, AppError> {
@@ -30,7 +39,7 @@ async fn scenes_list_handler(
     Ok(Json(res))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct MediaQuery {
     path: String,
 }

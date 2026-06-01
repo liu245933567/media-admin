@@ -8,6 +8,8 @@
     "web:lint": "pnpm --filter web lint",
     "web:preview": "pnpm --filter web preview",
     "web:build": "pnpm --filter web build",
+    "web:typegen": "pnpm --filter web typegen",
+    "web:openapi": "pnpm openapi:export && pnpm web:typegen",
     "server:dev": "cargo run -p media-admin-server",
     "server:dev:cuda": "cargo run -p media-admin-server --features cuda",
     "server:build": "cargo build -p media-admin-server",
@@ -15,6 +17,6 @@
     "desktop:dev:cuda": "pnpm --filter @media-admin/desktop dev:cuda",
     "desktop:build": "pnpm --filter @media-admin/desktop build",
     "desktop:build:cuda": "pnpm --filter @media-admin/desktop build:cuda",
-    "typeshare": "typeshare crates --lang=typescript --output-file=apps/web/src/types/api.ts"
+    "openapi:export": "cargo run -p media-admin-api --bin media-admin-openapi --features openapi -q -- apps/web/openapi.json"
   }
 }

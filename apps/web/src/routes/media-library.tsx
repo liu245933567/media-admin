@@ -1,5 +1,5 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
-import type { MediaSubtitleRow, MediaVideoRow } from '@/types'
+import type { MediaSubtitleRow, MediaVideoRow } from '@/api'
 import { DownOutlined } from '@ant-design/icons'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -16,15 +16,15 @@ import {
 } from 'antd'
 import dayjs from 'dayjs'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  deleteVideosMediaLibrary,
+  getListRootsMediaLibraryQueryKey,
+  listFilesMediaLibrary,
+  listRootsMediaLibrary,
+} from '@/api'
 import { SubtitleDetailModal } from '@/components/subtitle-detail'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
-import {
-  deleteMediaVideos,
-  fetchMediaFiles,
-  fetchMediaRoots,
-  mediaRootsQueryKey,
-} from '@/request'
 import { formatBytes } from '@/utils'
 
 export const Route = createFileRoute('/media-library')({
@@ -44,8 +44,8 @@ function PageComponent() {
   >()
 
   const rootsQuery = useQuery({
-    queryKey: mediaRootsQueryKey,
-    queryFn: fetchMediaRoots,
+    queryKey: getListRootsMediaLibraryQueryKey(),
+    queryFn: listRootsMediaLibrary,
   })
 
   const rootOptions = useMemo(() => {
@@ -60,7 +60,7 @@ function PageComponent() {
   }, [])
 
   const deleteVideosMutation = useMutation({
-    mutationFn: deleteMediaVideos,
+    mutationFn: (body: Parameters<typeof deleteVideosMediaLibrary>[0]) => deleteVideosMediaLibrary(body),
     onSuccess: (res) => {
       message.success(
         `已删除 ${res.deleted_videos} 个视频，${res.deleted_subtitles} 个字幕`,
@@ -252,7 +252,7 @@ function PageComponent() {
           columns={fileColumns}
           request={async (params) => {
             const hasSubtitle = params.has_subtitle
-            const res = await fetchMediaFiles({
+            const res = await listFilesMediaLibrary({
               root_id: params.root_id ? Number(params.root_id) : undefined,
               q: params.file_name,
               has_subtitle:

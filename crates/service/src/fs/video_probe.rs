@@ -6,6 +6,7 @@ use anyhow::{Context, Result, bail};
 use ma_utils::config::get_ffmpeg_bin_path;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt as _;
@@ -14,7 +15,7 @@ use std::os::windows::process::CommandExt as _;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct VideoPlaybackProbeRes {
     /// 是否建议走直链（H.264/AAC 等浏览器常见组合）

@@ -1,4 +1,4 @@
-import type { AppConfig } from '@/types'
+import type { AppConfig } from '@/api'
 import {
   PageContainer,
   ProForm,
@@ -14,6 +14,12 @@ import {
   Typography,
 } from 'antd'
 import { useEffect } from 'react'
+import {
+  getAppConfigSettings,
+  getGenerateDefaultsJobsQueryKey,
+  getGetAppConfigSettingsQueryKey,
+  putAppConfigSettings,
+} from '@/api'
 import { FfmpegSetupCard } from '@/components/ffmpeg-setup-card'
 import { MediaRootListCard } from '@/components/media-root-list-card'
 import { StashConfigFormGroup } from '@/components/stash-config-form-group'
@@ -22,12 +28,6 @@ import {
   useWhisperModelFilenameOptions,
   WhisperModelsSetupCard,
 } from '@/components/whisper-models-setup-card'
-import {
-  appConfigQueryKey,
-  fetchAppConfig,
-  subtitleGenerateDefaultsQueryKey,
-  updateAppConfig,
-} from '@/request'
 
 export const Route = createFileRoute('/setting')({
   component: RouteComponent,
@@ -38,10 +38,11 @@ function RouteComponent() {
   const queryClient = useQueryClient()
   const { options: whisperModelFilenameOptions, loading: whisperModelsLoading }
     = useWhisperModelFilenameOptions()
+  const appConfigQueryKey = getGetAppConfigSettingsQueryKey()
 
   const appCfgQuery = useQuery({
     queryKey: appConfigQueryKey,
-    queryFn: fetchAppConfig,
+    queryFn: getAppConfigSettings,
   })
 
   useEffect(() => {
@@ -92,10 +93,10 @@ function RouteComponent() {
                     }}
                     onFinish={async (vals) => {
                       try {
-                        await updateAppConfig(vals)
+                        await putAppConfigSettings(vals)
                         message.success('已保存全局默认参数')
                         void queryClient.invalidateQueries({ queryKey: appConfigQueryKey })
-                        void queryClient.invalidateQueries({ queryKey: subtitleGenerateDefaultsQueryKey })
+                        void queryClient.invalidateQueries({ queryKey: getGenerateDefaultsJobsQueryKey() })
                         return true
                       }
                       catch (e) {

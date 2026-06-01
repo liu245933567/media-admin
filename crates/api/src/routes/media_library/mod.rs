@@ -21,7 +21,14 @@ pub fn routes() -> StateRouter {
         .route("/videos/delete", post(delete_videos_handler))
 }
 
-async fn list_roots_handler(
+#[utoipa::path(
+    get,
+    path = "/api/media-library/roots",
+    operation_id = "listRootsMediaLibrary",
+    tag = "media-library",
+    responses((status = 200, body = Vec<MediaRootRow>))
+)]
+pub(crate) async fn list_roots_handler(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<MediaRootRow>>, AppError> {
     let rows = list_media_roots(&state.db)
@@ -30,7 +37,15 @@ async fn list_roots_handler(
     Ok(Json(rows))
 }
 
-async fn create_root_handler(
+#[utoipa::path(
+    post,
+    path = "/api/media-library/roots",
+    operation_id = "createRootMediaLibrary",
+    tag = "media-library",
+    request_body = MediaRootCreateReq,
+    responses((status = 200, body = MediaRootRow))
+)]
+pub(crate) async fn create_root_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<MediaRootCreateReq>, AppError>,
 ) -> Result<Json<MediaRootRow>, AppError> {
@@ -40,7 +55,15 @@ async fn create_root_handler(
     Ok(Json(row))
 }
 
-async fn delete_root_handler(
+#[utoipa::path(
+    delete,
+    path = "/api/media-library/roots/{id}",
+    operation_id = "deleteRootMediaLibrary",
+    tag = "media-library",
+    params(("id" = i64, Path, description = "媒体资源目录 ID")),
+    responses((status = 200, body = bool))
+)]
+pub(crate) async fn delete_root_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<bool>, AppError> {
@@ -50,7 +73,15 @@ async fn delete_root_handler(
     Ok(Json(deleted))
 }
 
-async fn scan_root_handler(
+#[utoipa::path(
+    post,
+    path = "/api/media-library/roots/{id}/scan",
+    operation_id = "scanRootMediaLibrary",
+    tag = "media-library",
+    params(("id" = i64, Path, description = "媒体资源目录 ID")),
+    responses((status = 200))
+)]
+pub(crate) async fn scan_root_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<()>, AppError> {
@@ -60,7 +91,15 @@ async fn scan_root_handler(
     Ok(Json(()))
 }
 
-async fn list_files_handler(
+#[utoipa::path(
+    get,
+    path = "/api/media-library/files",
+    operation_id = "listFilesMediaLibrary",
+    tag = "media-library",
+    params(MediaVideosQuery),
+    responses((status = 200, body = MediaVideosPageRes))
+)]
+pub(crate) async fn list_files_handler(
     State(state): State<AppState>,
     Query(q): Query<MediaVideosQuery>,
 ) -> Result<Json<MediaVideosPageRes>, AppError> {
@@ -70,7 +109,15 @@ async fn list_files_handler(
     Ok(Json(rows))
 }
 
-async fn delete_videos_handler(
+#[utoipa::path(
+    post,
+    path = "/api/media-library/videos/delete",
+    operation_id = "deleteVideosMediaLibrary",
+    tag = "media-library",
+    request_body = MediaVideoDeleteReq,
+    responses((status = 200, body = MediaVideoDeleteRes))
+)]
+pub(crate) async fn delete_videos_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<MediaVideoDeleteReq>, AppError>,
 ) -> Result<Json<MediaVideoDeleteRes>, AppError> {

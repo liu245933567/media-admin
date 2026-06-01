@@ -6,16 +6,17 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct SubtitleWebSearchReq {
     pub video_path: String,
 }
 
 /// 搜索字幕结果
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SubtitleWebSearchRes {
     /// 视频的绝对路径
     pub video_path: String,
@@ -27,7 +28,7 @@ pub struct SubtitleWebSearchRes {
 
 /// 搜索字幕结果 - 列表单项
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SubtitleWebRow {
     pub id: String,
     pub name: String,
@@ -37,14 +38,14 @@ pub struct SubtitleWebRow {
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct DownloadBody {
     pub video_path: String,
     pub subtitle_id: String,
 }
 
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DownloadResponse {
     pub subtitle_path: String,
     pub record_id: i32,

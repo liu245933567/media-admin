@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, QueryBuilder, Sqlite};
 use taskmill::SubmitOutcome;
 use typeshare::{I54, U53, typeshare};
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{
     job::{MediaLibraryScanTask, TaskmillRuntime},
@@ -21,7 +22,7 @@ use crate::{
 };
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 /// 媒体文件类型。
 pub enum MediaFileType {
     Video,
@@ -47,7 +48,7 @@ impl MediaFileType {
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// 新增媒体资源根目录请求。
 pub struct MediaRootCreateReq {
     pub path: String,
@@ -55,9 +56,10 @@ pub struct MediaRootCreateReq {
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 媒体资源根目录列表行。
 pub struct MediaRootRow {
+    #[schema(value_type = i64)]
     pub id: I54,
     pub path: String,
     pub name: String,
@@ -67,25 +69,30 @@ pub struct MediaRootRow {
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 视频拥有的字幕文件列表行。
 pub struct MediaSubtitleRow {
+    #[schema(value_type = i64)]
     pub id: I54,
     pub file_name: String,
     pub file_path: String,
+    #[schema(value_type = u64)]
     pub file_size: U53,
     pub modified_at: String,
     pub scanned_at: String,
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 媒体库视频列表行。
 pub struct MediaVideoRow {
+    #[schema(value_type = i64)]
     pub id: I54,
+    #[schema(value_type = i64)]
     pub root_id: I54,
     pub file_name: String,
     pub file_path: String,
+    #[schema(value_type = u64)]
     pub file_size: U53,
     pub modified_at: String,
     pub scanned_at: String,
@@ -94,9 +101,11 @@ pub struct MediaVideoRow {
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 /// 媒体库视频分页查询条件。
 pub struct MediaVideosQuery {
+    #[param(value_type = Option<i64>)]
+    #[schema(value_type = i64)]
     pub root_id: Option<I54>,
     pub q: Option<String>,
     pub has_subtitle: Option<bool>,
@@ -105,22 +114,23 @@ pub struct MediaVideosQuery {
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 媒体库视频分页查询结果。
 pub struct MediaVideosPageRes {
     pub data: Vec<MediaVideoRow>,
+    #[schema(value_type = i64)]
     pub total: I54,
 }
 
 #[typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 /// 删除媒体库视频请求。
 pub struct MediaVideoDeleteReq {
     pub video_paths: Vec<String>,
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 删除媒体库视频结果摘要。
 pub struct MediaVideoDeleteRes {
     pub deleted_videos: u32,
@@ -151,7 +161,7 @@ struct MediaFileRecord {
 }
 
 #[typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 /// 媒体库扫描结果摘要。
 pub struct MediaLibraryScanRes {
     pub scanned: u32,
@@ -160,7 +170,7 @@ pub struct MediaLibraryScanRes {
     pub removed: u32,
 }
 
-/// 已校验的媒体资源子目录。
+/// 已校验的媒体资源目录（媒体根目录或其子目录）。
 #[derive(Debug, Clone)]
 pub struct MediaResolvedChildDir {
     pub root_id: i64,
@@ -243,7 +253,7 @@ pub async fn enqueue_media_library_scan(
         .await
 }
 
-/// 校验文件夹属于已配置媒体根目录的子目录。
+/// 校验文件夹属于已配置媒体根目录或其子目录。
 pub async fn resolve_media_child_dir(
     pool: &SqlitePool,
     folder_path: &str,
@@ -257,10 +267,7 @@ pub async fn resolve_media_child_dir(
             .await
             .unwrap_or_else(|_| root_path.clone());
 
-        if normalized.real_path == root_real {
-            bail!("请选择媒体根目录下的子文件夹，不能选择媒体根目录本身");
-        }
-        if normalized.real_path.starts_with(&root_real) {
+        if normalized.real_path == root_real || normalized.real_path.starts_with(&root_real) {
             return Ok(MediaResolvedChildDir {
                 root_id: i64::from(root.id),
                 folder_path: normalized.display_path.to_string_lossy().to_string(),
@@ -268,7 +275,7 @@ pub async fn resolve_media_child_dir(
         }
     }
 
-    bail!("文件夹必须位于已配置的媒体资源目录下")
+    bail!("文件夹必须是已配置的媒体资源目录或其子目录")
 }
 
 /// 查询扫描入库的视频文件，并附带同目录匹配的字幕文件。

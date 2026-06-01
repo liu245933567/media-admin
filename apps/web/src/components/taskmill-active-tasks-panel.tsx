@@ -1,13 +1,13 @@
 import type { ColumnsType } from 'antd/es/table'
-import type { TaskmillTaskRecord, TaskmillTaskStatus } from '@/types'
+import type { TaskmillTaskRecord, TaskmillTaskStatus } from '@/api'
 import { useMutation } from '@tanstack/react-query'
 import { App, Button, Popconfirm, Space, Table, Tag, Typography } from 'antd'
 import { useMemo } from 'react'
 import {
-  cancelTaskmillTask,
-  pauseTaskmillTask,
-  resumeTaskmillTask,
-} from '@/request'
+  cancelTaskJobs,
+  pauseTaskJobs,
+  resumeTaskJobs,
+} from '@/api'
 
 function statusColor(status: TaskmillTaskStatus): string {
   const map: Record<TaskmillTaskStatus, string> = {
@@ -65,7 +65,7 @@ export function TaskmillActiveTasksPanel({
   const { message } = App.useApp()
 
   const cancelMutation = useMutation({
-    mutationFn: cancelTaskmillTask,
+    mutationFn: (id: number) => cancelTaskJobs(id),
     onSuccess: (res) => {
       if (res.cancelled) {
         message.success('已取消任务')
@@ -81,7 +81,7 @@ export function TaskmillActiveTasksPanel({
   })
 
   const pauseMutation = useMutation({
-    mutationFn: pauseTaskmillTask,
+    mutationFn: (id: number) => pauseTaskJobs(id),
     onSuccess: () => {
       message.success('已暂停任务')
       onChanged?.()
@@ -92,7 +92,7 @@ export function TaskmillActiveTasksPanel({
   })
 
   const resumeMutation = useMutation({
-    mutationFn: resumeTaskmillTask,
+    mutationFn: (id: number) => resumeTaskJobs(id),
     onSuccess: () => {
       message.success('已恢复任务')
       onChanged?.()

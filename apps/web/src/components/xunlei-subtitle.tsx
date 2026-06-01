@@ -1,4 +1,4 @@
-import type { SubtitleWebRow } from '@/types'
+import type { SubtitleWebRow } from '@/api'
 import { Button, Drawer, Table } from 'antd'
 import { useState } from 'react'
 

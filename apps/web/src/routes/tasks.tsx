@@ -1,9 +1,25 @@
+import type {
+  TaskmillExecLogEntry,
+  TaskmillJobSnapshot,
+  TaskmillTaskHistoryRecord,
+  TaskmillTaskRecord,
+} from '@/api'
 import { PlusOutlined } from '@ant-design/icons'
 import { PageContainer } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { App, Button, Card, Dropdown, Space, Switch, Tabs, Tag } from 'antd'
 import { useMemo, useState } from 'react'
+import {
+  activeTasksJobs,
+  execLogJobs,
+  getActiveTasksJobsQueryKey,
+  getExecLogJobsQueryKey,
+  getHistoryJobsQueryKey,
+  getSnapshotJobsQueryKey,
+  historyJobs,
+  snapshotJobs,
+} from '@/api'
 import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
@@ -12,16 +28,6 @@ import { TaskmillExecLogPanel } from '@/components/taskmill-demo-exec-log-panel'
 import { TaskmillHistoryPanel } from '@/components/taskmill-demo-history-panel'
 import { TaskmillSnapshotPanel } from '@/components/taskmill-demo-snapshot-panel'
 import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
-import {
-  fetchTaskmillActiveTasks,
-  fetchTaskmillExecLog,
-  fetchTaskmillHistory,
-  fetchTaskmillSnapshot,
-  taskmillActiveQueryKey,
-  taskmillExecLogQueryKey,
-  taskmillHistoryQueryKey,
-  taskmillSnapshotQueryKey,
-} from '@/request'
 
 const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
@@ -40,26 +46,26 @@ function PageComponent() {
   const [taskTypeFilter] = useState<string | undefined>()
 
   const snapshotQuery = useQuery({
-    queryKey: taskmillSnapshotQueryKey,
-    queryFn: fetchTaskmillSnapshot,
+    queryKey: getSnapshotJobsQueryKey(),
+    queryFn: () => snapshotJobs() as Promise<TaskmillJobSnapshot>,
     refetchInterval: 3000,
   })
 
   const activeQuery = useQuery({
-    queryKey: taskmillActiveQueryKey(activeQueryParams),
-    queryFn: () => fetchTaskmillActiveTasks(activeQueryParams),
+    queryKey: getActiveTasksJobsQueryKey(activeQueryParams),
+    queryFn: () => activeTasksJobs(activeQueryParams) as Promise<TaskmillTaskRecord[]>,
     refetchInterval: 3000,
   })
 
   const historyQuery = useQuery({
-    queryKey: taskmillHistoryQueryKey(historyQueryParams),
-    queryFn: () => fetchTaskmillHistory(historyQueryParams),
+    queryKey: getHistoryJobsQueryKey(historyQueryParams),
+    queryFn: () => historyJobs(historyQueryParams) as Promise<TaskmillTaskHistoryRecord[]>,
     refetchInterval: 5000,
   })
 
   const execLogQuery = useQuery({
-    queryKey: taskmillExecLogQueryKey(execLogQueryParams),
-    queryFn: () => fetchTaskmillExecLog(execLogQueryParams),
+    queryKey: getExecLogJobsQueryKey(execLogQueryParams),
+    queryFn: () => execLogJobs(execLogQueryParams) as Promise<TaskmillExecLogEntry[]>,
     refetchInterval: execLogAutoRefresh ? 1200 : false,
   })
 

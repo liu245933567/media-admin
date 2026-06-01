@@ -17,7 +17,8 @@ pub use filter::{
 };
 pub use scenes::list_scenes;
 pub use types::{
-    StashConnectConfig, StashSceneFile, StashSceneListReq, StashScenePaths, StashSceneRow,
+    StashConnectConfig, StashFilter, StashSceneFile, StashSceneListReq, StashScenePaths,
+    StashSceneRow,
 };
 
 pub type MediaBodyStream = Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>;

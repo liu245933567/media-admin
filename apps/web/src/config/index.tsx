@@ -1,7 +1,7 @@
 import {
+  FolderOpenOutlined,
   HomeOutlined,
   PlaySquareOutlined,
-  FolderOpenOutlined,
   SettingOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'

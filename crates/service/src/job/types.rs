@@ -6,6 +6,7 @@ use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use serde::{Deserialize, Serialize};
 use taskmill::{DomainKey, DuplicateStrategy, IoBudget, Priority, TaskTypeConfig, TypedTask};
 use typeshare::{I54, typeshare};
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MediaJobsDomain;
@@ -34,9 +35,10 @@ pub struct VideoSubtitleGenerateTask {
 
 /// 扫描媒体资源根目录并将视频/字幕文件写入业务库。
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 /// 扫描媒体资源根目录并将视频/字幕文件写入业务库。
 pub struct MediaLibraryScanTask {
+    #[schema(value_type = i64)]
     pub root_id: I54,
     pub root_path: String,
 }
@@ -123,7 +125,7 @@ impl TypedTask for VideoSubtitleGenerateTask {
 
 /// 字幕翻译任务（可独立提交，或由 [`VideoSubtitleGenerateTask`] 完成后异步入队，不阻塞生成任务）。
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SubtitleTranslateJob {
     pub source_srt_path: String,
     pub config: SubtitleTranslateConfig,

@@ -6,8 +6,15 @@ edition = "2024"
 [lib]
 name = "ma_api"
 
+[[bin]]
+name = "media-admin-openapi"
+path = "src/bin/openapi.rs"
+required-features = ["openapi"]
+
 [features]
+default = ["openapi"]
 cuda = ["media-admin-service/cuda"]
+openapi = []
 
 [dependencies]
 anyhow.workspace = true
@@ -17,6 +24,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 typeshare.workspace = true
+utoipa.workspace = true
 
 media-admin-utils = { path = "../../crates/utils" }
 media-admin-db = { path = "../../crates/db" }

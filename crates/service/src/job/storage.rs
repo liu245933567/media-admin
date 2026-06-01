@@ -13,6 +13,7 @@ use taskmill::{
     SubmitOutcome, TaskHistoryRecord,
 };
 use tokio_util::sync::CancellationToken;
+use utoipa::ToSchema;
 
 use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
 use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
@@ -22,16 +23,19 @@ use super::types::{
     VideoSubtitleGenerateTask, WhisperModelDownloadTask,
 };
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillSnapshot {
+    #[schema(value_type = serde_json::Value)]
     pub scheduler: SchedulerSnapshot,
+    #[schema(value_type = serde_json::Value)]
     pub metrics: MetricsSnapshot,
 }
 
 /// 一条带接收时间的调度器事件，供任务页展示「执行中」流式日志。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TimestampedSchedulerEvent {
     pub received_at: chrono::DateTime<Utc>,
+    #[schema(value_type = serde_json::Value)]
     pub event: SchedulerEvent,
 }
 

@@ -1,4 +1,4 @@
-import type { MediaVideoRow } from '@/types/api'
+import type { MediaVideoRow } from '@/api'
 import { isPlayableSubtitleFile } from '@/utils/video-path'
 
 export interface VideoPlaySearch {

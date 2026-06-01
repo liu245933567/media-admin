@@ -13,6 +13,6 @@ pub use app_config::{
     merge_subtitle_generate_config, merge_subtitle_translate_fields,
     merge_subtitle_translate_job_config,
 };
-pub use ma_subtitle::types::SubtitleTranslateConfig;
+pub use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 pub use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 pub use stash::StashConnectConfig;

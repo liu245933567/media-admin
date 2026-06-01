@@ -1,6 +1,7 @@
 import type { ColumnsType } from 'antd/es/table'
-import type { WhisperModelDownloadProgress } from '@/lib/setup-download-taskmill'
-import type { WhisperModelItem } from '@/types'
+import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, WhisperModelItem } from '@/api'
+import type { WhisperModelOption } from '@/components/subtitle-pipeline-form-groups'
+import type { SetupDownloadUiProgress, WhisperModelDownloadProgress } from '@/lib/setup-download-taskmill'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
@@ -13,25 +14,20 @@ import {
   Typography,
 } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { WhisperModelOption } from '@/components/subtitle-pipeline-form-groups'
 import {
-  buildWhisperDownloadProgressByModelId,
-  hasActiveWhisperDownloads,
-  listActiveWhisperDownloadTasks,
-  mapSetupDownloadFromHistory,
-  mapSetupDownloadFromSnapshot,
-  uiProgressPercent,
-  type SetupDownloadUiProgress,
-} from '@/lib/setup-download-taskmill'
-import {
-  fetchTaskmillHistory,
-  fetchTaskmillSnapshot,
-  fetchWhisperModels,
-  startWhisperDownload,
-  taskmillHistoryQueryKey,
-  taskmillSnapshotQueryKey,
-  whisperModelsQueryKey,
-} from '@/request'
+  downloadWhisperSetup,
+  getHistoryJobsQueryKey,
+  getListWhisperModelsSetupQueryKey,
+  getSnapshotJobsQueryKey,
+  historyJobs,
+  listWhisperModelsSetup,
+  snapshotJobs,
+} from '@/api'
+import { buildWhisperDownloadProgressByModelId, hasActiveWhisperDownloads, listActiveWhisperDownloadTasks, mapSetupDownloadFromHistory, mapSetupDownloadFromSnapshot, uiProgressPercent } from '@/lib/setup-download-taskmill'
+
+const whisperModelsQueryKey = getListWhisperModelsSetupQueryKey()
+const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
+const taskmillHistoryParams = { limit: 40, offset: 0 } as const
 
 /** 供字幕表单等使用的 Whisper 模型下拉选项（与卡片共享同一 react-query 缓存）。 */
 export function useWhisperModelFilenameOptions(): {
@@ -40,7 +36,7 @@ export function useWhisperModelFilenameOptions(): {
 } {
   const whisperModelsQuery = useQuery({
     queryKey: whisperModelsQueryKey,
-    queryFn: fetchWhisperModels,
+    queryFn: listWhisperModelsSetup,
   })
   const models = useMemo(
     () => whisperModelsQuery.data?.items ?? [],
@@ -64,7 +60,7 @@ export function WhisperModelsSetupCard() {
 
   const whisperModelsQuery = useQuery({
     queryKey: whisperModelsQueryKey,
-    queryFn: fetchWhisperModels,
+    queryFn: listWhisperModelsSetup,
   })
 
   const models = useMemo(
@@ -78,7 +74,7 @@ export function WhisperModelsSetupCard() {
 
   const taskmillSnapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
-    queryFn: fetchTaskmillSnapshot,
+    queryFn: () => snapshotJobs() as Promise<TaskmillJobSnapshot>,
     refetchInterval: (query) => {
       const snap = query.state.data
       const whisperActive = snap != null && hasActiveWhisperDownloads(snap)
@@ -88,8 +84,8 @@ export function WhisperModelsSetupCard() {
   })
 
   const taskmillHistoryQuery = useQuery({
-    queryKey: taskmillHistoryQueryKey({ limit: 40, offset: 0 }),
-    queryFn: () => fetchTaskmillHistory({ limit: 40, offset: 0 }),
+    queryKey: getHistoryJobsQueryKey(taskmillHistoryParams),
+    queryFn: () => historyJobs(taskmillHistoryParams) as Promise<TaskmillTaskHistoryRecord[]>,
     enabled: whisperTaskId != null,
     refetchInterval: whisperTaskId != null ? 1000 : false,
   })
@@ -180,11 +176,11 @@ export function WhisperModelsSetupCard() {
     queryClient,
   ])
 
-  const startWhisperDownloadForModel = useCallback(async (modelId: string) => {
+  const startWhisperModelDownload = useCallback(async (modelId: string) => {
     setWhisperProgress(null)
     setDownloadingModelId(modelId)
     try {
-      const { job_id } = await startWhisperDownload({ model_id: modelId })
+      const { job_id } = await downloadWhisperSetup({ model_id: modelId })
       const taskId = Number.parseInt(job_id, 10)
       if (!Number.isFinite(taskId)) {
         throw new TypeError('无效的任务 ID')
@@ -222,9 +218,9 @@ export function WhisperModelsSetupCard() {
       ),
       okText: '开始下载',
       cancelText: '取消',
-      onOk: () => startWhisperDownloadForModel(modelId),
+      onOk: () => startWhisperModelDownload(modelId),
     })
-  }, [models, startWhisperDownloadForModel])
+  }, [models, startWhisperModelDownload])
 
   const whisperModelColumns: ColumnsType<WhisperModelItem> = useMemo(
     () => [

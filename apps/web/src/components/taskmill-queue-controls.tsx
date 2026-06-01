@@ -1,13 +1,16 @@
+import type { TaskmillJobSnapshot } from '@/api'
 import { PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button } from 'antd'
 import {
-  fetchTaskmillSnapshot,
-  pauseTaskmillScheduler,
-  resumeTaskmillScheduler,
-  taskmillActiveQueryKey,
-  taskmillSnapshotQueryKey,
-} from '@/request'
+  getActiveTasksJobsQueryKey,
+  getSnapshotJobsQueryKey,
+  pauseSchedulerJobs,
+  resumeSchedulerJobs,
+  snapshotJobs,
+} from '@/api'
+
+const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
 
 export interface TaskmillQueueControlsProps {
   onChanged?: () => void
@@ -19,18 +22,18 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
 
   const snapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
-    queryFn: fetchTaskmillSnapshot,
+    queryFn: () => snapshotJobs() as Promise<TaskmillJobSnapshot>,
     refetchInterval: 2000,
   })
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: taskmillSnapshotQueryKey })
-    void queryClient.invalidateQueries({ queryKey: taskmillActiveQueryKey() })
+    void queryClient.invalidateQueries({ queryKey: getActiveTasksJobsQueryKey() })
     onChanged?.()
   }
 
   const pauseMutation = useMutation({
-    mutationFn: pauseTaskmillScheduler,
+    mutationFn: () => pauseSchedulerJobs(),
     onSuccess: () => {
       message.success('已暂停任务调度：运行中任务将暂停，不再派发新任务')
       invalidate()
@@ -41,7 +44,7 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
   })
 
   const resumeMutation = useMutation({
-    mutationFn: resumeTaskmillScheduler,
+    mutationFn: () => resumeSchedulerJobs(),
     onSuccess: () => {
       message.success('任务调度已恢复')
       invalidate()

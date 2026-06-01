@@ -2,14 +2,14 @@ import type { ColumnsType } from 'antd/es/table'
 import type {
   TaskmillHistoryStatus,
   TaskmillTaskHistoryRecord,
-} from '@/types'
+} from '@/api'
 import { useMutation } from '@tanstack/react-query'
 import { App, Button, Popconfirm, Table, Tag, Typography } from 'antd'
 import dayjs from 'dayjs'
 import duration from 'dayjs/plugin/duration'
 import { useMemo } from 'react'
+import { deleteHistoryJobs } from '@/api'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
-import { deleteTaskmillHistory } from '@/request'
 import { transJobType, transStatus } from './taskmill-active-tasks-panel'
 
 dayjs.extend(duration)
@@ -41,7 +41,7 @@ export function TaskmillHistoryPanel({
   const { message } = App.useApp()
 
   const deleteMutation = useMutation({
-    mutationFn: deleteTaskmillHistory,
+    mutationFn: (id: number) => deleteHistoryJobs(id),
     onSuccess: (res) => {
       if (res.deleted) {
         message.success('已删除历史记录')

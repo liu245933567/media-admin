@@ -1,24 +1,30 @@
+import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, TaskmillTaskRecord } from '@/api'
 import type { SetupDownloadUiProgress } from '@/lib/setup-download-taskmill'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Modal, Progress, Space, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
+import {
+  activeTasksJobs,
+  downloadFfmpegSetup,
+  ffmpegStatusSetup,
+  getActiveTasksJobsQueryKey,
+  getFfmpegStatusSetupQueryKey,
+  getHistoryJobsQueryKey,
+  getSnapshotJobsQueryKey,
+  historyJobs,
+  snapshotJobs,
+} from '@/api'
 import {
   mapSetupDownloadFromActiveRecord,
   mapSetupDownloadFromHistory,
   mapSetupDownloadFromSnapshot,
   uiProgressPercent,
 } from '@/lib/setup-download-taskmill'
-import {
-  fetchFfmpegSetupStatus,
-  fetchTaskmillActiveTasks,
-  fetchTaskmillHistory,
-  fetchTaskmillSnapshot,
-  ffmpegSetupStatusQueryKey,
-  startFfmpegDownload,
-  taskmillActiveQueryKey,
-  taskmillHistoryQueryKey,
-  taskmillSnapshotQueryKey,
-} from '@/request'
+
+const ffmpegSetupStatusQueryKey = getFfmpegStatusSetupQueryKey()
+const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
+const taskmillHistoryParams = { limit: 40, offset: 0 } as const
+const taskmillActiveParams = { limit: 50 } as const
 
 /** 设置页：FFmpeg 安装状态与 Taskmill 下载进度。 */
 export function FfmpegSetupCard() {
@@ -27,7 +33,7 @@ export function FfmpegSetupCard() {
 
   const ffmpegSetupQuery = useQuery({
     queryKey: ffmpegSetupStatusQueryKey,
-    queryFn: fetchFfmpegSetupStatus,
+    queryFn: ffmpegStatusSetup,
   })
 
   const [ffmpegTaskId, setFfmpegTaskId] = useState<number | null>(null)
@@ -36,20 +42,20 @@ export function FfmpegSetupCard() {
 
   const taskmillSnapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
-    queryFn: fetchTaskmillSnapshot,
+    queryFn: () => snapshotJobs() as Promise<TaskmillJobSnapshot>,
     refetchInterval: ffmpegTaskId != null ? 500 : false,
   })
 
   const taskmillHistoryQuery = useQuery({
-    queryKey: taskmillHistoryQueryKey({ limit: 40, offset: 0 }),
-    queryFn: () => fetchTaskmillHistory({ limit: 40, offset: 0 }),
+    queryKey: getHistoryJobsQueryKey(taskmillHistoryParams),
+    queryFn: () => historyJobs(taskmillHistoryParams) as Promise<TaskmillTaskHistoryRecord[]>,
     enabled: ffmpegTaskId != null,
     refetchInterval: ffmpegTaskId != null ? 1000 : false,
   })
 
   const activeTasksQuery = useQuery({
-    queryKey: taskmillActiveQueryKey({ limit: 50 }),
-    queryFn: () => fetchTaskmillActiveTasks({ limit: 50 }),
+    queryKey: getActiveTasksJobsQueryKey(taskmillActiveParams),
+    queryFn: () => activeTasksJobs(taskmillActiveParams) as Promise<TaskmillTaskRecord[]>,
     enabled: ffmpegTaskId != null,
     refetchInterval: ffmpegTaskId != null ? 500 : false,
   })
@@ -132,7 +138,7 @@ export function FfmpegSetupCard() {
         setFfmpegProgress(null)
         return (async () => {
           try {
-            const { job_id } = await startFfmpegDownload({})
+            const { job_id } = await downloadFfmpegSetup({})
             const taskId = Number.parseInt(job_id, 10)
             if (!Number.isFinite(taskId)) {
               throw new TypeError('无效的任务 ID')

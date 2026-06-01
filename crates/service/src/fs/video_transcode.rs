@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use tokio::sync::Mutex;
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 use crate::media_paths::validate_video_path;
 
@@ -25,7 +26,7 @@ use std::os::windows::process::CommandExt as _;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VideoTranscodePhase {
     Idle,
@@ -35,7 +36,7 @@ pub enum VideoTranscodePhase {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct VideoTranscodeStatusRes {
     pub phase: VideoTranscodePhase,
     /// 0.0–1.0，仅 `running` 时有效

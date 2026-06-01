@@ -42,3 +42,4 @@ chrono = "0.4"
 dotenvy = "0.15"
 taskmill = "0.7.1"
 tokio-util = "0.7"
+utoipa = { version = "5.5.0", features = ["axum_extras", "chrono"] }

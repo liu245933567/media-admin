@@ -3,20 +3,20 @@ import type {
   SubtitleGenerateReq,
   SubtitleTranslateConfig,
   VadConfig,
-} from '@/types/api'
+} from '@/api'
 import { DrawerForm, ProFormText } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Checkbox } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
-  enqueueSubtitleGenerate,
-  enqueueSubtitleGenerateBulk,
-  fetchSubtitleGenerateDefaults,
-  fetchWhisperModels,
-  subtitleGenerateDefaultsQueryKey,
-  whisperModelsQueryKey,
-} from '@/request'
+  generateBulkJobs,
+  generateDefaultsJobs,
+  generateJobs,
+  getGenerateDefaultsJobsQueryKey,
+  getListWhisperModelsSetupQueryKey,
+  listWhisperModelsSetup,
+} from '@/api'
+import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 
 export interface SubtitleTaskBulkSourceRow {
   video_path: string
@@ -36,6 +36,10 @@ export interface SubtitleTaskCreateDrawerFormProps {
 /** 表单字段：配置项 + 单条模式下的视频路径 */
 type SubtitleGenerateFormValues = SubtitleGenerateConfig & {
   video_path?: string
+}
+
+function nullToUndefined<T>(value: T | null | undefined): T | undefined {
+  return value ?? undefined
 }
 
 const DEFAULT_VAD_CONFIG: VadConfig = {
@@ -75,8 +79,8 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   }, [props.bulkSourceRows, skipDiskSubtitle])
 
   const defaultsQuery = useQuery({
-    queryKey: subtitleGenerateDefaultsQueryKey,
-    queryFn: fetchSubtitleGenerateDefaults,
+    queryKey: getGenerateDefaultsJobsQueryKey(),
+    queryFn: generateDefaultsJobs,
     staleTime: 60 * 60 * 1000,
   })
 
@@ -91,8 +95,8 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   }, [defaultsQuery.isError, defaultsQuery.error, message])
 
   const whisperModelsQuery = useQuery({
-    queryKey: whisperModelsQueryKey,
-    queryFn: fetchWhisperModels,
+    queryKey: getListWhisperModelsSetupQueryKey(),
+    queryFn: listWhisperModelsSetup,
   })
   const whisperModelFilenameOptions = useMemo(
     () =>
@@ -117,6 +121,9 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
       ...c,
       video_path: path,
       vad_config: c.vad_config ?? DEFAULT_VAD_CONFIG,
+      whisper_engine_config: nullToUndefined(c.whisper_engine_config),
+      whisper_transcribe_config: nullToUndefined(c.whisper_transcribe_config),
+      translate_config: nullToUndefined(c.translate_config),
     }
   }, [defaultsQuery.data, props.initialVideoPath])
 
@@ -143,17 +150,17 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
 
       const whisper_engine_config = inheritWhisperEngine
         ? undefined
-        : rest.whisper_engine_config ?? d?.whisper_engine_config
+        : rest.whisper_engine_config ?? nullToUndefined(d?.whisper_engine_config)
 
       const whisper_transcribe_config = inheritWhisperTranscribe
         ? undefined
-        : rest.whisper_transcribe_config ?? d?.whisper_transcribe_config
+        : rest.whisper_transcribe_config ?? nullToUndefined(d?.whisper_transcribe_config)
 
       const translate_config = !enableTranslate
         ? undefined
         : inheritTranslate
           ? INHERIT_TRANSLATE_CONFIG
-          : rest.translate_config ?? d?.translate_config
+          : rest.translate_config ?? nullToUndefined(d?.translate_config)
 
       return {
         vad_config,
@@ -203,7 +210,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
               return false
             }
 
-            const res = await enqueueSubtitleGenerateBulk({
+            const res = await generateBulkJobs({
               video_paths: targetBulkPaths.map(vp => vp.trim()),
               config: buildConfig(values),
               skip_if_exists: true,
@@ -238,7 +245,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
             video_path,
             config: buildConfig(values),
           }
-          await enqueueSubtitleGenerate(req)
+          await generateJobs(req)
           message.success('任务已添加')
           props.onCreated?.()
           return true

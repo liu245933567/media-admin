@@ -1,16 +1,16 @@
-import type { SubtitleWebRow } from '@/types/api'
+import type { SubtitleWebRow } from '@/api'
 import { DownloadOutlined } from '@ant-design/icons'
 import { ProTable } from '@ant-design/pro-components'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { App, Button, Modal, Tooltip } from 'antd'
 import { useState } from 'react'
-import { downloadSubtitleToDiskApi, searchSubtitlesApi } from '@/request'
+import { downloadSubtitleWeb, searchSubtitleWeb } from '@/api'
 
 function DownloadButton({ videoPath, subtitle, onDownloaded }: { videoPath: string, subtitle: SubtitleWebRow, onDownloaded?: () => void }) {
   const { message } = App.useApp()
 
   const downloadSubtitleToDiskMutation = useMutation({
-    mutationFn: downloadSubtitleToDiskApi,
+    mutationFn: (body: Parameters<typeof downloadSubtitleWeb>[0]) => downloadSubtitleWeb(body),
     onSuccess: (data) => {
       message.success(`已下载 ${data.subtitle_path}`)
       onDownloaded?.()
@@ -48,7 +48,7 @@ export function SubtitleWebModal({
 
   const subtitleWebSearchQuery = useQuery({
     queryKey: ['subtitle-web-search', videoPath],
-    queryFn: () => searchSubtitlesApi({ video_path: videoPath }),
+    queryFn: () => searchSubtitleWeb({ video_path: videoPath }),
     enabled: false,
   })
 

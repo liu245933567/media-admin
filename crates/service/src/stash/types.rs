@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::filter::StashSceneFilterType;
 
 /// Stash 连接配置（持久化于应用 `AppConfig`）。
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashConnectConfig {
     /// 实例根地址，如 `http://127.0.0.1:9999`
     pub base_url: String,
@@ -30,7 +31,7 @@ fn default_list_page_size() -> i32 {
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct StashSceneListReq {
     pub filter: StashFilter,
     /// 对应 GraphQL `SceneFilterType`
@@ -43,7 +44,7 @@ pub struct StashSceneListReq {
 
 /// Stash 场景列表查询（分页字段与 ProTable 对齐，服务端映射为 Stash `FindFilterType`）
 #[typeshare::typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct StashFilter {
     #[serde(default = "default_list_page")]
     pub page: i32,
@@ -56,14 +57,14 @@ pub struct StashFilter {
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashSceneFile {
     pub path: String,
     pub basename: String,
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashScenePaths {
     pub screenshot: String,
     pub preview: String,
@@ -77,7 +78,7 @@ pub struct StashScenePaths {
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashSceneRow {
     pub id: String,
     pub title: String,

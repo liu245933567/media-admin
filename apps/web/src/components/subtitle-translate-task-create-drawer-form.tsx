@@ -1,4 +1,4 @@
-import type { SubtitleTranslateConfig, SubtitleTranslateJobReq } from '@/types/api'
+import type { SubtitleTranslateConfig, SubtitleTranslateJobReq } from '@/api'
 import {
   DrawerForm,
   ProFormDigit,
@@ -9,7 +9,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { App, Checkbox } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import { appConfigQueryKey, enqueueSubtitleTranslate, fetchAppConfig } from '@/request'
+import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, translateJobs } from '@/api'
 
 export interface SubtitleTranslateTaskCreateDrawerFormProps {
   open: boolean
@@ -28,8 +28,8 @@ export function SubtitleTranslateTaskCreateDrawerForm(
   const [inheritGlobal, setInheritGlobal] = useState(true)
 
   const appCfgQuery = useQuery({
-    queryKey: appConfigQueryKey,
-    queryFn: fetchAppConfig,
+    queryKey: getGetAppConfigSettingsQueryKey(),
+    queryFn: getAppConfigSettings,
     enabled: props.open,
     staleTime: 60 * 1000,
   })
@@ -102,7 +102,7 @@ export function SubtitleTranslateTaskCreateDrawerForm(
               },
             }
         try {
-          await enqueueSubtitleTranslate(body)
+          await translateJobs(body)
           message.success('已提交翻译任务')
           props.onCreated?.()
           return true

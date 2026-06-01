@@ -4,22 +4,22 @@ import type {
   SubtitleGenerateConfig,
   SubtitleTranslateConfig,
   VadConfig,
-} from '@/types'
+} from '@/api'
 import { DrawerForm } from '@ant-design/pro-components'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, AutoComplete, Checkbox, Form } from 'antd'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 import {
-  fetchFsList,
-  fetchMediaRoots,
-  fetchSubtitleGenerateDefaults,
-  fetchWhisperModels,
-  mediaRootsQueryKey,
-  scanAndEnqueueSubtitleGenerate,
-  subtitleGenerateDefaultsQueryKey,
-  whisperModelsQueryKey,
-} from '@/request'
+  generateDefaultsJobs,
+  getGenerateDefaultsJobsQueryKey,
+  getListRootsMediaLibraryQueryKey,
+  getListWhisperModelsSetupQueryKey,
+  listFs,
+  listRootsMediaLibrary,
+  listWhisperModelsSetup,
+  scanGenerateJobs,
+} from '@/api'
+import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
 
 type ScanGenerateSubtitleFormValues = SubtitleGenerateConfig & {
   folder_path?: string
@@ -61,12 +61,14 @@ function parentPathOf(path: string): string | undefined {
   return value.slice(0, idx)
 }
 
-function isChildOfMediaRoot(folderPath: string, roots: MediaRootRow[]): boolean {
+function isMediaRootOrChild(folderPath: string, roots: MediaRootRow[]): boolean {
   const current = normalizePathForCompare(folderPath)
   return roots.some((root) => {
     const rootPath = normalizePathForCompare(root.path)
-    if (!rootPath || current === rootPath)
+    if (!rootPath)
       return false
+    if (current === rootPath)
+      return true
     return current.startsWith(`${rootPath}\\`) || current.startsWith(`${rootPath}/`)
   })
 }
@@ -94,21 +96,21 @@ export function ScanGenerateSubtitleDrawerForm({
   const [enableTranslate, setEnableTranslate] = useState(true)
 
   const rootsQuery = useQuery({
-    queryKey: mediaRootsQueryKey,
-    queryFn: fetchMediaRoots,
+    queryKey: getListRootsMediaLibraryQueryKey(),
+    queryFn: listRootsMediaLibrary,
     enabled: open,
   })
 
   const defaultsQuery = useQuery({
-    queryKey: subtitleGenerateDefaultsQueryKey,
-    queryFn: fetchSubtitleGenerateDefaults,
+    queryKey: getGenerateDefaultsJobsQueryKey(),
+    queryFn: generateDefaultsJobs,
     staleTime: 60 * 60 * 1000,
     enabled: open,
   })
 
   const whisperModelsQuery = useQuery({
-    queryKey: whisperModelsQueryKey,
-    queryFn: fetchWhisperModels,
+    queryKey: getListWhisperModelsSetupQueryKey(),
+    queryFn: listWhisperModelsSetup,
     enabled: open,
   })
 
@@ -208,7 +210,7 @@ export function ScanGenerateSubtitleDrawerForm({
       return
 
     try {
-      const children = await fetchFsList({ parent_path: parentPath })
+      const children = await listFs({ parent_path: parentPath })
       setFolderOptions(dirOptions(children))
     }
     catch {
@@ -242,12 +244,12 @@ export function ScanGenerateSubtitleDrawerForm({
             message.error('请输入文件夹路径')
             return false
           }
-          if (!isChildOfMediaRoot(nextFolderPath, rootsQuery.data ?? [])) {
-            message.error('文件夹必须是已配置媒体文件夹列表里的子文件夹')
+          if (!isMediaRootOrChild(nextFolderPath, rootsQuery.data ?? [])) {
+            message.error('文件夹必须是已配置媒体文件夹或其子文件夹')
             return false
           }
 
-          const res = await scanAndEnqueueSubtitleGenerate({
+          const res = await scanGenerateJobs({
             folder_path: nextFolderPath,
             config: buildConfig(values),
             skip_if_exists: true,
@@ -273,7 +275,7 @@ export function ScanGenerateSubtitleDrawerForm({
         className="mb-4"
         type="info"
         showIcon
-        message="将先扫描指定子文件夹并更新媒体库，再把无字幕视频批量加入字幕生成队列。"
+        message="将先扫描指定媒体文件夹并更新媒体库，再把无字幕视频批量加入字幕生成队列。"
       />
       <Form.Item
         name="folder_path"
@@ -285,15 +287,15 @@ export function ScanGenerateSubtitleDrawerForm({
               const next = String(value ?? '').trim()
               if (!next)
                 throw new Error('请输入文件夹路径')
-              if (!isChildOfMediaRoot(next, rootsQuery.data ?? []))
-                throw new Error('文件夹必须是已配置媒体文件夹列表里的子文件夹')
+              if (!isMediaRootOrChild(next, rootsQuery.data ?? []))
+                throw new Error('文件夹必须是已配置媒体文件夹或其子文件夹')
             },
           },
         ]}
       >
         <AutoComplete
           options={folderOptions}
-          placeholder="输入或选择已配置媒体根目录下的子文件夹"
+          placeholder="输入或选择已配置媒体文件夹或其子文件夹"
           onSearch={(value) => {
             void loadFolderSuggestions(value)
           }}

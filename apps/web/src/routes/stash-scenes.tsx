@@ -1,15 +1,50 @@
-import type { FetchStashScenesParams } from '@/request/stash'
-import type { StashSceneRow } from '@/types'
+import type { ProTableProps } from '@ant-design/pro-components'
+import type { SortOrder } from 'antd/es/table/interface'
+import type { StashFilter, StashSceneRow } from '@/api'
 import { PageContainer, ProTable } from '@ant-design/pro-components'
 import { createFileRoute } from '@tanstack/react-router'
 import { Switch } from 'antd'
 import { useState } from 'react'
+import { listScenesStash } from '@/api'
 import { StashSceneCover } from '@/components/stash-scene-cover'
-import { fetchStashScenes } from '@/request'
+
+interface FetchStashScenesParams {
+  q?: string
+}
 
 export const Route = createFileRoute('/stash-scenes')({
   component: PageComponent,
 })
+
+function toStashSortOrder(sort: Record<string, SortOrder>): Pick<StashFilter, 'sort' | 'direction'> {
+  const firstKey = Object.keys(sort)[0]
+  if (!firstKey) {
+    return {}
+  }
+  return {
+    sort: firstKey,
+    direction: sort[firstKey] === 'ascend' ? 'ASC' : 'DESC',
+  }
+}
+
+const requestStashScenes: ProTableProps<StashSceneRow, FetchStashScenesParams>['request'] = async (params, sort) => {
+  const res = await listScenesStash({
+    filter: {
+      page: params.current ?? 1,
+      page_size: params.pageSize ?? 20,
+      q: params.q,
+      sort: 'updated_at',
+      direction: 'DESC',
+      ...toStashSortOrder(sort),
+    },
+  })
+
+  return {
+    data: res.data,
+    success: true,
+    total: res.total,
+  }
+}
 
 function PageComponent() {
   const [screenshotShow, setScreenshotShow] = useState(false)
@@ -17,7 +52,7 @@ function PageComponent() {
   return (
     <PageContainer pageHeaderRender={() => null}>
       <ProTable<StashSceneRow, FetchStashScenesParams>
-        request={fetchStashScenes}
+        request={requestStashScenes}
         search={
           {
             filterType: 'light',

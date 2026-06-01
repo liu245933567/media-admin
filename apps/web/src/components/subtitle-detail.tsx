@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { App, Button, Drawer, Popconfirm, Result, Space, Spin } from 'antd'
 import { useMemo, useState } from 'react'
-import { fetchFsDeleteSubtitleApi, fetchFsReadText } from '@/request'
+import { deleteSubtitleFs, readTextFs } from '@/api'
 import { deserializeSubtitleText } from '@/utils/subtitle'
 
 export interface SubtitleDetailModalProps {
@@ -21,13 +21,13 @@ export function SubtitleDetailModal({ trigger, subtitlePath, onDeleted }: Subtit
 
   const fsReadTextQuery = useMutation({
     mutationFn: async () => {
-      const res = await fetchFsReadText({ path: subtitlePath })
+      const res = await readTextFs({ path: subtitlePath })
       return deserializeSubtitleText(res.content)
     },
   })
 
   const deleteSubtitleMutation = useMutation({
-    mutationFn: fetchFsDeleteSubtitleApi,
+    mutationFn: (body: Parameters<typeof deleteSubtitleFs>[0]) => deleteSubtitleFs(body),
     onSuccess: () => {
       message.success('字幕文件已删除')
       setOpen(false)

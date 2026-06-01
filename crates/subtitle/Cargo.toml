@@ -25,3 +25,4 @@ async-openai = { version = "0.38.0", default-features = false, features = [
 media-admin-whisper = { path = "../../crates/whisper" }
 media-admin-utils = { path = "../../crates/utils" }
 typeshare = "1.0.5"
+utoipa.workspace = true

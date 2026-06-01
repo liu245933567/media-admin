@@ -5,7 +5,7 @@ import type {
   TaskmillTaskProgress,
   TaskmillTaskRecord,
   TaskmillTaskStatus,
-} from '@/types/taskmill-snapshot'
+} from '@/api'
 import { useMutation } from '@tanstack/react-query'
 import {
   App,
@@ -24,7 +24,7 @@ import {
   Typography,
 } from 'antd'
 import { useMemo } from 'react'
-import { cancelTaskmillTask } from '@/request'
+import { cancelTaskJobs } from '@/api'
 import { transStatus } from './taskmill-active-tasks-panel'
 
 function formatDuration(d: TaskmillSerdeDuration | null | undefined): string {
@@ -66,7 +66,7 @@ export function TaskmillSnapshotPanel({
   const { message } = App.useApp()
 
   const cancelMutation = useMutation({
-    mutationFn: cancelTaskmillTask,
+    mutationFn: (id: number) => cancelTaskJobs(id),
     onSuccess: (res) => {
       if (res.cancelled) {
         message.success('已取消任务')

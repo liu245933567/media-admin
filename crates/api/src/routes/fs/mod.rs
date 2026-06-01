@@ -16,6 +16,7 @@ use ma_service::fs::{
     stream_local_video, video_transcode_status,
 };
 use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
 pub fn routes() -> StateRouter {
     Router::new()
@@ -35,7 +36,15 @@ pub fn routes() -> StateRouter {
         .route("/video/transcoded", get(video_transcoded_stream_handler))
 }
 
-async fn list_handler(
+#[utoipa::path(
+    post,
+    path = "/api/fs/list",
+    operation_id = "listFs",
+    tag = "fs",
+    request_body = FsListReq,
+    responses((status = 200, body = Vec<FsListItem>))
+)]
+pub(crate) async fn list_handler(
     WithRejection(Json(body), _): WithRejection<Json<FsListReq>, AppError>,
 ) -> Result<Json<Vec<FsListItem>>, AppError> {
     let resp = get_fs_list(body.parent_path).await?;
@@ -43,14 +52,30 @@ async fn list_handler(
     Ok(Json(resp))
 }
 
-async fn read_text_handler(
+#[utoipa::path(
+    post,
+    path = "/api/fs/read-text",
+    operation_id = "readTextFs",
+    tag = "fs",
+    request_body = FsReadTextReq,
+    responses((status = 200, body = FsReadTextRes))
+)]
+pub(crate) async fn read_text_handler(
     WithRejection(Json(body), _): WithRejection<Json<FsReadTextReq>, AppError>,
 ) -> Result<Json<FsReadTextRes>, AppError> {
     let resp = read_text_file(body.path).await?;
     Ok(Json(resp))
 }
 
-async fn delete_subtitle_handler(
+#[utoipa::path(
+    post,
+    path = "/api/fs/delete-subtitle",
+    operation_id = "deleteSubtitleFs",
+    tag = "fs",
+    request_body = FsDeleteReq,
+    responses((status = 200, body = FsDeleteRes))
+)]
+pub(crate) async fn delete_subtitle_handler(
     WithRejection(Json(body), _): WithRejection<Json<FsDeleteReq>, AppError>,
 ) -> Result<Json<FsDeleteRes>, AppError> {
     let resp = delete_subtitle_file(body.path)
@@ -59,8 +84,8 @@ async fn delete_subtitle_handler(
     Ok(Json(resp))
 }
 
-#[derive(Debug, Deserialize)]
-struct VideoPathQuery {
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub(crate) struct VideoPathQuery {
     path: String,
 }
 
@@ -77,7 +102,15 @@ async fn video_stream_handler(
     video_stream_response(streamed)
 }
 
-async fn video_probe_handler(
+#[utoipa::path(
+    get,
+    path = "/api/fs/video/probe",
+    operation_id = "probeVideoFs",
+    tag = "fs",
+    params(VideoPathQuery),
+    responses((status = 200, body = VideoPlaybackProbeRes))
+)]
+pub(crate) async fn video_probe_handler(
     Query(q): Query<VideoPathQuery>,
 ) -> Result<Json<VideoPlaybackProbeRes>, AppError> {
     let res = probe_video_playback(q.path)
@@ -86,7 +119,15 @@ async fn video_probe_handler(
     Ok(Json(res))
 }
 
-async fn video_transcode_status_handler(
+#[utoipa::path(
+    get,
+    path = "/api/fs/video/transcode/status",
+    operation_id = "videoTranscodeStatusFs",
+    tag = "fs",
+    params(VideoPathQuery),
+    responses((status = 200, body = VideoTranscodeStatusRes))
+)]
+pub(crate) async fn video_transcode_status_handler(
     Query(q): Query<VideoPathQuery>,
 ) -> Result<Json<VideoTranscodeStatusRes>, AppError> {
     let res = video_transcode_status(q.path)
@@ -95,7 +136,15 @@ async fn video_transcode_status_handler(
     Ok(Json(res))
 }
 
-async fn video_transcode_start_handler(
+#[utoipa::path(
+    post,
+    path = "/api/fs/video/transcode/start",
+    operation_id = "startVideoTranscodeFs",
+    tag = "fs",
+    params(VideoPathQuery),
+    responses((status = 200, body = VideoTranscodeStatusRes))
+)]
+pub(crate) async fn video_transcode_start_handler(
     Query(q): Query<VideoPathQuery>,
 ) -> Result<Json<VideoTranscodeStatusRes>, AppError> {
     let res = start_video_transcode(q.path)

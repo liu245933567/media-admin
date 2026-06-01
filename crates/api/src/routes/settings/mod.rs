@@ -15,13 +15,28 @@ pub fn routes() -> StateRouter {
 }
 
 /// 返回当前全局配置。
-async fn get_app_config(State(state): State<AppState>) -> Result<Json<AppConfig>, AppError> {
+#[utoipa::path(
+    get,
+    path = "/api/settings/app-config",
+    operation_id = "getAppConfigSettings",
+    tag = "settings",
+    responses((status = 200, body = AppConfig))
+)]
+pub(crate) async fn get_app_config(State(state): State<AppState>) -> Result<Json<AppConfig>, AppError> {
     let c = state.app_config.read().await.clone();
     Ok(Json(c))
 }
 
 /// 更新全局配置并持久化；`api_key` 为空则保留原密钥。
-async fn put_app_config(
+#[utoipa::path(
+    put,
+    path = "/api/settings/app-config",
+    operation_id = "putAppConfigSettings",
+    tag = "settings",
+    request_body = AppConfig,
+    responses((status = 200, body = AppConfig))
+)]
+pub(crate) async fn put_app_config(
     State(state): State<AppState>,
     WithRejection(Json(incoming), _): WithRejection<Json<AppConfig>, AppError>,
 ) -> Result<Json<AppConfig>, AppError> {

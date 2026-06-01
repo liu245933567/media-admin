@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 /// whisper 语音识别结果 - 列表单项
 #[derive(Clone)]
@@ -24,7 +25,7 @@ pub struct WhisperTranscribeOutput {
 
 /// whisper 引擎运行时配置（影响模型加载，启动期决定）
 #[typeshare]
-#[derive(Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Hash, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct WhisperEngineConfig {
     /// 模型文件名
     pub model_filename: String,
@@ -51,7 +52,7 @@ impl Default for WhisperEngineConfig {
 
 /// whisper 解码可调参数（影响每次 transcribe 行为）
 #[typeshare]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct WhisperTranscribeConfig {
     /// 语言代码：
     /// - `None`：完全用 whisper.cpp 编译默认（通常是 "en"），不调用 `set_xxx`。
@@ -102,7 +103,7 @@ impl Default for WhisperTranscribeConfig {
 
 /// VAD 配置
 #[typeshare]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct VadConfig {
     /// 帧长 10/20/30（默认 30）
     pub frame_ms: u16,

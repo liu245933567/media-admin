@@ -2,10 +2,11 @@ use ma_utils::config::{get_translate_openai_api_key, get_translate_openai_base};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 /// 翻译选项
 #[typeshare]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct SubtitleTranslateConfig {
     /// 调用模型的基础 URL
     pub base_url: String,
@@ -47,7 +48,7 @@ pub struct SubtitleGenerateItem {
 }
 
 #[typeshare]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct SubtitleGenerateConfig {
     pub vad_config: Option<VadConfig>,
     pub whisper_engine_config: Option<WhisperEngineConfig>,

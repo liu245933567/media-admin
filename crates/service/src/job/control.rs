@@ -3,23 +3,24 @@
 use anyhow::{Context, bail};
 use serde::Serialize;
 use taskmill::{PauseReasons, TaskRecord, TaskStatus};
+use utoipa::ToSchema;
 
 use super::storage::TaskmillRuntime;
 
 /// 通用成功响应。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillControlOk {
     pub ok: bool,
 }
 
 /// 取消任务结果。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillCancelRes {
     pub cancelled: bool,
 }
 
 /// 删除历史记录结果。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillDeleteHistoryRes {
     pub deleted: bool,
 }
