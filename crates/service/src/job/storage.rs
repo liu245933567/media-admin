@@ -16,11 +16,15 @@ use tokio_util::sync::CancellationToken;
 use utoipa::ToSchema;
 
 use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
-use super::spawn::{SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor};
+use super::spawn::{
+    SubtitleTranslateExecutor, VideoSubtitleExtractWavExecutor, VideoSubtitleGenerateExecutor,
+    VideoSubtitleRecognizeExecutor,
+};
 use super::types::{
     FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_SUBTITLE_PIPELINE,
     GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
-    VideoSubtitleGenerateTask, WhisperModelDownloadTask,
+    VideoSubtitleExtractWavTask, VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
+    WhisperModelDownloadTask,
 };
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -147,6 +151,8 @@ impl TaskmillRuntime {
             .domain(
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
+                    .task::<VideoSubtitleExtractWavTask>(VideoSubtitleExtractWavExecutor)
+                    .task::<VideoSubtitleRecognizeTask>(VideoSubtitleRecognizeExecutor)
                     .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
                     .task::<MediaLibraryScanTask>(media_scan_exec)
                     .task::<WhisperModelDownloadTask>(whisper_dl_exec)

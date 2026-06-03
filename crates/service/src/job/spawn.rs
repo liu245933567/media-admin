@@ -2,14 +2,20 @@
 
 use std::path::Path;
 
-use ma_subtitle::pipeline::generate_subtitle_pipeline;
+use ma_subtitle::generate::{pending_translate_from, write_srt_from_recognize};
+use ma_subtitle::segment_filter::sanitize_whisper_segments;
 use ma_subtitle::translate::translate_srt_file;
+use ma_whisper::decode_gate::acquire_decode_permit;
 use ma_whisper::engine_cache::spawn_idle_eviction_loop;
+use ma_whisper::generate::recognize_wav_voice;
+use ma_whisper::wav::extract_wav_i16_mono16k;
 use taskmill::{DomainTaskContext, TaskError, TypedExecutor};
+use tokio::task::spawn_blocking;
 
 use super::storage::{MediaLibraryScanDeps, TaskmillRuntime};
 use super::types::{
-    MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob, VideoSubtitleGenerateTask,
+    MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob, VideoSubtitleExtractWavTask,
+    VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
 };
 
 pub struct VideoSubtitleGenerateExecutor;
@@ -26,43 +32,178 @@ impl TypedExecutor<VideoSubtitleGenerateTask> for VideoSubtitleGenerateExecutor 
         }
 
         ctx.progress()
-            .report(0.05, Some(format!("开始字幕流水线: {video_path}")));
+            .report(0.05, Some(format!("开始字幕流水线编排: {video_path}")));
         ctx.check_cancelled()?;
 
-        let path = Path::new(video_path);
-        let config = job.config.clone();
+        ctx.spawn_child_with(VideoSubtitleExtractWavTask {
+            video_path: video_path.to_string(),
+            config: job.config,
+        })
+        .await
+        .map_err(|e| TaskError::retryable(format!("入队音频提取子任务失败: {e:#}")))?;
 
-        let outcome = generate_subtitle_pipeline(path, &config)
+        ctx.progress()
+            .report(0.2, Some("已入队音频提取子任务".into()));
+        Ok(())
+    }
+
+    async fn finalize(
+        &self,
+        job: VideoSubtitleGenerateTask,
+        _memo: (),
+        ctx: DomainTaskContext<'_, MediaJobsDomain>,
+    ) -> Result<(), TaskError> {
+        ctx.progress()
+            .report(1.0, Some(format!("字幕流水线全部完成: {}", job.video_path)));
+        Ok(())
+    }
+}
+
+pub struct VideoSubtitleExtractWavExecutor;
+
+impl TypedExecutor<VideoSubtitleExtractWavTask> for VideoSubtitleExtractWavExecutor {
+    async fn execute(
+        &self,
+        job: VideoSubtitleExtractWavTask,
+        ctx: DomainTaskContext<'_, MediaJobsDomain>,
+    ) -> Result<(), TaskError> {
+        let video_path = job.video_path.trim();
+        if video_path.is_empty() {
+            return Err(TaskError::permanent("video_path 不能为空"));
+        }
+
+        ctx.progress()
+            .report(0.05, Some(format!("开始提取 WAV: {video_path}")));
+        ctx.check_cancelled()?;
+
+        let wav_path = extract_wav_i16_mono16k(Path::new(video_path), None)
             .await
             .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
 
-        let srt_hint = outcome
-            .items
-            .first()
-            .map(|i| i.srt_path.as_str())
-            .unwrap_or("");
         ctx.progress()
-            .report(0.9, Some(format!("已生成源字幕: {srt_hint}")));
+            .report(0.9, Some(format!("WAV 缓存完成: {}", wav_path.display())));
         ctx.check_cancelled()?;
 
-        if let Some(pending) = outcome.pending_translate {
-            ctx.domain::<MediaJobsDomain>()
-                .submit(SubtitleTranslateJob {
-                    source_srt_path: pending.source_srt_path.clone(),
-                    config: pending.config,
-                })
-                .await
-                .map_err(|e| TaskError::retryable(format!("入队翻译任务失败: {e:#}")))?;
+        ctx.spawn_sibling_with(VideoSubtitleRecognizeTask {
+            video_path: video_path.to_string(),
+            wav_path: wav_path.display().to_string(),
+            config: job.config,
+        })
+        .await
+        .map_err(|e| TaskError::retryable(format!("入队识别子任务失败: {e:#}")))?;
+
+        ctx.progress().report(1.0, Some("已入队识别子任务".into()));
+        Ok(())
+    }
+}
+
+pub struct VideoSubtitleRecognizeExecutor;
+
+async fn remove_wav_cache_best_effort(wav_path: &str) {
+    if wav_path.trim().is_empty() {
+        return;
+    }
+    if let Err(e) = tokio::fs::remove_file(wav_path).await {
+        tracing::warn!(wav = wav_path, error = %e, "删除 WAV 缓存失败");
+    }
+}
+
+impl TypedExecutor<VideoSubtitleRecognizeTask> for VideoSubtitleRecognizeExecutor {
+    async fn execute(
+        &self,
+        job: VideoSubtitleRecognizeTask,
+        ctx: DomainTaskContext<'_, MediaJobsDomain>,
+    ) -> Result<(), TaskError> {
+        let video_path = job.video_path.trim();
+        let wav_path = job.wav_path.trim();
+        if video_path.is_empty() {
+            return Err(TaskError::permanent("video_path 不能为空"));
+        }
+        if wav_path.is_empty() {
+            return Err(TaskError::permanent("wav_path 不能为空"));
+        }
+
+        ctx.progress()
+            .report(0.05, Some(format!("开始 VAD + Whisper 识别: {wav_path}")));
+        ctx.check_cancelled()?;
+
+        let vad_config = job.config.vad_config.clone();
+        let whisper_engine_config = job.config.whisper_engine_config.clone();
+        let whisper_transcribe_config = job.config.whisper_transcribe_config.clone();
+        let wav_path_buf = Path::new(wav_path).to_path_buf();
+
+        let decode_permit = acquire_decode_permit()
+            .await
+            .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
+
+        let recognize_res = spawn_blocking(move || {
+            let _decode_permit = decode_permit;
+            recognize_wav_voice(
+                &wav_path_buf,
+                vad_config,
+                whisper_engine_config,
+                whisper_transcribe_config,
+            )
+        })
+        .await
+        .map_err(|e| TaskError::retryable(format!("Whisper 任务 join 失败: {e:#}")))?
+        .map_err(|e| TaskError::retryable(format!("{e:#}")));
+        let recognize_output = match recognize_res {
+            Ok(out) => out,
+            Err(e) => {
+                remove_wav_cache_best_effort(wav_path).await;
+                return Err(e);
+            }
+        };
+
+        let detected_lang = recognize_output.lang.clone();
+        let source_items = sanitize_whisper_segments(recognize_output.items.clone());
+        let outcome = write_srt_from_recognize(video_path, recognize_output, None)
+            .await
+            .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
+
+        remove_wav_cache_best_effort(wav_path).await;
+
+        let srt_path = outcome
+            .items
+            .first()
+            .map(|i| i.srt_path.clone())
+            .ok_or_else(|| TaskError::retryable("识别未返回 SRT 路径"))?;
+
+        ctx.progress()
+            .report(0.9, Some(format!("已生成源字幕: {srt_path}")));
+        ctx.check_cancelled()?;
+
+        if let Some(pending) = pending_translate_from(
+            Path::new(&srt_path),
+            detected_lang.as_deref(),
+            &source_items,
+            job.config.translate_config.as_ref(),
+        ) {
+            ctx.spawn_sibling_with(SubtitleTranslateJob {
+                source_srt_path: pending.source_srt_path.clone(),
+                config: pending.config,
+            })
+            .await
+            .map_err(|e| TaskError::retryable(format!("入队翻译子任务失败: {e:#}")))?;
+
             ctx.progress().report(
                 0.95,
-                Some(format!(
-                    "已入队翻译任务（独立调度）: {}",
-                    pending.source_srt_path
-                )),
+                Some(format!("已入队翻译子任务: {}", pending.source_srt_path)),
             );
         }
 
-        ctx.progress().report(1.0, Some("字幕生成完成".into()));
+        ctx.progress().report(1.0, Some("识别子任务完成".into()));
+        Ok(())
+    }
+
+    async fn on_cancel(
+        &self,
+        job: VideoSubtitleRecognizeTask,
+        _ctx: DomainTaskContext<'_, MediaJobsDomain>,
+    ) -> Result<(), TaskError> {
+        let wav_path = job.wav_path.trim();
+        remove_wav_cache_best_effort(wav_path).await;
         Ok(())
     }
 }

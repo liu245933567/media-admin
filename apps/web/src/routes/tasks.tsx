@@ -4,11 +4,11 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import { Button, Card, Chip, Label, Switch } from '@heroui/react'
+import { Button, Chip, Label, Switch } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   activeTasksJobs,
   execLogJobs,
@@ -24,17 +24,12 @@ import { useAppToast } from '@/components/app-toast'
 import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
-import { TaskmillActiveTasksPanel } from '@/components/taskmill-active-tasks-panel'
 import { TaskmillExecLogPanel } from '@/components/taskmill-demo-exec-log-panel'
-import { TaskmillHistoryPanel } from '@/components/taskmill-demo-history-panel'
-import { TaskmillSnapshotPanel } from '@/components/taskmill-demo-snapshot-panel'
 import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
 
 const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
 const activeQueryParams = { limit: 200 } as const
-
-type TaskTab = 'snapshot' | 'active' | 'history' | 'exec-log'
 
 export const Route = createFileRoute('/tasks')({
   component: PageComponent,
@@ -46,8 +41,6 @@ function PageComponent() {
   const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
   const [execLogAutoRefresh, setExecLogAutoRefresh] = useState(true)
-  const [taskTypeFilter] = useState<string | undefined>()
-  const [activeTab, setActiveTab] = useState<TaskTab>('snapshot')
 
   const snapshotQuery = useQuery({
     queryKey: getSnapshotJobsQueryKey(),
@@ -73,25 +66,11 @@ function PageComponent() {
     refetchInterval: execLogAutoRefresh ? 1200 : false,
   })
 
-  const filteredHistory = useMemo(() => {
-    const list = historyQuery.data ?? []
-    if (!taskTypeFilter) {
-      return list
-    }
-    return list.filter(r => r.task_type === taskTypeFilter)
-  }, [historyQuery.data, taskTypeFilter])
-
-  const filteredActive = useMemo(() => {
-    const list = activeQuery.data ?? []
-    if (!taskTypeFilter) {
-      return list
-    }
-    return list.filter(r => r.task_type === taskTypeFilter)
-  }, [activeQuery.data, taskTypeFilter])
-
   const runningCount = snapshotQuery.data?.scheduler.running.length ?? 0
   const pendingCount = snapshotQuery.data?.scheduler.pending_count ?? 0
   const activeCount = activeQuery.data?.length ?? 0
+  const completedCount = snapshotQuery.data?.metrics.completed ?? 0
+  const failedCount = snapshotQuery.data?.metrics.failed ?? 0
 
   function refreshAll() {
     void snapshotQuery.refetch()
@@ -99,13 +78,6 @@ function PageComponent() {
     void historyQuery.refetch()
     void execLogQuery.refetch()
   }
-
-  const tabs: { key: TaskTab, label: string }[] = [
-    { key: 'snapshot', label: '队列与执行中' },
-    { key: 'active', label: '活跃任务' },
-    { key: 'history', label: '任务历史' },
-    { key: 'exec-log', label: '调度事件' },
-  ]
 
   return (
     <AppPage
@@ -152,18 +124,12 @@ function PageComponent() {
           }}
         />
 
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {tabs.map(tab => (
-              <Button
-                key={tab.key}
-                size="sm"
-                variant={activeTab === tab.key ? 'primary' : 'tertiary'}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                {tab.label}
-              </Button>
-            ))}
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-secondary px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <h2 className="m-0 text-lg font-semibold">执行过程</h2>
+            <p className="m-0 mt-1 text-sm text-muted">
+              以 pipeline 列表查看任务状态、阶段和执行日志。
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Chip color={runningCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
@@ -178,69 +144,34 @@ function PageComponent() {
               活跃
               {activeCount}
             </Chip>
+            <Chip color={completedCount > 0 ? 'success' : 'default'} size="sm" variant="soft">
+              已完成
+              {completedCount}
+            </Chip>
+            <Chip color={failedCount > 0 ? 'danger' : 'default'} size="sm" variant="soft">
+              失败
+              {failedCount}
+            </Chip>
             {snapshotQuery.data?.scheduler.is_paused
               ? <Chip color="danger" size="sm" variant="soft">调度已暂停</Chip>
               : null}
+            <Switch isSelected={execLogAutoRefresh} onChange={setExecLogAutoRefresh}>
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+              <Switch.Content>
+                <Label className="text-sm">自动刷新</Label>
+              </Switch.Content>
+            </Switch>
           </div>
         </div>
 
-        {activeTab === 'snapshot'
-          ? (
-              <Card>
-                <Card.Content>
-                  <TaskmillSnapshotPanel
-                    data={snapshotQuery.data}
-                    loading={snapshotQuery.isLoading || snapshotQuery.isFetching}
-                    onChanged={refreshAll}
-                  />
-                </Card.Content>
-              </Card>
-            )
-          : null}
-
-        {activeTab === 'active'
-          ? (
-              <TaskmillActiveTasksPanel
-                items={filteredActive}
-                loading={activeQuery.isLoading || activeQuery.isFetching}
-                onChanged={refreshAll}
-              />
-            )
-          : null}
-
-        {activeTab === 'history'
-          ? (
-              <TaskmillHistoryPanel
-                items={filteredHistory}
-                loading={historyQuery.isLoading || historyQuery.isFetching}
-                onChanged={refreshAll}
-              />
-            )
-          : null}
-
-        {activeTab === 'exec-log'
-          ? (
-              <Card>
-                <Card.Header className="items-center justify-between">
-                  <Card.Title>调度事件</Card.Title>
-                  <Switch isSelected={execLogAutoRefresh} onChange={setExecLogAutoRefresh}>
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                    <Switch.Content>
-                      <Label className="text-sm">自动刷新</Label>
-                    </Switch.Content>
-                  </Switch>
-                </Card.Header>
-                <Card.Content>
-                  <TaskmillExecLogPanel
-                    items={execLogQuery.data}
-                    loading={execLogQuery.isLoading || execLogQuery.isFetching}
-                  />
-                </Card.Content>
-              </Card>
-            )
-          : null}
+        <TaskmillExecLogPanel
+          items={execLogQuery.data}
+          activeItems={activeQuery.data}
+          historyItems={historyQuery.data}
+          loading={execLogQuery.isLoading || execLogQuery.isFetching}
+        />
       </div>
     </AppPage>
   )

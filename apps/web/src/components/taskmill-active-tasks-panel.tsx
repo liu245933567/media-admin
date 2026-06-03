@@ -47,6 +47,8 @@ const JOB_TYPE_LABELS: Record<string, string> = {
   'media-jobs::whisper-model-download': '下载 Whisper 模型',
   'media-jobs::ffmpeg-setup-download': '下载 FFmpeg',
   'media-jobs::video-subtitle-generate': '字幕生成',
+  'media-jobs::video-subtitle-extract-wav': '提取音频',
+  'media-jobs::video-subtitle-recognize': '识别字幕',
   'media-jobs::subtitle-translate': '字幕翻译',
 }
 
@@ -71,6 +73,60 @@ function TooltipText({
 
 export function transJobType(type: string): string {
   return JOB_TYPE_LABELS[type] ?? type.split('::').pop() ?? ''
+}
+
+export interface TaskmillTaskTreeRow<T extends { id: number, parent_id: number | null }> {
+  item: T
+  depth: number
+}
+
+export function flattenTaskTree<T extends { id: number, parent_id: number | null }>(
+  items: T[] | undefined,
+): Array<TaskmillTaskTreeRow<T>> {
+  const source = items ?? []
+  const childrenByParent = new Map<number | null, T[]>()
+  const byId = new Map<number, T>()
+
+  for (const item of source) {
+    byId.set(item.id, item)
+  }
+
+  for (const item of source) {
+    const parentId = item.parent_id != null && byId.has(item.parent_id) ? item.parent_id : null
+    const children = childrenByParent.get(parentId) ?? []
+    children.push(item)
+    childrenByParent.set(parentId, children)
+  }
+
+  const rows: Array<TaskmillTaskTreeRow<T>> = []
+  const visit = (task: T, depth: number) => {
+    rows.push({ item: task, depth })
+    for (const child of childrenByParent.get(task.id) ?? []) {
+      visit(child, depth + 1)
+    }
+  }
+
+  for (const root of childrenByParent.get(null) ?? []) {
+    visit(root, 0)
+  }
+
+  return rows
+}
+
+export function TaskHierarchyLabel({ depth }: { depth: number }) {
+  if (depth <= 0) {
+    return null
+  }
+
+  return (
+    <span
+      aria-hidden
+      className="inline-flex shrink-0 items-center text-muted"
+      style={{ width: depth * 18 }}
+    >
+      <span className="ml-auto mr-1 h-px w-3 bg-divider" />
+    </span>
+  )
 }
 
 export interface TaskmillActiveTasksPanelProps {
@@ -127,34 +183,38 @@ export function TaskmillActiveTasksPanel({
 
   const actionPending
     = cancelMutation.isPending || pauseMutation.isPending || resumeMutation.isPending
+  const treeRows = useMemo(() => flattenTaskTree(items), [items])
 
-  const columns: ColumnDef<TaskmillTaskRecord, unknown>[] = useMemo(
+  const columns: ColumnDef<TaskmillTaskTreeRow<TaskmillTaskRecord>, unknown>[] = useMemo(
     () => [
-      { header: 'ID', accessorKey: 'id', size: 72 },
+      { header: 'ID', accessorFn: row => row.item.id, size: 72 },
       {
         header: '类型',
-        accessorKey: 'task_type',
+        accessorFn: row => row.item.task_type,
         cell: ({ row }) => (
-          <TooltipText className="max-w-[180px] truncate" content={row.original.task_type}>
-            {transJobType(row.original.task_type)}
-          </TooltipText>
+          <div className="flex min-w-0 items-center">
+            <TaskHierarchyLabel depth={row.original.depth} />
+            <TooltipText className="max-w-[180px] truncate" content={row.original.item.task_type}>
+              {transJobType(row.original.item.task_type)}
+            </TooltipText>
+          </div>
         ),
       },
       {
         header: '标签',
-        accessorKey: 'label',
+        accessorFn: row => row.item.label,
         cell: ({ row }) => (
-          <TooltipText className="max-w-[220px] truncate" content={row.original.label}>
-            {row.original.label}
+          <TooltipText className="max-w-[220px] truncate" content={row.original.item.label}>
+            {row.original.item.label}
           </TooltipText>
         ),
       },
       {
         header: '状态',
-        accessorKey: 'status',
+        accessorFn: row => row.item.status,
         cell: ({ row }) => (
-          <Chip color={statusColor(row.original.status)} size="sm" variant="soft">
-            {transStatus(row.original.status)}
+          <Chip color={statusColor(row.original.item.status)} size="sm" variant="soft">
+            {transStatus(row.original.item.status)}
           </Chip>
         ),
       },
@@ -163,7 +223,7 @@ export function TaskmillActiveTasksPanel({
         id: 'action',
         enableSorting: false,
         cell: ({ row }) => {
-          const task = row.original
+          const task = row.original.item
           const cancelBtn = (
             <Button
               size="sm"
@@ -220,7 +280,7 @@ export function TaskmillActiveTasksPanel({
         },
       },
     ],
-    [actionPending, cancelMutation, pauseMutation, resumeMutation],
+    [actionPending, cancelMutation, confirm, pauseMutation, resumeMutation],
   )
 
   return (
@@ -228,9 +288,9 @@ export function TaskmillActiveTasksPanel({
       ariaLabel="活跃任务"
       loading={loading}
       columns={columns}
-      data={items ?? []}
+      data={treeRows}
       emptyText="当前无活跃任务"
-      getRowId={row => String(row.id)}
+      getRowId={row => String(row.item.id)}
       minWidth={820}
     />
   )

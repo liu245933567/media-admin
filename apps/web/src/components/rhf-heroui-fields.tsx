@@ -107,11 +107,13 @@ export function RhfNumberField<TFieldValues extends FieldValues, TName extends F
   minValue,
   maxValue,
   step,
+  variant,
   ...controllerProps
 }: BaseFieldProps<TFieldValues, TName> & {
   minValue?: number
   maxValue?: number
   step?: number
+  variant?: 'secondary' | 'primary'
 }) {
   return (
     <Controller
@@ -125,6 +127,7 @@ export function RhfNumberField<TFieldValues extends FieldValues, TName extends F
           minValue={minValue}
           name={field.name}
           step={step}
+          variant={variant}
           value={typeof field.value === 'number' ? field.value : undefined}
           onBlur={field.onBlur}
           onChange={field.onChange}

@@ -22,7 +22,9 @@ pub fn routes() -> StateRouter {
     tag = "settings",
     responses((status = 200, body = AppConfig))
 )]
-pub(crate) async fn get_app_config(State(state): State<AppState>) -> Result<Json<AppConfig>, AppError> {
+pub(crate) async fn get_app_config(
+    State(state): State<AppState>,
+) -> Result<Json<AppConfig>, AppError> {
     let c = state.app_config.read().await.clone();
     Ok(Json(c))
 }

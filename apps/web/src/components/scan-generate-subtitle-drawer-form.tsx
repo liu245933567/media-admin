@@ -286,14 +286,14 @@ export function ScanGenerateSubtitleDrawerForm({
 
   return (
     <Drawer.Backdrop isOpen={open} onOpenChange={onOpenChange}>
-      <Drawer.Content placement="right" className="sm:max-w-[960px]">
-        <Drawer.Dialog>
+      <Drawer.Content placement="right">
+        <Drawer.Dialog className="flex h-dvh w-full flex-col">
           <Drawer.CloseTrigger />
-          <Drawer.Header>
+          <Drawer.Header className="shrink-0">
             <Drawer.Heading>扫描并生成字幕</Drawer.Heading>
           </Drawer.Header>
-          <form onSubmit={form.handleSubmit(handleSubmit)}>
-            <Drawer.Body>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={form.handleSubmit(handleSubmit)}>
+            <Drawer.Body className="min-h-0 flex-1 overflow-y-auto">
               <div className="flex flex-col gap-5">
                 <Alert status="accent">
                   <Alert.Indicator />
@@ -361,7 +361,7 @@ export function ScanGenerateSubtitleDrawerForm({
                 />
               </div>
             </Drawer.Body>
-            <Drawer.Footer>
+            <Drawer.Footer className="shrink-0">
               <Button variant="secondary" onPress={() => onOpenChange(false)}>
                 取消
               </Button>

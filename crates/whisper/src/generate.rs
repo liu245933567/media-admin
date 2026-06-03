@@ -98,6 +98,165 @@ fn finalize_segments(
     }
 }
 
+/// 流式 VAD 状态：缓存最近 PCM，持续追踪当前语音段并产出可解码区间。
+struct StreamingVadState {
+    vad_config: VadConfig,
+    fallback_samples: Vec<i16>,
+    pending: Vec<i16>,
+    pending_start_sample: usize,
+    processed_until_sample: usize,
+    emitted_any: bool,
+    in_voice: bool,
+    current_start: usize,
+    last_voice_end: usize,
+    silence_samples: usize,
+    max_segment_samples: usize,
+}
+
+impl StreamingVadState {
+    /// 创建流式 VAD 状态。
+    fn new(vad_config: VadConfig) -> Self {
+        let max_segment_samples = if vad_config.max_segment_ms == 0 {
+            usize::MAX
+        } else {
+            (vad_config.max_segment_ms as usize) * 16
+        };
+        Self {
+            vad_config,
+            fallback_samples: Vec::new(),
+            pending: Vec::new(),
+            pending_start_sample: 0,
+            processed_until_sample: 0,
+            emitted_any: false,
+            in_voice: false,
+            current_start: 0,
+            last_voice_end: 0,
+            silence_samples: 0,
+            max_segment_samples,
+        }
+    }
+
+    /// 追加一个 PCM 块，并返回当前已完整闭合的语音区间。
+    fn push_chunk(&mut self, chunk: Vec<i16>) -> Result<Vec<(usize, Vec<i16>)>> {
+        if !self.emitted_any {
+            self.fallback_samples.extend_from_slice(&chunk);
+        }
+        self.pending.extend_from_slice(&chunk);
+        self.process(false)
+    }
+
+    /// 输入结束时冲刷最后一个未闭合的语音区间。
+    fn finish(mut self) -> Result<Vec<(usize, Vec<i16>)>> {
+        self.process(true)
+    }
+
+    /// 扫描 pending PCM，更新 VAD 状态并收集可提交区间。
+    fn process(&mut self, flush: bool) -> Result<Vec<(usize, Vec<i16>)>> {
+        let intervals = detect_vad_intervals_i16(&self.pending, &self.vad_config)?;
+        let mut ready = Vec::new();
+        let padding_samples = (self.vad_config.padding_ms as usize) * 16;
+        let min_speech_samples = (self.vad_config.min_speech_ms as usize).max(1) * 16;
+
+        for (local_start, local_end) in intervals {
+            let abs_start = self.pending_start_sample + local_start;
+            let abs_end = self.pending_start_sample + local_end;
+            if abs_end <= self.processed_until_sample {
+                continue;
+            }
+            if !self.in_voice {
+                self.in_voice = true;
+                self.current_start = abs_start.saturating_sub(padding_samples);
+            }
+            self.last_voice_end = self.last_voice_end.max(abs_end);
+            if self.last_voice_end.saturating_sub(self.current_start) >= self.max_segment_samples {
+                ready.extend(self.emit_current(self.last_voice_end, min_speech_samples));
+            }
+        }
+
+        let consumed_until = self.pending_start_sample + self.pending.len();
+        if self.in_voice {
+            self.silence_samples = consumed_until.saturating_sub(self.last_voice_end);
+            if self.silence_samples >= padding_samples {
+                let end = self
+                    .last_voice_end
+                    .saturating_add(padding_samples)
+                    .min(consumed_until);
+                ready.extend(self.emit_current(end, min_speech_samples));
+            }
+        }
+
+        if flush {
+            if self.in_voice {
+                ready.extend(self.emit_current(consumed_until, min_speech_samples));
+            } else if !self.emitted_any && !self.fallback_samples.is_empty() {
+                tracing::warn!("流式 VAD 未检出语音段，回退为整段转写");
+                self.emitted_any = true;
+                ready.push((0, std::mem::take(&mut self.fallback_samples)));
+            }
+        } else {
+            self.processed_until_sample = consumed_until;
+            self.trim_pending();
+        }
+
+        Ok(ready)
+    }
+
+    /// 将当前语音段转成绝对起点和 PCM 样本。
+    fn emit_current(
+        &mut self,
+        end_sample: usize,
+        min_speech_samples: usize,
+    ) -> Vec<(usize, Vec<i16>)> {
+        let start = self.current_start;
+        let end = end_sample.max(start);
+        self.in_voice = false;
+        self.silence_samples = 0;
+
+        if end.saturating_sub(start) < min_speech_samples {
+            return Vec::new();
+        }
+
+        match self.slice_abs(start, end) {
+            Some(samples) => {
+                self.emitted_any = true;
+                self.fallback_samples.clear();
+                vec![(start, samples)]
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// 按绝对采样位置从 pending PCM 中切出样本。
+    fn slice_abs(&self, start: usize, end: usize) -> Option<Vec<i16>> {
+        if end <= start || start < self.pending_start_sample {
+            return None;
+        }
+        let local_start = start - self.pending_start_sample;
+        let local_end = end
+            .saturating_sub(self.pending_start_sample)
+            .min(self.pending.len());
+        if local_start >= local_end || local_start >= self.pending.len() {
+            return None;
+        }
+        Some(self.pending[local_start..local_end].to_vec())
+    }
+
+    /// 清理已经不再参与 VAD 判断的旧 PCM。
+    fn trim_pending(&mut self) {
+        let keep_from = if self.in_voice {
+            self.current_start.saturating_sub(self.pending_start_sample)
+        } else {
+            let keep_samples = (self.vad_config.padding_ms as usize) * 16;
+            self.pending.len().saturating_sub(keep_samples)
+        };
+        if keep_from == 0 {
+            return;
+        }
+        self.pending.drain(..keep_from);
+        self.pending_start_sample += keep_from;
+    }
+}
+
 /// 对已加载的 16kHz mono PCM 做 VAD 切分 + Whisper 识别。
 pub fn recognize_pcm_i16(
     samples_i16: &[i16],
@@ -180,6 +339,66 @@ where
         output.items.len()
     );
     Ok(output)
+}
+
+/// 对流式输入的 16kHz mono PCM 做 VAD 切分 + Whisper 识别。
+///
+/// 每识别出一个可提交区间就调用 `on_interval`，适合与视频读取和翻译重叠执行。
+pub fn recognize_pcm_i16_chunk_stream<I, F>(
+    chunks: I,
+    vad_config: Option<VadConfig>,
+    whisper_engine_config: Option<WhisperEngineConfig>,
+    whisper_transcribe_config: Option<WhisperTranscribeConfig>,
+    mut on_interval: F,
+) -> Result<WhisperTranscribeOutput>
+where
+    I: IntoIterator<Item = Result<Vec<i16>>>,
+    F: FnMut(&[WhisperTranscribeItem], usize, usize) -> Result<()>,
+{
+    tracing::info!("[whisper] 开始流式 PCM 识别");
+
+    let engine = acquire_shared_engine(whisper_engine_config)?;
+    let engine = engine
+        .lock()
+        .map_err(|e| anyhow::anyhow!("whisper 引擎 lock: {e}"))?;
+    let options = whisper_transcribe_config.unwrap_or_default();
+    let vad_config = vad_config.unwrap_or_default();
+    let mut vad = StreamingVadState::new(vad_config);
+    let mut all_segments: Vec<WhisperTranscribeItem> = Vec::new();
+    let mut lang_counts: HashMap<String, usize> = HashMap::new();
+    let mut interval_idx = 0usize;
+
+    for chunk in chunks {
+        let chunk = chunk?;
+        for (start_sample, samples) in vad.push_chunk(chunk)? {
+            let offset_cs = samples_to_cs(start_sample);
+            let out = engine
+                .transcribe(&samples, offset_cs, &options)
+                .with_context(|| format!("流式 VAD 段 #{interval_idx} 解码失败"))?;
+            if let Some(l) = out.lang.clone().filter(|s| !s.is_empty()) {
+                *lang_counts.entry(l).or_default() += out.items.len().max(1);
+            }
+            on_interval(&out.items, interval_idx, 0)?;
+            all_segments.extend(out.items);
+            interval_idx += 1;
+        }
+    }
+
+    for (start_sample, samples) in vad.finish()? {
+        let offset_cs = samples_to_cs(start_sample);
+        let out = engine
+            .transcribe(&samples, offset_cs, &options)
+            .with_context(|| format!("流式 VAD 段 #{interval_idx} 解码失败"))?;
+        if let Some(l) = out.lang.clone().filter(|s| !s.is_empty()) {
+            *lang_counts.entry(l).or_default() += out.items.len().max(1);
+        }
+        on_interval(&out.items, interval_idx, 0)?;
+        all_segments.extend(out.items);
+        interval_idx += 1;
+    }
+
+    tracing::info!("[whisper] 流式识别完成: {interval_idx} 个区间");
+    Ok(finalize_segments(all_segments, lang_counts))
 }
 
 /// 对已提取的 16kHz mono WAV 做 VAD 切分 + Whisper 识别。

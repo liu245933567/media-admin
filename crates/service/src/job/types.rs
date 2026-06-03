@@ -33,6 +33,21 @@ pub struct VideoSubtitleGenerateTask {
     pub config: SubtitleGenerateConfig,
 }
 
+/// 从视频提取本地 WAV 缓存的子任务。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct VideoSubtitleExtractWavTask {
+    pub video_path: String,
+    pub config: SubtitleGenerateConfig,
+}
+
+/// 使用 WAV 缓存执行 VAD + Whisper，并生成源 SRT 的子任务。
+#[derive(Clone, Serialize, Deserialize)]
+pub struct VideoSubtitleRecognizeTask {
+    pub video_path: String,
+    pub wav_path: String,
+    pub config: SubtitleGenerateConfig,
+}
+
 /// 扫描媒体资源根目录并将视频/字幕文件写入业务库。
 #[typeshare]
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -84,6 +99,23 @@ impl std::fmt::Debug for VideoSubtitleGenerateTask {
     }
 }
 
+impl std::fmt::Debug for VideoSubtitleExtractWavTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VideoSubtitleExtractWavTask")
+            .field("video_path", &self.video_path)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for VideoSubtitleRecognizeTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VideoSubtitleRecognizeTask")
+            .field("video_path", &self.video_path)
+            .field("wav_path", &self.wav_path)
+            .finish()
+    }
+}
+
 impl TypedTask for VideoSubtitleGenerateTask {
     type Domain = MediaJobsDomain;
 
@@ -119,6 +151,84 @@ impl TypedTask for VideoSubtitleGenerateTask {
         HashMap::from([(
             "job.kind".to_string(),
             "video-subtitle-generate".to_string(),
+        )])
+    }
+}
+
+impl TypedTask for VideoSubtitleExtractWavTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "video-subtitle-extract-wav";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::NORMAL)
+            .expected_io(IoBudget::disk(128 * 1024 * 1024, 128 * 1024 * 1024))
+            .group(GROUP_SUBTITLE_PIPELINE)
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("video-subtitle-extract-wav:{path}"))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("提取字幕音频: {path}"))
+        }
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([(
+            "job.kind".to_string(),
+            "video-subtitle-extract-wav".to_string(),
+        )])
+    }
+}
+
+impl TypedTask for VideoSubtitleRecognizeTask {
+    type Domain = MediaJobsDomain;
+
+    const TASK_TYPE: &'static str = "video-subtitle-recognize";
+
+    fn config() -> TaskTypeConfig {
+        TaskTypeConfig::new()
+            .priority(Priority::NORMAL)
+            .expected_io(IoBudget::disk(64 * 1024 * 1024, 16 * 1024 * 1024))
+            .group(GROUP_WHISPER)
+            .on_duplicate(DuplicateStrategy::Skip)
+    }
+
+    fn key(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("video-subtitle-recognize:{path}"))
+        }
+    }
+
+    fn label(&self) -> Option<String> {
+        let path = self.video_path.trim();
+        if path.is_empty() {
+            None
+        } else {
+            Some(format!("识别字幕: {path}"))
+        }
+    }
+
+    fn tags(&self) -> HashMap<String, String> {
+        HashMap::from([(
+            "job.kind".to_string(),
+            "video-subtitle-recognize".to_string(),
         )])
     }
 }

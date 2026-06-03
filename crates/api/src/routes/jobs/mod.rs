@@ -249,7 +249,9 @@ pub(crate) async fn active_tasks_handler(
     tag = "jobs",
     responses((status = 200, body = TaskmillControlOk))
 )]
-pub(crate) async fn scheduler_pause_handler(State(state): State<AppState>) -> Json<TaskmillControlOk> {
+pub(crate) async fn scheduler_pause_handler(
+    State(state): State<AppState>,
+) -> Json<TaskmillControlOk> {
     state.taskmill.pause_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }
@@ -261,7 +263,9 @@ pub(crate) async fn scheduler_pause_handler(State(state): State<AppState>) -> Js
     tag = "jobs",
     responses((status = 200, body = TaskmillControlOk))
 )]
-pub(crate) async fn scheduler_resume_handler(State(state): State<AppState>) -> Json<TaskmillControlOk> {
+pub(crate) async fn scheduler_resume_handler(
+    State(state): State<AppState>,
+) -> Json<TaskmillControlOk> {
     state.taskmill.resume_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }

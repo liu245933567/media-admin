@@ -260,13 +260,13 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
   return (
     <Drawer.Backdrop isOpen={props.open} onOpenChange={props.onOpenChange}>
       <Drawer.Content placement="right">
-        <Drawer.Dialog className="w-full sm:w-[960px] sm:max-w-[960px]">
+        <Drawer.Dialog className="flex h-dvh w-full flex-col">
           <Drawer.CloseTrigger />
-          <Drawer.Header>
+          <Drawer.Header className="shrink-0">
             <Drawer.Heading>{isBulk ? '批量新增字幕任务' : '新增字幕任务'}</Drawer.Heading>
           </Drawer.Header>
-          <form onSubmit={form.handleSubmit(handleSubmit)}>
-            <Drawer.Body>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={form.handleSubmit(handleSubmit)}>
+            <Drawer.Body className="min-h-0 flex-1 overflow-y-auto">
               <div className="flex flex-col gap-5">
                 {isBulk && (
                   <div className="flex flex-col gap-3">
@@ -339,7 +339,7 @@ export function SubtitleTaskCreateDrawerForm(props: SubtitleTaskCreateDrawerForm
                 />
               </div>
             </Drawer.Body>
-            <Drawer.Footer>
+            <Drawer.Footer className="shrink-0">
               <Button variant="secondary" onPress={() => props.onOpenChange(false)}>
                 取消
               </Button>

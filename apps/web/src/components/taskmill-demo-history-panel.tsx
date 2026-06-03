@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table'
+import type { TaskmillTaskTreeRow } from './taskmill-active-tasks-panel'
 import type {
   TaskmillHistoryStatus,
   TaskmillTaskHistoryRecord,
@@ -13,7 +14,7 @@ import { formatTaskmillTime } from '@/lib/taskmill-time'
 import { useAppToast } from './app-toast'
 import { useConfirmDialog } from './confirm-dialog'
 import { DataTable } from './data-table'
-import { transJobType, transStatus } from './taskmill-active-tasks-panel'
+import { flattenTaskTree, TaskHierarchyLabel, transJobType, transStatus } from './taskmill-active-tasks-panel'
 
 dayjs.extend(duration)
 
@@ -111,54 +112,59 @@ export function TaskmillHistoryPanel({
     },
   })
 
-  const columns: ColumnDef<TaskmillTaskHistoryRecord, unknown>[] = useMemo(
+  const treeRows = useMemo(() => flattenTaskTree(items), [items])
+
+  const columns: ColumnDef<TaskmillTaskTreeRow<TaskmillTaskHistoryRecord>, unknown>[] = useMemo(
     () => [
-      { header: 'ID', accessorKey: 'id' },
+      { header: 'ID', accessorFn: row => row.item.id },
       {
         header: '类型',
-        accessorKey: 'task_type',
+        accessorFn: row => row.item.task_type,
         cell: ({ row }) => (
-          <PopoverText className="max-w-[200px] truncate" content={row.original.task_type}>
-            {transJobType(row.original.task_type)}
-          </PopoverText>
+          <div className="flex min-w-0 items-center">
+            <TaskHierarchyLabel depth={row.original.depth} />
+            <PopoverText className="max-w-[200px] truncate" content={row.original.item.task_type}>
+              {transJobType(row.original.item.task_type)}
+            </PopoverText>
+          </div>
         ),
       },
       {
         header: '标签',
-        accessorKey: 'label',
+        accessorFn: row => row.item.label,
         cell: ({ row }) => (
-          <PopoverText className="max-w-60 truncate" content={row.original.label}>
-            {row.original.label}
+          <PopoverText className="max-w-60 truncate" content={row.original.item.label}>
+            {row.original.item.label}
           </PopoverText>
         ),
       },
       {
         header: '状态',
-        accessorKey: 'status',
+        accessorFn: row => row.item.status,
         cell: ({ row }) => (
-          <Chip color={historyStatusColor(row.original.status)} size="sm" variant="soft">
-            {transStatus(row.original.status)}
+          <Chip color={historyStatusColor(row.original.item.status)} size="sm" variant="soft">
+            {transStatus(row.original.item.status)}
           </Chip>
         ),
       },
       {
         header: '完成时间',
-        accessorKey: 'completed_at',
-        cell: ({ row }) => formatTaskmillTime(row.original.completed_at),
+        accessorFn: row => row.item.completed_at,
+        cell: ({ row }) => formatTaskmillTime(row.original.item.completed_at),
       },
       {
         header: '耗时',
-        accessorKey: 'duration_ms',
-        cell: ({ row }) => row.original.duration_ms == null ? '-' : formatDurationMs(row.original.duration_ms),
+        accessorFn: row => row.item.duration_ms,
+        cell: ({ row }) => row.original.item.duration_ms == null ? '-' : formatDurationMs(row.original.item.duration_ms),
       },
       {
         header: '错误',
-        accessorKey: 'last_error',
+        accessorFn: row => row.item.last_error,
         cell: ({ row }) =>
-          row.original.last_error
+          row.original.item.last_error
             ? (
-                <PopoverText className="max-w-50 truncate text-danger" content={row.original.last_error}>
-                  {row.original.last_error}
+                <PopoverText className="max-w-50 truncate text-danger" content={row.original.item.last_error}>
+                  {row.original.item.last_error}
                 </PopoverText>
               )
             : (
@@ -179,7 +185,7 @@ export function TaskmillHistoryPanel({
               description: '仅从数据库移除记录，不可恢复。',
               confirmText: '删除',
               danger: true,
-              onConfirm: () => deleteMutation.mutateAsync(row.original.id),
+              onConfirm: () => deleteMutation.mutateAsync(row.original.item.id),
             })}
           >
             删除
@@ -195,9 +201,9 @@ export function TaskmillHistoryPanel({
       ariaLabel="历史任务"
       loading={loading}
       columns={columns}
-      data={items ?? []}
+      data={treeRows}
       emptyText="暂无历史记录"
-      getRowId={row => String(row.id)}
+      getRowId={row => String(row.item.id)}
       minWidth={960}
     />
   )

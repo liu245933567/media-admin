@@ -82,11 +82,11 @@ export function SubtitlePipelineFormGroups<TFieldValues extends FieldValues>(
           onInheritChange={props.onInheritVadChange}
         />
         <div className="grid gap-4 md:grid-cols-3">
-          <RhfNumberField control={props.control} name={'vad_config.frame_ms' as never} label="帧长(ms)" minValue={10} maxValue={30} disabled={props.disabledVad} />
-          <RhfNumberField control={props.control} name={'vad_config.mode' as never} label="模式(0-3)" minValue={0} maxValue={3} disabled={props.disabledVad} />
-          <RhfNumberField control={props.control} name={'vad_config.padding_ms' as never} label="Padding(ms)" minValue={0} disabled={props.disabledVad} />
-          <RhfNumberField control={props.control} name={'vad_config.min_speech_ms' as never} label="最短语音段(ms)" minValue={0} disabled={props.disabledVad} />
-          <RhfNumberField control={props.control} name={'vad_config.max_segment_ms' as never} label="单段最大长度(ms)" minValue={0} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.frame_ms' as never} variant="secondary" label="帧长(ms)" minValue={10} maxValue={30} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.mode' as never} variant="secondary" label="模式(0-3)" minValue={0} maxValue={3} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.padding_ms' as never} variant="secondary" label="Padding(ms)" minValue={0} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.min_speech_ms' as never} variant="secondary" label="最短语音段(ms)" minValue={0} disabled={props.disabledVad} />
+          <RhfNumberField control={props.control} name={'vad_config.max_segment_ms' as never} variant="secondary" label="单段最大长度(ms)" minValue={0} disabled={props.disabledVad} />
         </div>
       </section>
 
