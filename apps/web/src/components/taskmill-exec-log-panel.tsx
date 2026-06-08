@@ -37,9 +37,11 @@ import { formatTaskmillTime } from '@/lib/taskmill-time'
 const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 const CANCELLABLE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])
 const RERUNNABLE_STATUSES = new Set(['failed', 'dead_letter', 'dependency_failed', 'expired'])
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'superseded', 'expired', 'dependency_failed', 'dead_letter'])
 
 interface TaskEventHeaderLike {
   task_id?: number
+  key?: string
   label?: string
   task_type?: string
 }
@@ -256,16 +258,23 @@ function formatProcessEventSummary(event: Record<string, unknown>): { summary: s
 }
 
 function deriveStatusFromEvent(type: string, event: Record<string, unknown>, current: string): string {
+  if (TERMINAL_STATUSES.has(current) && ['Dispatched', 'Progress', 'Waiting', 'Preempted'].includes(type)) {
+    return current
+  }
+
   switch (type) {
     case 'Dispatched':
     case 'Progress':
-      return current === 'completed' ? current : 'running'
+      return 'running'
     case 'Waiting':
       return 'waiting'
     case 'Completed':
       return 'completed'
     case 'Failed': {
       const data = asRecord(event.data)
+      if (TERMINAL_STATUSES.has(current) && data?.will_retry === true) {
+        return current
+      }
       return data?.will_retry === true ? 'pending' : 'failed'
     }
     case 'Cancelled':
@@ -332,13 +341,17 @@ function buildTaskLogGroups(
   progressItems: TaskmillEstimatedProgress[] | undefined,
 ): TaskLogGroup[] {
   const groups = new Map<string, TaskLogGroup>()
+  const historyKeys = new Map<string, string>()
+  const activeKeys = new Set<string>()
 
   for (const task of historyItems ?? []) {
     const key = historyTaskKey(task.id)
+    historyKeys.set(task.key, key)
     groups.set(key, mergeTask(task, groups.get(key)))
   }
   for (const task of activeItems ?? []) {
     const key = activeTaskKey(task.id)
+    activeKeys.add(key)
     groups.set(key, mergeTask(task, groups.get(key)))
   }
 
@@ -350,7 +363,20 @@ function buildTaskLogGroups(
 
     const type = typeof row.event.type === 'string' ? row.event.type : '?'
     const header = readEventHeader(row.event)
-    const groupKey = activeTaskKey(taskId)
+    const activeKey = activeTaskKey(taskId)
+    const historyKey = header?.key != null ? historyKeys.get(header.key) : undefined
+    const groupKey = activeKeys.has(activeKey) ? activeKey : historyKey ?? activeKey
+    if (groupKey !== activeKey && groups.has(activeKey)) {
+      const activeGroup = groups.get(activeKey)!
+      const targetGroup = groups.get(groupKey)
+      groups.set(groupKey, {
+        ...(targetGroup ?? activeGroup),
+        latestAt: [targetGroup?.latestAt, activeGroup.latestAt].filter(Boolean).sort().at(-1) ?? activeGroup.latestAt,
+        lines: [...(targetGroup?.lines ?? []), ...activeGroup.lines],
+        percent: targetGroup?.percent ?? activeGroup.percent,
+      })
+      groups.delete(activeKey)
+    }
     const existing = groups.get(groupKey)
     const formatted = formatProcessEventSummary(row.event)
     const status = deriveStatusFromEvent(type, row.event, existing?.status ?? 'pending')
