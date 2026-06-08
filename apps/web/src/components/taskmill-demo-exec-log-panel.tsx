@@ -3,11 +3,14 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import { Button, Card, Chip, Input, Label, Modal, Spinner, Switch, Table } from '@heroui/react'
+import { ListView } from '@heroui-pro/react/list-view'
+import { Button, Card, Chip, Drawer, Input, Label, ListBox, Pagination, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 import { transJobType, transStatus } from './taskmill-active-tasks-panel'
+
+const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
 interface TaskEventHeaderLike {
   task_id?: number
@@ -18,6 +21,7 @@ interface TaskEventHeaderLike {
 type TaskmillKnownTask = TaskmillTaskRecord | TaskmillTaskHistoryRecord
 type PipelineFilter = 'all' | 'running' | 'finished' | 'failed'
 type EventTone = 'default' | 'accent' | 'success' | 'warning' | 'danger'
+type PipelinePageItem = number | 'left-ellipsis' | 'right-ellipsis'
 
 interface TaskEventLine {
   key: string
@@ -519,6 +523,30 @@ function matchesFilter(pipeline: PipelineView, filter: PipelineFilter): boolean 
   }
 }
 
+function paginationItems(page: number, totalPages: number): PipelinePageItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1)
+  }
+
+  const pages: PipelinePageItem[] = [1]
+  if (page > 3) {
+    pages.push('left-ellipsis')
+  }
+
+  const start = Math.max(2, page - 1)
+  const end = Math.min(totalPages - 1, page + 1)
+  for (let current = start; current <= end; current += 1) {
+    pages.push(current)
+  }
+
+  if (page < totalPages - 2) {
+    pages.push('right-ellipsis')
+  }
+  pages.push(totalPages)
+
+  return pages
+}
+
 function stageDot(task: TaskLogGroup, selected: boolean) {
   return (
     <span
@@ -583,7 +611,10 @@ function PipelineStages({
           <button
             className="group flex shrink-0 flex-col items-center gap-2 text-left"
             type="button"
-            onClick={() => onSelect(job.taskId)}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSelect(job.taskId)
+            }}
           >
             {stageDot(job, selectedJobId === job.taskId)}
             {!compact && (
@@ -698,6 +729,8 @@ export function TaskmillExecLogPanel({
   const [autoScroll, setAutoScroll] = useState(true)
   const [filter, setFilter] = useState<PipelineFilter>('all')
   const [q, setQ] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(PIPELINE_PAGE_SIZE_OPTIONS[0])
   const [detailPipelineId, setDetailPipelineId] = useState<number | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
 
@@ -724,6 +757,19 @@ export function TaskmillExecLogPanel({
       return haystack.includes(keyword)
     })
   }, [filter, pipelines, q])
+  const totalPipelines = filteredPipelines.length
+  const totalPages = Math.max(1, Math.ceil(totalPipelines / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageItems = useMemo(
+    () => paginationItems(currentPage, totalPages),
+    [currentPage, totalPages],
+  )
+  const pagedPipelines = useMemo(
+    () => filteredPipelines.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, filteredPipelines, pageSize],
+  )
+  const pageStart = totalPipelines === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const pageEnd = Math.min(currentPage * pageSize, totalPipelines)
 
   const detailPipeline = useMemo(
     () => pipelines.find(pipeline => pipeline.root.taskId === detailPipelineId),
@@ -765,7 +811,10 @@ export function TaskmillExecLogPanel({
                     key={tab.key}
                     size="sm"
                     variant={filter === tab.key ? 'primary' : 'tertiary'}
-                    onPress={() => setFilter(tab.key)}
+                    onPress={() => {
+                      setFilter(tab.key)
+                      setPage(1)
+                    }}
                   >
                     {tab.label}
                     <Chip size="sm" variant="soft">
@@ -795,123 +844,197 @@ export function TaskmillExecLogPanel({
                 value={q}
                 placeholder="Filter pipelines"
                 variant="secondary"
-                onChange={event => setQ(event.target.value)}
+                onChange={(event) => {
+                  setQ(event.target.value)
+                  setPage(1)
+                }}
               />
             </div>
           </Card.Content>
         </Card>
 
-        <Table variant="secondary">
-          <Table.ScrollContainer className="max-h-[calc(100dvh-18rem)]">
-            <Table.Content aria-label="任务执行过程 Pipeline 列表" style={{ minWidth: 980 }}>
-              <Table.Header>
-                <Table.Column className="w-44">Status</Table.Column>
-                <Table.Column isRowHeader>Pipeline</Table.Column>
-                <Table.Column className="w-56">Stages</Table.Column>
-                <Table.Column className="w-56">Latest</Table.Column>
-                <Table.Column className="w-20 text-right">Actions</Table.Column>
-              </Table.Header>
-              <Table.Body>
-                {loading && filteredPipelines.length === 0
-                  ? (
-                      <Table.Row>
-                        <Table.Cell colSpan={5}>
-                          <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted">
-                            <Spinner size="sm" />
-                            加载中
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    )
-                  : filteredPipelines.length === 0
-                    ? (
-                        <Table.Row>
-                          <Table.Cell colSpan={5}>
-                            <div className="py-10 text-center text-sm text-muted">
-                              暂无 pipeline；提交任务并恢复调度后会显示执行过程。
-                            </div>
-                          </Table.Cell>
-                        </Table.Row>
-                      )
-                    : filteredPipelines.map((pipeline) => {
-                        const stages = stageJobs(pipeline)
-                        const title = pipelineTitle(pipeline)
-                        return (
-                          <Table.Row
-                            key={pipeline.root.taskId}
-                            id={String(pipeline.root.taskId)}
-                          >
-                            <Table.Cell className="align-top">
-                              <StatusBlock task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
-                            </Table.Cell>
-                            <Table.Cell className="min-w-0 align-top">
-                              <button
-                                className="block max-w-full truncate text-left text-sm font-medium text-accent hover:underline"
-                                title={title}
-                                type="button"
-                                onClick={() => openPipelineDetail(pipeline)}
-                              >
-                                {title}
-                              </button>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                                <span className="font-mono">
-                                  #
-                                  {pipeline.root.taskId}
-                                </span>
-                                <Chip size="sm" variant="soft">
-                                  {transJobType(pipeline.root.taskType)}
-                                </Chip>
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <Chip color="success" size="sm" variant="soft">taskmill</Chip>
-                                <Chip color="accent" size="sm" variant="soft">
-                                  {pipeline.jobs.length}
-                                  {' '}
-                                  jobs
-                                </Chip>
-                                {pipeline.percent != null && (
-                                  <Chip color="accent" size="sm" variant="soft">
-                                    {formatPercent(pipeline.percent)}
-                                  </Chip>
-                                )}
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="align-top">
-                              <PipelineStages
-                                compact
-                                jobs={stages}
-                                selectedJobId={null}
-                                onSelect={id => openPipelineDetail(pipeline, id)}
-                              />
-                            </Table.Cell>
-                            <Table.Cell className="min-w-0 align-top text-sm text-muted">
-                              <div>{formatTaskmillTime(pipeline.latestAt)}</div>
-                              <div className="mt-1 truncate" title={latestLineOf(pipeline.root)?.summary}>
-                                {latestLineOf(pipeline.root)?.summary ?? '暂无事件'}
-                              </div>
-                            </Table.Cell>
-                            <Table.Cell className="align-top">
-                              <div className="flex justify-end">
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="tertiary"
-                                  onPress={() => openPipelineDetail(pipeline)}
-                                >
-                                  <Icon className="size-4" icon="lucide:panel-right-open" />
-                                </Button>
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        )
-                      })}
-              </Table.Body>
-            </Table.Content>
-          </Table.ScrollContainer>
-        </Table>
+        <ListView
+          aria-label="任务执行过程 Pipeline 列表"
+          className="max-h-[calc(100dvh-18rem)] overflow-y-auto"
+          items={pagedPipelines}
+          selectionMode="none"
+          variant="secondary"
+          renderEmptyState={() => (
+            <div className="flex items-center justify-center py-10 text-sm text-muted">
+              {loading
+                ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner size="sm" />
+                      加载中
+                    </div>
+                  )
+                : '暂无 pipeline；提交任务并恢复调度后会显示执行过程。'}
+            </div>
+          )}
+          onAction={(key) => {
+            const pipeline = pagedPipelines.find(item => String(item.root.taskId) === String(key))
+            if (pipeline) {
+              openPipelineDetail(pipeline)
+            }
+          }}
+        >
+          {(pipeline) => {
+            const stages = stageJobs(pipeline)
+            const title = pipelineTitle(pipeline)
+            const latestSummary = latestLineOf(pipeline.root)?.summary
+
+            return (
+              <ListView.Item
+                id={String(pipeline.root.taskId)}
+                key={pipeline.root.taskId}
+                textValue={title}
+              >
+                <ListView.ItemContent className="min-w-0 flex-1 items-start">
+                  <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-[11rem_minmax(14rem,1fr)_14rem_minmax(12rem,14rem)]">
+                    <StatusBlock task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+                    <div className="min-w-0">
+                      <button
+                        className="block max-w-full truncate text-left text-sm font-medium text-accent hover:underline"
+                        title={title}
+                        type="button"
+                        onClick={() => openPipelineDetail(pipeline)}
+                      >
+                        {title}
+                      </button>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <span className="font-mono">
+                          #
+                          {pipeline.root.taskId}
+                        </span>
+                        <Chip size="sm" variant="soft">
+                          {transJobType(pipeline.root.taskType)}
+                        </Chip>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Chip color="success" size="sm" variant="soft">taskmill</Chip>
+                        <Chip color="accent" size="sm" variant="soft">
+                          {pipeline.jobs.length}
+                          {' '}
+                          jobs
+                        </Chip>
+                        {pipeline.percent != null && (
+                          <Chip color="accent" size="sm" variant="soft">
+                            {formatPercent(pipeline.percent)}
+                          </Chip>
+                        )}
+                      </div>
+                    </div>
+                    <PipelineStages
+                      compact
+                      jobs={stages}
+                      selectedJobId={null}
+                      onSelect={id => openPipelineDetail(pipeline, id)}
+                    />
+                    <div className="min-w-0 text-sm text-muted">
+                      <div>{formatTaskmillTime(pipeline.latestAt)}</div>
+                      <div className="mt-1 truncate" title={latestSummary}>
+                        {latestSummary ?? '暂无事件'}
+                      </div>
+                    </div>
+                  </div>
+                </ListView.ItemContent>
+                <ListView.ItemAction>
+                  <Tooltip delay={0}>
+                    <Button
+                      isIconOnly
+                      aria-label="打开 Pipeline 详情"
+                      size="sm"
+                      variant="tertiary"
+                      onPress={() => openPipelineDetail(pipeline)}
+                    >
+                      <Icon className="size-4" icon="lucide:panel-right-open" />
+                    </Button>
+                    <Tooltip.Content>打开详情</Tooltip.Content>
+                  </Tooltip>
+                </ListView.ItemAction>
+              </ListView.Item>
+            )
+          }}
+        </ListView>
+
+        <div className="flex flex-col gap-3 text-sm text-muted md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="tabular-nums">
+              显示
+              {' '}
+              {pageStart}
+              -
+              {pageEnd}
+              {' '}
+              / 共
+              {' '}
+              {totalPipelines}
+              {' '}
+              个 Pipeline
+            </span>
+            <Select
+              className="w-28"
+              selectedKey={String(pageSize)}
+              variant="secondary"
+              onSelectionChange={(key) => {
+                const nextPageSize = Number(key)
+                if (Number.isFinite(nextPageSize)) {
+                  setPageSize(nextPageSize)
+                  setPage(1)
+                }
+              }}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {PIPELINE_PAGE_SIZE_OPTIONS.map(size => (
+                    <ListBox.Item key={size} id={String(size)} textValue={`${size} / 页`}>
+                      {size}
+                      {' '}
+                      / 页
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+          </div>
+          <Pagination className="w-full justify-end md:w-auto" size="sm">
+            <Pagination.Content>
+              <Pagination.Item>
+                <Pagination.Previous isDisabled={currentPage <= 1} onPress={() => setPage(prev => Math.max(1, prev - 1))}>
+                  <Pagination.PreviousIcon />
+                  <span>上一页</span>
+                </Pagination.Previous>
+              </Pagination.Item>
+              {pageItems.map(item => typeof item === 'string'
+                ? (
+                    <Pagination.Item key={item}>
+                      <Pagination.Ellipsis />
+                    </Pagination.Item>
+                  )
+                : (
+                    <Pagination.Item key={item}>
+                      <Pagination.Link isActive={item === currentPage} onPress={() => setPage(item)}>
+                        {item}
+                      </Pagination.Link>
+                    </Pagination.Item>
+                  ))}
+              <Pagination.Item>
+                <Pagination.Next isDisabled={currentPage >= totalPages} onPress={() => setPage(prev => Math.min(totalPages, prev + 1))}>
+                  <span>下一页</span>
+                  <Pagination.NextIcon />
+                </Pagination.Next>
+              </Pagination.Item>
+            </Pagination.Content>
+          </Pagination>
+        </div>
       </div>
 
-      <Modal.Backdrop
+      <Drawer.Backdrop
         isOpen={Boolean(detailPipeline)}
         onOpenChange={(open) => {
           if (!open) {
@@ -920,15 +1043,16 @@ export function TaskmillExecLogPanel({
           }
         }}
       >
-        <Modal.Container size="lg" className="max-w-[min(1120px,calc(100vw-2rem))]">
-          <Modal.Dialog>
-            <Modal.Header className="items-start justify-between">
+        <Drawer.Content placement="right">
+          <Drawer.Dialog className="flex h-dvh w-full flex-col">
+            <Drawer.CloseTrigger />
+            <Drawer.Header className="shrink-0 items-start justify-between pr-12">
               <div className="min-w-0">
-                <Modal.Heading>
+                <Drawer.Heading>
                   <span className="block truncate" title={detailPipeline ? pipelineTitle(detailPipeline) : undefined}>
                     {detailPipeline ? pipelineTitle(detailPipeline) : 'Pipeline'}
                   </span>
-                </Modal.Heading>
+                </Drawer.Heading>
                 {detailPipeline && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                     <Chip color={taskStatusColor(detailPipeline.status)} size="sm" variant="soft">
@@ -948,19 +1072,8 @@ export function TaskmillExecLogPanel({
                   </div>
                 )}
               </div>
-              <Button
-                isIconOnly
-                size="sm"
-                variant="tertiary"
-                onPress={() => {
-                  setDetailPipelineId(null)
-                  setSelectedJobId(null)
-                }}
-              >
-                <Icon className="size-4" icon="lucide:x" />
-              </Button>
-            </Modal.Header>
-            <Modal.Body className="max-h-[calc(100dvh-10rem)] overflow-auto">
+            </Drawer.Header>
+            <Drawer.Body className="min-h-0 flex-1 overflow-y-auto">
               {detailPipeline && (
                 <div className="flex flex-col gap-4">
                   <div className="overflow-x-auto rounded-lg border border-border bg-surface px-4 py-6">
@@ -973,10 +1086,10 @@ export function TaskmillExecLogPanel({
                   <JobLogView job={selectedJob} autoScroll={autoScroll} />
                 </div>
               )}
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
+            </Drawer.Body>
+          </Drawer.Dialog>
+        </Drawer.Content>
+      </Drawer.Backdrop>
     </>
   )
 }

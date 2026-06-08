@@ -4,17 +4,3 @@ allowBuilds:
   '@heroui-pro/react': true
   '@zowe/secrets-for-zowe-sdk': true
   esbuild: true
-minimumReleaseAgeExclude:
-  - '@eslint-react/ast@5.8.4'
-  - '@eslint-react/core@5.8.4'
-  - '@eslint-react/eslint-plugin@5.8.4'
-  - '@eslint-react/eslint@5.8.4'
-  - '@eslint-react/jsx@5.8.4'
-  - '@eslint-react/shared@5.8.4'
-  - '@eslint-react/var@5.8.4'
-  - eslint-plugin-react-dom@5.8.4
-  - eslint-plugin-react-jsx@5.8.4
-  - eslint-plugin-react-naming-convention@5.8.4
-  - eslint-plugin-react-rsc@5.8.4
-  - eslint-plugin-react-web-api@5.8.4
-  - eslint-plugin-react-x@5.8.4

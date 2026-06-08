@@ -8,6 +8,8 @@
 
 - 前端项目中，文件使用中横线格式命名
 - 写组件时，尽量基于 `@heroui/react` 和 `@heroui-pro/react` 的组件开发
+- 前端组件相关 skill `heroui-pro-design-taste`、`heroui-react-pro`、`heroui-react`
+- 前端组件相关 mcp ``hero-pro`、`hero-react`
 - 写组件时，尽量与项目中其他相似逻辑组件撰写的风格相同
 - 对接 rust 服务 api 时，相关的类型从 rust 导出生成
 - 需要写样式的时候，尽量用 tailwindcss 写
