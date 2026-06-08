@@ -14,6 +14,8 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// 与落盘提取共用的 ffmpeg 音频参数（16k 单声道 + 降噪/响度归一化）。
 fn push_audio_extract_args(cmd: &mut tokio::process::Command) {
     cmd.args([
+        "-map",
+        "0:a:0",
         "-vn",
         "-ac",
         "1",
@@ -22,6 +24,29 @@ fn push_audio_extract_args(cmd: &mut tokio::process::Command) {
         "-af",
         "highpass=f=80,afftdn=nf=-25,dynaudnorm=f=150:g=15:p=0.95",
     ]);
+}
+
+fn is_no_audio_stream_error(stderr: &str) -> bool {
+    stderr.contains("Output file does not contain any stream")
+        || stderr.contains("matches no streams")
+        || stderr.contains("Stream map '0:a")
+}
+
+fn ffmpeg_audio_extract_error(
+    status: std::process::ExitStatus,
+    stderr: &str,
+    input: &Path,
+) -> String {
+    if is_no_audio_stream_error(stderr) {
+        return format!(
+            "视频不包含可用音频流，无法提取 WAV: {}。请确认视频文件含有音轨后再生成字幕。ffmpeg: {stderr}",
+            input.display()
+        );
+    }
+
+    format!(
+        "ffmpeg 提取音频失败: {status}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_DIR 指向包含 ffmpeg 的目录。"
+    )
 }
 
 fn spawn_pcm_extract_command(input_video_path: &Path) -> Result<tokio::process::Command> {
@@ -94,8 +119,8 @@ pub async fn extract_wav_i16_mono16k(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         bail!(
-            "ffmpeg 提取 WAV 失败: {}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。",
-            output.status
+            "{}",
+            ffmpeg_audio_extract_error(output.status, &stderr, input_video_path)
         );
     }
 
@@ -139,7 +164,8 @@ pub async fn extract_pcm_i16_mono16k(input_video_path: &Path) -> Result<Vec<i16>
     if !status.success() {
         let stderr = String::from_utf8_lossy(&stderr_bytes);
         bail!(
-            "ffmpeg 退出码异常: {status}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。"
+            "{}",
+            ffmpeg_audio_extract_error(status, &stderr, input_video_path)
         );
     }
 
@@ -247,14 +273,9 @@ pub async fn stream_pcm_i16_mono16k_chunks(
 
     if !status.success() {
         let stderr = String::from_utf8_lossy(&stderr_bytes);
-        let _ = tx
-            .send(Err(anyhow!(
-                "ffmpeg 退出码异常: {status}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。"
-            )))
-            .await;
-        bail!(
-            "ffmpeg 退出码异常: {status}. {stderr}请确认 ffmpeg 可用，或设置环境变量 FFMPEG_PATH 指向可执行文件。"
-        );
+        let message = ffmpeg_audio_extract_error(status, &stderr, input_video_path);
+        let _ = tx.send(Err(anyhow!(message.clone()))).await;
+        bail!("{message}");
     }
 
     ensure!(total_samples != 0, "ffmpeg 未输出任何 PCM 数据");

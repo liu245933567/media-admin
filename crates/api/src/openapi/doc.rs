@@ -27,6 +27,7 @@ use utoipa::OpenApi;
         crate::routes::jobs::task_pause_handler,
         crate::routes::jobs::task_resume_handler,
         crate::routes::jobs::delete_history_handler,
+        crate::routes::jobs::rerun_history_handler,
         crate::routes::media_library::list_roots_handler,
         crate::routes::media_library::create_root_handler,
         crate::routes::media_library::delete_root_handler,

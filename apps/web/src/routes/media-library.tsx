@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import type { MediaSubtitleRow, MediaVideoRow } from '@/api'
-import { Button, Chip, Input, Label, ListBox, Popover, Select } from '@heroui/react'
+import { Button, Chip, Input, ListBox, Popover, Select } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -168,7 +168,7 @@ function PageComponent() {
         header: '完整路径',
         accessorKey: 'file_path',
         cell: ({ row }) => (
-          <span className="block max-w-[360px] truncate font-mono text-xs" title={row.original.file_path}>
+          <span className="block max-w-90 truncate font-mono text-xs" title={row.original.file_path}>
             {row.original.file_path}
           </span>
         ),
@@ -242,7 +242,6 @@ function PageComponent() {
       <div className="flex flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_220px_180px_auto] md:items-end">
           <div className="flex flex-col gap-1">
-            <Label>文件名</Label>
             <Input
               value={q}
               placeholder="搜索文件名"
@@ -261,7 +260,6 @@ function PageComponent() {
               setPage(1)
             }}
           >
-            <Label>资源路径</Label>
             <Select.Trigger>
               <Select.Value />
               <Select.Indicator />
@@ -289,7 +287,6 @@ function PageComponent() {
               setPage(1)
             }}
           >
-            <Label>是否有字幕</Label>
             <Select.Trigger>
               <Select.Value />
               <Select.Indicator />

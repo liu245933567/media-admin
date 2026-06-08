@@ -2,10 +2,18 @@
 
 use anyhow::{Context, bail};
 use serde::Serialize;
-use taskmill::{PauseReasons, TaskRecord, TaskStatus};
+use taskmill::{
+    HistoryStatus, PauseReasons, SubmitOutcome, TaskHistoryRecord, TaskRecord, TaskStatus,
+    TypedTask,
+};
 use utoipa::ToSchema;
 
 use super::storage::TaskmillRuntime;
+use super::types::{
+    FfmpegSetupDownloadTask, MediaLibraryScanTask, SubtitleTranslateJob,
+    VideoSubtitleExtractWavTask, VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
+    WhisperModelDownloadTask,
+};
 
 /// 通用成功响应。
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -23,6 +31,13 @@ pub struct TaskmillCancelRes {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillDeleteHistoryRes {
     pub deleted: bool,
+}
+
+/// 重新执行历史任务的结果。
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TaskmillRerunHistoryRes {
+    pub submitted: bool,
+    pub task_id: Option<i64>,
 }
 
 impl TaskmillRuntime {
@@ -91,6 +106,83 @@ impl TaskmillRuntime {
             .context("删除历史记录失败")
     }
 
+    /// 重新提交一条失败类历史任务。
+    pub async fn rerun_history(&self, history_id: i64) -> anyhow::Result<TaskmillRerunHistoryRes> {
+        let history = self
+            .scheduler
+            .store()
+            .history_by_id(history_id)
+            .await
+            .context("读取历史任务失败")?
+            .ok_or_else(|| anyhow::anyhow!("历史任务不存在"))?;
+
+        if !is_rerunnable_history_status(history.status) {
+            bail!("仅失败、死信、依赖失败或过期的历史任务可重新执行");
+        }
+
+        let outcome = self.submit_history_payload(&history).await?;
+        let task_id = outcome.id();
+        Ok(TaskmillRerunHistoryRes {
+            submitted: outcome.is_inserted() || task_id.is_some(),
+            task_id,
+        })
+    }
+
+    async fn submit_history_payload(
+        &self,
+        history: &TaskHistoryRecord,
+    ) -> anyhow::Result<SubmitOutcome> {
+        let payload = history
+            .payload
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("历史任务缺少 payload，无法重新执行"))?;
+
+        match strip_domain_prefix(&history.task_type) {
+            VideoSubtitleGenerateTask::TASK_TYPE => {
+                self.enqueue_generate(parse_history_payload::<VideoSubtitleGenerateTask>(payload)?)
+                    .await
+            }
+            VideoSubtitleExtractWavTask::TASK_TYPE => {
+                let task = parse_history_payload::<VideoSubtitleExtractWavTask>(payload)?;
+                self.enqueue_generate(VideoSubtitleGenerateTask {
+                    video_path: task.video_path,
+                    config: task.config,
+                })
+                .await
+            }
+            VideoSubtitleRecognizeTask::TASK_TYPE => {
+                let task = parse_history_payload::<VideoSubtitleRecognizeTask>(payload)?;
+                self.enqueue_generate(VideoSubtitleGenerateTask {
+                    video_path: task.video_path,
+                    config: task.config,
+                })
+                .await
+            }
+            SubtitleTranslateJob::TASK_TYPE => {
+                self.enqueue_translate(parse_history_payload::<SubtitleTranslateJob>(payload)?)
+                    .await
+            }
+            MediaLibraryScanTask::TASK_TYPE => {
+                self.enqueue_media_library_scan(parse_history_payload::<MediaLibraryScanTask>(
+                    payload,
+                )?)
+                .await
+            }
+            WhisperModelDownloadTask::TASK_TYPE => {
+                self.enqueue_whisper_model_download(parse_history_payload::<
+                    WhisperModelDownloadTask,
+                >(payload)?)
+                    .await
+            }
+            FfmpegSetupDownloadTask::TASK_TYPE => {
+                let _ = parse_history_payload::<FfmpegSetupDownloadTask>(payload)?;
+                self.enqueue_ffmpeg_setup_download(FfmpegSetupDownloadTask)
+                    .await
+            }
+            other => bail!("不支持重新执行的任务类型: {other}"),
+        }
+    }
+
     /// 列出活跃队列中的任务（pending / running / paused / waiting / blocked）。
     pub async fn list_active_tasks(&self, limit: i32) -> anyhow::Result<Vec<TaskRecord>> {
         let limit = limit.clamp(1, 500) as usize;
@@ -103,4 +195,28 @@ impl TaskmillRuntime {
         tasks.truncate(limit);
         Ok(tasks)
     }
+}
+
+fn is_rerunnable_history_status(status: HistoryStatus) -> bool {
+    matches!(
+        status,
+        HistoryStatus::Failed
+            | HistoryStatus::DeadLetter
+            | HistoryStatus::DependencyFailed
+            | HistoryStatus::Expired
+    )
+}
+
+fn strip_domain_prefix(task_type: &str) -> &str {
+    task_type
+        .rsplit_once("::")
+        .map(|(_, ty)| ty)
+        .unwrap_or(task_type)
+}
+
+fn parse_history_payload<T>(payload: &[u8]) -> anyhow::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_slice(payload).context("解析历史任务 payload 失败")
 }

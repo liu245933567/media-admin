@@ -22,6 +22,7 @@ export interface TaskLogGroup {
   label: string
   parentIdentityKey: string | null
   isHistory: boolean
+  canRerun: boolean
   status: string
   createdAt: string | null
   startedAt: string | null
@@ -35,6 +36,7 @@ export interface TaskLogGroup {
 export interface PipelineView {
   root: TaskLogGroup
   jobs: TaskLogGroup[]
+  historyRecordId: number | null
   status: string
   latestAt: string
   percent: number | null

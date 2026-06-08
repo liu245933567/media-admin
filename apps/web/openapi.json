@@ -1905,6 +1905,25 @@
         ],
         "type": "object"
       },
+      "TaskmillRerunHistoryRes": {
+        "description": "重新执行历史任务的结果。",
+        "properties": {
+          "submitted": {
+            "type": "boolean"
+          },
+          "task_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "submitted"
+        ],
+        "type": "object"
+      },
       "TaskmillSnapshot": {
         "properties": {
           "metrics": {},
@@ -2571,6 +2590,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaskmillDeleteHistoryRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/history/{id}/rerun": {
+      "post": {
+        "operationId": "rerunHistoryJobs",
+        "parameters": [
+          {
+            "description": "历史记录 ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskmillRerunHistoryRes"
                 }
               }
             },

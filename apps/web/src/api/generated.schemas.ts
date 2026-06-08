@@ -274,6 +274,16 @@ export const DeleteHistoryJobsResponse = zod.object({
 }).describe('删除历史记录结果。')
 
 
+export const RerunHistoryJobsParams = zod.object({
+  "id": zod.number().describe('历史记录 ID')
+})
+
+export const RerunHistoryJobsResponse = zod.object({
+  "submitted": zod.boolean(),
+  "task_id": zod.number().nullish()
+}).describe('重新执行历史任务的结果。')
+
+
 export const scanGenerateJobsBodyConfigTwoVadConfigTwoFrameMsMin = 0;
 
 export const scanGenerateJobsBodyConfigTwoVadConfigTwoMaxSegmentMsMin = 0;
