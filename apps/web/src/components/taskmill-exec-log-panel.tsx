@@ -44,6 +44,14 @@ type TaskmillKnownTask = TaskmillTaskRecord | TaskmillTaskHistoryRecord
 type PipelineFilter = 'all' | 'running' | 'finished' | 'failed'
 type PipelinePageItem = number | 'left-ellipsis' | 'right-ellipsis'
 
+function activeTaskKey(taskId: number): string {
+  return `task:${taskId}`
+}
+
+function historyTaskKey(historyId: number): string {
+  return `history:${historyId}`
+}
+
 function readEventHeader(event: Record<string, unknown>): TaskEventHeaderLike | undefined {
   const data = event.data
   if (!data || typeof data !== 'object') {
@@ -273,12 +281,15 @@ function mergeTask(
 ): TaskLogGroup {
   const isHistory = isHistoryTask(task)
   const completedAt = isHistoryTask(task) ? task.completed_at : null
+  const identityKey = isHistory ? historyTaskKey(task.id) : activeTaskKey(task.id)
+  const parentIdentityKey = !isHistory && task.parent_id != null ? activeTaskKey(task.parent_id) : null
   const existingPercent = clampTaskPercent(existing?.percent)
   return {
+    identityKey,
     taskId: task.id,
     taskType: task.task_type,
     label: task.label,
-    parentId: task.parent_id,
+    parentIdentityKey,
     isHistory: isHistory || existing?.isHistory === true,
     status: task.status,
     createdAt: task.created_at,
@@ -311,13 +322,15 @@ function buildTaskLogGroups(
   historyItems: TaskmillTaskHistoryRecord[] | undefined,
   progressItems: TaskmillEstimatedProgress[] | undefined,
 ): TaskLogGroup[] {
-  const groups = new Map<number, TaskLogGroup>()
+  const groups = new Map<string, TaskLogGroup>()
 
   for (const task of historyItems ?? []) {
-    groups.set(task.id, mergeTask(task, groups.get(task.id)))
+    const key = historyTaskKey(task.id)
+    groups.set(key, mergeTask(task, groups.get(key)))
   }
   for (const task of activeItems ?? []) {
-    groups.set(task.id, mergeTask(task, groups.get(task.id)))
+    const key = activeTaskKey(task.id)
+    groups.set(key, mergeTask(task, groups.get(key)))
   }
 
   for (const [index, row] of (items ?? []).entries()) {
@@ -328,7 +341,8 @@ function buildTaskLogGroups(
 
     const type = typeof row.event.type === 'string' ? row.event.type : '?'
     const header = readEventHeader(row.event)
-    const existing = groups.get(taskId)
+    const groupKey = activeTaskKey(taskId)
+    const existing = groups.get(groupKey)
     const formatted = formatProcessEventSummary(row.event)
     const status = deriveStatusFromEvent(type, row.event, existing?.status ?? 'pending')
     const percent = formatted.percent ?? clampTaskPercent(existing?.percent)
@@ -342,11 +356,12 @@ function buildTaskLogGroups(
       tone: eventTone(type),
     }
 
-    groups.set(taskId, {
+    groups.set(groupKey, {
+      identityKey: groupKey,
       taskId,
       taskType: existing?.taskType ?? header?.task_type ?? '',
       label: existing?.label ?? header?.label ?? '',
-      parentId: existing?.parentId ?? null,
+      parentIdentityKey: existing?.parentIdentityKey ?? null,
       isHistory: existing?.isHistory ?? false,
       status,
       createdAt: existing?.createdAt ?? null,
@@ -361,9 +376,9 @@ function buildTaskLogGroups(
 
   for (const progress of progressItems ?? []) {
     const taskId = progress.header.task_id
-    const existing = groups.get(taskId)
+    const existing = groups.get(activeTaskKey(taskId))
     if (existing) {
-      groups.set(taskId, mergeEstimatedProgress(existing, progress))
+      groups.set(existing.identityKey, mergeEstimatedProgress(existing, progress))
     }
   }
 
@@ -383,7 +398,7 @@ function derivePipelinePercent(root: TaskLogGroup, jobs: TaskLogGroup[], status:
   }
 
   const progressJobs = jobs.length > 1
-    ? jobs.filter(job => job.taskId !== root.taskId)
+    ? jobs.filter(job => job.identityKey !== root.identityKey)
     : jobs
   if (progressJobs.length === 0) {
     return clampTaskPercent(root.percent)
@@ -401,38 +416,60 @@ function derivePipelinePercent(root: TaskLogGroup, jobs: TaskLogGroup[], status:
 }
 
 function buildPipelineViews(groups: TaskLogGroup[]): PipelineView[] {
-  const byId = new Map(groups.map(group => [group.taskId, group]))
-  const childrenByParent = new Map<number, TaskLogGroup[]>()
+  const byKey = new Map(groups.map(group => [group.identityKey, group]))
+  const childrenByParent = new Map<string, TaskLogGroup[]>()
+
+  const createsParentCycle = (group: TaskLogGroup): boolean => {
+    const seen = new Set<string>([group.identityKey])
+    let parentIdentityKey = group.parentIdentityKey
+    while (parentIdentityKey != null) {
+      if (seen.has(parentIdentityKey)) {
+        return true
+      }
+      seen.add(parentIdentityKey)
+      parentIdentityKey = byKey.get(parentIdentityKey)?.parentIdentityKey ?? null
+    }
+    return false
+  }
 
   for (const group of groups) {
-    if (group.parentId != null && byId.has(group.parentId)) {
-      const children = childrenByParent.get(group.parentId) ?? []
+    if (group.parentIdentityKey != null && byKey.has(group.parentIdentityKey) && !createsParentCycle(group)) {
+      const children = childrenByParent.get(group.parentIdentityKey) ?? []
       children.push(group)
-      childrenByParent.set(group.parentId, children)
+      childrenByParent.set(group.parentIdentityKey, children)
     }
   }
 
   const readRoot = (group: TaskLogGroup): TaskLogGroup => {
     let current = group
-    const seen = new Set<number>()
-    while (current.parentId != null && byId.has(current.parentId) && !seen.has(current.parentId)) {
-      seen.add(current.taskId)
-      current = byId.get(current.parentId)!
+    const seen = new Set<string>()
+    while (
+      current.parentIdentityKey != null
+      && byKey.has(current.parentIdentityKey)
+      && !seen.has(current.parentIdentityKey)
+    ) {
+      seen.add(current.identityKey)
+      current = byKey.get(current.parentIdentityKey)!
     }
     return current
   }
 
-  const roots = new Map<number, TaskLogGroup>()
+  const roots = new Map<string, TaskLogGroup>()
   for (const group of groups) {
     const root = readRoot(group)
-    roots.set(root.taskId, root)
+    roots.set(root.identityKey, root)
   }
 
   const collectJobs = (root: TaskLogGroup): TaskLogGroup[] => {
     const jobs: TaskLogGroup[] = []
+    const visited = new Set<string>()
     const visit = (task: TaskLogGroup) => {
+      if (visited.has(task.identityKey)) {
+        return
+      }
+      visited.add(task.identityKey)
       jobs.push(task)
-      const children = [...(childrenByParent.get(task.taskId) ?? [])].sort(
+      const children = [...(childrenByParent.get(task.identityKey) ?? [])].sort(
         (a, b) => (a.startedAt ?? a.createdAt ?? a.latestAt).localeCompare(b.startedAt ?? b.createdAt ?? b.latestAt),
       )
       for (const child of children) {
@@ -524,13 +561,13 @@ function stageDot(task: TaskLogGroup, selected: boolean) {
 
 function PipelineStages({
   jobs,
-  selectedJobId,
+  selectedJobKey,
   onSelect,
   compact,
 }: {
   jobs: TaskLogGroup[]
-  selectedJobId: number | null
-  onSelect: (id: number) => void
+  selectedJobKey: string | null
+  onSelect: (key: string) => void
   compact?: boolean
 }) {
   if (jobs.length === 0) {
@@ -540,17 +577,17 @@ function PipelineStages({
   return (
     <div className="flex min-w-0 items-center overflow-x-auto py-0.5">
       {jobs.map((job, index) => (
-        <div key={job.taskId} className="flex items-center">
+        <div key={job.identityKey} className="flex items-center">
           {index > 0 && <span className={compact ? 'h-px w-4 shrink-0 bg-divider' : 'h-px w-8 shrink-0 bg-divider'} />}
           <button
             className="group flex shrink-0 flex-col items-center gap-1.5 text-left"
             type="button"
             onClick={(event) => {
               event.stopPropagation()
-              onSelect(job.taskId)
+              onSelect(job.identityKey)
             }}
           >
-            {stageDot(job, selectedJobId === job.taskId)}
+            {stageDot(job, selectedJobKey === job.identityKey)}
             {!compact && (
               <span className="max-w-32 truncate text-xs text-muted group-hover:text-foreground" title={stageName(job)}>
                 {stageName(job)}
@@ -592,8 +629,8 @@ export function TaskmillExecLogPanel({
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(PIPELINE_PAGE_SIZE_OPTIONS[0])
-  const [detailPipelineId, setDetailPipelineId] = useState<number | null>(null)
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [detailPipelineKey, setDetailPipelineKey] = useState<string | null>(null)
+  const [selectedJobKey, setSelectedJobKey] = useState<string | null>(null)
 
   const cancelMutation = useMutation({
     mutationFn: (id: number) => cancelTaskJobs(id),
@@ -665,17 +702,17 @@ export function TaskmillExecLogPanel({
   const pageEnd = Math.min(currentPage * pageSize, totalPipelines)
 
   const detailPipeline = useMemo(
-    () => pipelines.find(pipeline => pipeline.root.taskId === detailPipelineId),
-    [detailPipelineId, pipelines],
+    () => pipelines.find(pipeline => pipeline.root.identityKey === detailPipelineKey),
+    [detailPipelineKey, pipelines],
   )
   const detailStages = detailPipeline ? stageJobs(detailPipeline) : []
-  const selectedJob = detailStages.find(job => job.taskId === selectedJobId)
+  const selectedJob = detailStages.find(job => job.identityKey === selectedJobKey)
     ?? detailStages[0]
     ?? detailPipeline?.root
-  function openPipelineDetail(pipeline: PipelineView, jobId?: number) {
+  function openPipelineDetail(pipeline: PipelineView, jobKey?: string) {
     const stages = stageJobs(pipeline)
-    setDetailPipelineId(pipeline.root.taskId)
-    setSelectedJobId(jobId ?? (stages[0] ?? pipeline.root).taskId)
+    setDetailPipelineKey(pipeline.root.identityKey)
+    setSelectedJobKey(jobKey ?? (stages[0] ?? pipeline.root).identityKey)
   }
 
   function confirmCancelPipeline(pipeline: PipelineView) {
@@ -824,7 +861,7 @@ export function TaskmillExecLogPanel({
               </div>
             )}
             onAction={(key) => {
-              const pipeline = pagedPipelines.find(item => String(item.root.taskId) === String(key))
+              const pipeline = pagedPipelines.find(item => item.root.identityKey === String(key))
               if (pipeline) {
                 openPipelineDetail(pipeline)
               }
@@ -839,8 +876,8 @@ export function TaskmillExecLogPanel({
 
               return (
                 <ListView.Item
-                  id={String(pipeline.root.taskId)}
-                  key={pipeline.root.taskId}
+                  id={pipeline.root.identityKey}
+                  key={pipeline.root.identityKey}
                   textValue={title}
                   className="flex-nowrap items-center py-1.5"
                 >
@@ -877,8 +914,8 @@ export function TaskmillExecLogPanel({
                         <PipelineStages
                           compact
                           jobs={stages}
-                          selectedJobId={null}
-                          onSelect={id => openPipelineDetail(pipeline, id)}
+                          selectedJobKey={null}
+                          onSelect={key => openPipelineDetail(pipeline, key)}
                         />
                       </div>
                       <div className="min-w-0 text-xs text-muted lg:text-right">
@@ -1008,13 +1045,13 @@ export function TaskmillExecLogPanel({
         autoScroll
         pipeline={detailPipeline}
         selectedJob={selectedJob}
-        selectedJobId={selectedJob?.taskId ?? null}
+        selectedJobKey={selectedJob?.identityKey ?? null}
         stages={detailStages}
         onClose={() => {
-          setDetailPipelineId(null)
-          setSelectedJobId(null)
+          setDetailPipelineKey(null)
+          setSelectedJobKey(null)
         }}
-        onSelectedJobIdChange={setSelectedJobId}
+        onSelectedJobKeyChange={setSelectedJobKey}
       />
     </>
   )

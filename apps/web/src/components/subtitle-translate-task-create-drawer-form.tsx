@@ -4,9 +4,17 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, translateJobs } from '@/api'
+import {
+  getAppConfigSettings,
+  getGetAppConfigSettingsQueryKey,
+  translateJobs,
+} from '@/api'
 import { useAppToast } from './app-toast'
-import { RhfNumberField, RhfSwitchField, RhfTextField } from './rhf-heroui-fields'
+import {
+  RhfNumberField,
+  RhfSwitchField,
+  RhfTextField,
+} from './rhf-heroui-fields'
 
 export interface SubtitleTranslateTaskCreateDrawerFormProps {
   open: boolean
@@ -124,7 +132,7 @@ export function SubtitleTranslateTaskCreateDrawerForm(
 
   return (
     <Drawer.Backdrop isOpen={props.open} onOpenChange={props.onOpenChange}>
-      <Drawer.Content placement="right" className="sm:max-w-[760px]">
+      <Drawer.Content placement="right" className="sm:max-w-190">
         <Drawer.Dialog>
           <Drawer.CloseTrigger />
           <Drawer.Header>
@@ -139,7 +147,10 @@ export function SubtitleTranslateTaskCreateDrawerForm(
                   label="源 SRT 路径"
                   placeholder="请输入字幕文件路径"
                 />
-                <Checkbox isSelected={inheritGlobal} onChange={setInheritGlobal}>
+                <Checkbox
+                  isSelected={inheritGlobal}
+                  onChange={setInheritGlobal}
+                >
                   <Checkbox.Control>
                     <Checkbox.Indicator />
                   </Checkbox.Control>
@@ -150,22 +161,71 @@ export function SubtitleTranslateTaskCreateDrawerForm(
                 <section className="flex flex-col gap-4">
                   <h3 className="m-0 text-base font-semibold">翻译配置</h3>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <RhfTextField control={form.control} name="base_url" label="API Base URL" disabled={inheritGlobal} />
-                    <RhfTextField control={form.control} name="api_key" label="API Key" type="password" disabled={inheritGlobal} />
-                    <RhfTextField control={form.control} name="model" label="模型" disabled={inheritGlobal} />
-                    <RhfTextField control={form.control} name="target_language" label="目标语言" disabled={inheritGlobal} />
-                    <RhfNumberField control={form.control} name="concurrency" label="并发数" minValue={1} maxValue={32} disabled={inheritGlobal} />
-                    <RhfNumberField control={form.control} name="batch_size" label="批量条数" minValue={1} maxValue={64} disabled={inheritGlobal} />
-                    <RhfSwitchField control={form.control} name="remove_source_srt" label="完成后删除原文 SRT" disabled={inheritGlobal} />
+                    <RhfTextField
+                      control={form.control}
+                      name="base_url"
+                      label="API Base URL"
+                      disabled={inheritGlobal}
+                    />
+                    <RhfTextField
+                      control={form.control}
+                      name="api_key"
+                      label="API Key"
+                      type="password"
+                      disabled={inheritGlobal}
+                    />
+                    <RhfTextField
+                      control={form.control}
+                      name="model"
+                      label="模型"
+                      disabled={inheritGlobal}
+                    />
+                    <RhfTextField
+                      control={form.control}
+                      name="target_language"
+                      label="目标语言"
+                      disabled={inheritGlobal}
+                    />
+                    <RhfNumberField
+                      control={form.control}
+                      name="concurrency"
+                      label="并发数"
+                      minValue={1}
+                      maxValue={32}
+                      disabled={inheritGlobal}
+                      variant="secondary"
+                    />
+                    <RhfNumberField
+                      control={form.control}
+                      name="batch_size"
+                      label="批量条数"
+                      minValue={1}
+                      maxValue={64}
+                      disabled={inheritGlobal}
+                      variant="secondary"
+                    />
+                    <RhfSwitchField
+                      control={form.control}
+                      name="remove_source_srt"
+                      label="完成后删除原文 SRT"
+                      disabled={inheritGlobal}
+                    />
                   </div>
                 </section>
               </div>
             </Drawer.Body>
             <Drawer.Footer>
-              <Button variant="secondary" onPress={() => props.onOpenChange(false)}>
+              <Button
+                variant="secondary"
+                onPress={() => props.onOpenChange(false)}
+              >
                 取消
               </Button>
-              <Button type="submit" isDisabled={appCfgQuery.isPending} isPending={form.formState.isSubmitting}>
+              <Button
+                type="submit"
+                isDisabled={appCfgQuery.isPending}
+                isPending={form.formState.isSubmitting}
+              >
                 提交
               </Button>
             </Drawer.Footer>

@@ -27,7 +27,7 @@ fn build_router(app_state: AppState) -> Router<()> {
 pub async fn serve() -> anyhow::Result<()> {
     ma_utils::log::init_tracing();
 
-    let listen = std::env::var("LISTEN").unwrap_or_else(|_| "0.0.0.0:4000".to_string());
+    let listen = std::env::var("LISTEN").unwrap_or_else(|_| "0.0.0.0:4200".to_string());
 
     let listener = TcpListener::bind(&listen).await?;
 

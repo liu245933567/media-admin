@@ -19,7 +19,7 @@ function activeStepIndex(jobs: TaskLogGroup[], selectedJob: TaskLogGroup | undef
   if (jobs.length === 0) {
     return 0
   }
-  const selectedIndex = selectedJob ? jobs.findIndex(job => job.taskId === selectedJob.taskId) : -1
+  const selectedIndex = selectedJob ? jobs.findIndex(job => job.identityKey === selectedJob.identityKey) : -1
   if (selectedIndex >= 0) {
     return selectedIndex
   }
@@ -62,18 +62,18 @@ function PipelineStepTitle({ task }: { task: TaskLogGroup }) {
 
 function PipelineDetailStepper({
   jobs,
-  selectedJobId,
+  selectedJobKey,
   onSelect,
 }: {
   jobs: TaskLogGroup[]
-  selectedJobId: number | null
-  onSelect: (id: number) => void
+  selectedJobKey: string | null
+  onSelect: (key: string) => void
 }) {
   if (jobs.length === 0) {
     return <span className="px-3 py-2 text-sm text-muted">暂无子任务</span>
   }
 
-  const selectedJob = jobs.find(job => job.taskId === selectedJobId)
+  const selectedJob = jobs.find(job => job.identityKey === selectedJobKey)
   const currentStep = activeStepIndex(jobs, selectedJob)
 
   return (
@@ -85,12 +85,12 @@ function PipelineDetailStepper({
         onStepChange={(step) => {
           const next = jobs[step]
           if (next) {
-            onSelect(next.taskId)
+            onSelect(next.identityKey)
           }
         }}
       >
         {jobs.map(job => (
-          <Stepper.Step key={job.taskId}>
+          <Stepper.Step key={job.identityKey}>
             <StepIndicator task={job} />
             <Stepper.Content>
               <PipelineStepTitle task={job} />
@@ -176,9 +176,9 @@ export interface TaskmillPipelineDetailDrawerProps {
   pipeline: PipelineView | undefined
   stages: TaskLogGroup[]
   selectedJob: TaskLogGroup | undefined
-  selectedJobId: number | null
+  selectedJobKey: string | null
   autoScroll: boolean
-  onSelectedJobIdChange: (id: number) => void
+  onSelectedJobKeyChange: (key: string) => void
   onClose: () => void
 }
 
@@ -186,9 +186,9 @@ export function TaskmillPipelineDetailDrawer({
   pipeline,
   stages,
   selectedJob,
-  selectedJobId,
+  selectedJobKey,
   autoScroll,
-  onSelectedJobIdChange,
+  onSelectedJobKeyChange,
   onClose,
 }: TaskmillPipelineDetailDrawerProps) {
   return (
@@ -244,8 +244,8 @@ export function TaskmillPipelineDetailDrawer({
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-secondary">
                 <PipelineDetailStepper
                   jobs={stages}
-                  selectedJobId={selectedJobId}
-                  onSelect={onSelectedJobIdChange}
+                  selectedJobKey={selectedJobKey}
+                  onSelect={onSelectedJobKeyChange}
                 />
                 {selectedJob && (
                   <div className="mx-3 mb-2 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface px-3 py-2 text-xs text-muted">

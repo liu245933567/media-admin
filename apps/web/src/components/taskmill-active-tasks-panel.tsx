@@ -91,15 +91,35 @@ export function flattenTaskTree<T extends { id: number, parent_id: number | null
     byId.set(item.id, item)
   }
 
+  const createsParentCycle = (item: T): boolean => {
+    const seen = new Set<number>([item.id])
+    let parentId = item.parent_id
+    while (parentId != null) {
+      if (seen.has(parentId)) {
+        return true
+      }
+      seen.add(parentId)
+      parentId = byId.get(parentId)?.parent_id ?? null
+    }
+    return false
+  }
+
   for (const item of source) {
-    const parentId = item.parent_id != null && byId.has(item.parent_id) ? item.parent_id : null
+    const parentId = item.parent_id != null && byId.has(item.parent_id) && !createsParentCycle(item)
+      ? item.parent_id
+      : null
     const children = childrenByParent.get(parentId) ?? []
     children.push(item)
     childrenByParent.set(parentId, children)
   }
 
   const rows: Array<TaskmillTaskTreeRow<T>> = []
+  const visited = new Set<number>()
   const visit = (task: T, depth: number) => {
+    if (visited.has(task.id)) {
+      return
+    }
+    visited.add(task.id)
     rows.push({ item: task, depth })
     for (const child of childrenByParent.get(task.id) ?? []) {
       visit(child, depth + 1)

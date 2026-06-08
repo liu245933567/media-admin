@@ -12,7 +12,7 @@ export default defineConfig({
       client: 'react-query',
       httpClient: 'axios',
       override: {
-        enumGenerationType: 'type',
+        enumGenerationType: 'union',
         mutator: {
           path: './src/api/axios-instance.ts',
           name: 'axiosInstance',
@@ -31,7 +31,7 @@ export default defineConfig({
       target: './src/api/generated.schemas.ts',
       client: 'zod',
       override: {
-        enumGenerationType: 'type',
+        enumGenerationType: 'union',
       },
     },
     hooks: {

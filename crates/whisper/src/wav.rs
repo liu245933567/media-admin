@@ -1,5 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use ma_utils::config::get_ffmpeg_bin_path;
+use ma_utils::config::{get_ffmpeg_bin_path, get_temp_wav_dir};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use tokio::io::AsyncReadExt;
@@ -43,13 +45,14 @@ fn spawn_pcm_extract_command(input_video_path: &Path) -> Result<tokio::process::
 }
 
 fn default_wav_cache_path(input_video_path: &Path) -> PathBuf {
-    let mut p = input_video_path.to_path_buf();
+    let mut hasher = DefaultHasher::new();
+    input_video_path.to_string_lossy().hash(&mut hasher);
+
     let stem = input_video_path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "audio".to_string());
-    p.set_file_name(format!("{stem}.whisper-cache.wav"));
-    p
+    get_temp_wav_dir().join(format!("{stem}-{:016x}.whisper-cache.wav", hasher.finish()))
 }
 
 /// 从视频提取 16kHz 单声道 PCM WAV 到本地硬盘缓存。

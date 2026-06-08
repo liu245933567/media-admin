@@ -16,10 +16,11 @@ export interface TaskEventLine {
 }
 
 export interface TaskLogGroup {
+  identityKey: string
   taskId: number
   taskType: string
   label: string
-  parentId: number | null
+  parentIdentityKey: string | null
   isHistory: boolean
   status: string
   createdAt: string | null
@@ -136,7 +137,7 @@ export function stageJobs(pipeline: PipelineView): TaskLogGroup[] {
   if (pipeline.jobs.length <= 1) {
     return pipeline.jobs
   }
-  return pipeline.jobs.filter(job => job.taskId !== pipeline.root.taskId)
+  return pipeline.jobs.filter(job => job.identityKey !== pipeline.root.identityKey)
 }
 
 export function StatusChip({ task }: { task: TaskLogGroup }) {
