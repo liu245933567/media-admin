@@ -1,13 +1,31 @@
 import type {
+  TaskmillEstimatedProgress,
   TaskmillExecLogEntry,
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
+import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Card, Chip, Drawer, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch } from '@heroui/react'
+import { Button, Card, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { transJobType, transStatus } from '@/components/taskmill-active-tasks-panel'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { getTaskSubtitlePreviewJobsQueryKey, taskSubtitlePreviewJobs } from '@/api'
+import { transJobType } from '@/components/taskmill-active-tasks-panel'
+import {
+  clampTaskPercent,
+  formatPercent,
+  latestLineOf,
+  pipelineTitle,
+  stageJobs,
+  stageName,
+  StatusChip,
+  statusIcon,
+  TaskDurationMeta,
+  TaskProgressBar,
+  taskStatusColor,
+} from '@/components/taskmill-exec-log-shared'
+import { TaskmillPipelineDetailDrawer } from '@/components/taskmill-pipeline-detail-drawer'
 import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
@@ -21,40 +39,7 @@ interface TaskEventHeaderLike {
 
 type TaskmillKnownTask = TaskmillTaskRecord | TaskmillTaskHistoryRecord
 type PipelineFilter = 'all' | 'running' | 'finished' | 'failed'
-type EventTone = 'default' | 'accent' | 'success' | 'warning' | 'danger'
 type PipelinePageItem = number | 'left-ellipsis' | 'right-ellipsis'
-
-interface TaskEventLine {
-  key: string
-  type: string
-  receivedAt: string
-  summary: string
-  percent?: number
-  tone: EventTone
-}
-
-interface TaskLogGroup {
-  taskId: number
-  taskType: string
-  label: string
-  parentId: number | null
-  status: string
-  createdAt: string | null
-  startedAt: string | null
-  completedAt: string | null
-  durationMs: number | null
-  latestAt: string
-  percent: number | null
-  lines: TaskEventLine[]
-}
-
-interface PipelineView {
-  root: TaskLogGroup
-  jobs: TaskLogGroup[]
-  status: string
-  latestAt: string
-  percent: number | null
-}
 
 function readEventHeader(event: Record<string, unknown>): TaskEventHeaderLike | undefined {
   const data = event.data
@@ -90,34 +75,12 @@ function readEventTaskId(event: Record<string, unknown>): number | undefined {
   return typeof data?.task_id === 'number' ? data.task_id : undefined
 }
 
-function readNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
 function isHistoryTask(task: TaskmillKnownTask): task is TaskmillTaskHistoryRecord {
   return 'completed_at' in task
-}
-
-function taskStatusColor(status: string): EventTone {
-  const map: Record<string, EventTone> = {
-    running: 'success',
-    pending: 'default',
-    paused: 'warning',
-    waiting: 'accent',
-    blocked: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    cancelled: 'default',
-    superseded: 'accent',
-    expired: 'warning',
-    dependency_failed: 'danger',
-    dead_letter: 'danger',
-  }
-  return map[status] ?? 'default'
 }
 
 function eventTone(type: string): EventTone {
@@ -136,24 +99,6 @@ function eventTone(type: string): EventTone {
     Superseded: 'warning',
   }
   return map[type] ?? 'default'
-}
-
-function statusIcon(status: string): string {
-  const map: Record<string, string> = {
-    running: 'lucide:loader-circle',
-    pending: 'lucide:clock',
-    paused: 'lucide:pause',
-    waiting: 'lucide:hourglass',
-    blocked: 'lucide:ban',
-    completed: 'lucide:check',
-    failed: 'lucide:x',
-    cancelled: 'lucide:circle-slash',
-    superseded: 'lucide:replace',
-    expired: 'lucide:clock-alert',
-    dependency_failed: 'lucide:git-branch-plus',
-    dead_letter: 'lucide:triangle-alert',
-  }
-  return map[status] ?? 'lucide:dot'
 }
 
 function eventLabel(type: string): string {
@@ -177,52 +122,6 @@ function eventLabel(type: string): string {
   return map[type] ?? type
 }
 
-function formatPercent(percent: number): string {
-  return `${Math.round(percent * 1000) / 10}%`
-}
-
-function formatDurationMs(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value) || value < 0) {
-    return '-'
-  }
-
-  const totalSeconds = Math.max(1, Math.ceil(value / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes <= 0) {
-    return `${seconds}s`
-  }
-  return `${minutes}m ${seconds}s`
-}
-
-function durationBetween(start: string | null, end: string | null): number | null {
-  if (!start || !end) {
-    return null
-  }
-  const s = new Date(start).getTime()
-  const e = new Date(end).getTime()
-  if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) {
-    return null
-  }
-  return e - s
-}
-
-function latestLineOf(task: TaskLogGroup): TaskEventLine | undefined {
-  return task.lines.at(-1)
-}
-
-function pipelineTitle(pipeline: PipelineView): string {
-  return pipeline.root.label || transJobType(pipeline.root.taskType) || `任务 #${pipeline.root.taskId}`
-}
-
-function stageName(task: TaskLogGroup): string {
-  const label = transJobType(task.taskType)
-  if (label) {
-    return label
-  }
-  return task.label || `任务 #${task.taskId}`
-}
-
 /** 将 taskmill `SchedulerEvent` JSON 压缩为一行可读摘要 */
 function formatTaskmillExecLogSummary(event: Record<string, unknown>): string {
   const typeStr = typeof event.type === 'string' ? event.type : '?'
@@ -234,9 +133,10 @@ function formatTaskmillExecLogSummary(event: Record<string, unknown>): string {
   switch (typeStr) {
     case 'Progress': {
       const data = event.data as Record<string, unknown> | undefined
-      const pct = typeof data?.percent === 'number'
-        ? formatPercent(data.percent)
-        : ''
+      const percent = clampTaskPercent(data?.percent)
+      const pct = percent == null
+        ? ''
+        : formatPercent(percent)
       const msg = typeof data?.message === 'string' ? data.message : ''
       return `${who}${pct} ${msg}`.trim()
     }
@@ -298,10 +198,10 @@ function formatProcessEventSummary(event: Record<string, unknown>): { summary: s
 
   switch (typeStr) {
     case 'Progress': {
-      const percent = readNumber(data?.percent)
+      const percent = clampTaskPercent(data?.percent)
       const message = readString(data?.message)
       return {
-        percent,
+        percent: percent ?? undefined,
         summary: [percent == null ? undefined : formatPercent(percent), message]
           .filter(Boolean)
           .join(' '),
@@ -369,6 +269,7 @@ function mergeTask(
   existing?: TaskLogGroup,
 ): TaskLogGroup {
   const completedAt = isHistoryTask(task) ? task.completed_at : null
+  const existingPercent = clampTaskPercent(existing?.percent)
   return {
     taskId: task.id,
     taskType: task.task_type,
@@ -380,8 +281,22 @@ function mergeTask(
     completedAt,
     durationMs: isHistoryTask(task) ? task.duration_ms : null,
     latestAt: completedAt ?? task.started_at ?? task.created_at,
-    percent: task.status === 'completed' ? 1 : existing?.percent ?? null,
+    percent: task.status === 'completed' ? 1 : existingPercent,
     lines: existing?.lines ?? [],
+  }
+}
+
+function mergeEstimatedProgress(
+  group: TaskLogGroup,
+  progress: TaskmillEstimatedProgress,
+): TaskLogGroup {
+  const percent = clampTaskPercent(progress.percent)
+
+  return {
+    ...group,
+    taskType: group.taskType || progress.header.task_type,
+    label: group.label || progress.header.label,
+    percent: percent ?? group.percent,
   }
 }
 
@@ -389,6 +304,7 @@ function buildTaskLogGroups(
   items: TaskmillExecLogEntry[] | undefined,
   activeItems: TaskmillTaskRecord[] | undefined,
   historyItems: TaskmillTaskHistoryRecord[] | undefined,
+  progressItems: TaskmillEstimatedProgress[] | undefined,
 ): TaskLogGroup[] {
   const groups = new Map<number, TaskLogGroup>()
 
@@ -410,7 +326,7 @@ function buildTaskLogGroups(
     const existing = groups.get(taskId)
     const formatted = formatProcessEventSummary(row.event)
     const status = deriveStatusFromEvent(type, row.event, existing?.status ?? 'pending')
-    const percent = formatted.percent ?? existing?.percent ?? null
+    const percent = formatted.percent ?? clampTaskPercent(existing?.percent)
 
     const line: TaskEventLine = {
       key: `${row.received_at}-${type}-${index}`,
@@ -437,7 +353,45 @@ function buildTaskLogGroups(
     })
   }
 
+  for (const progress of progressItems ?? []) {
+    const taskId = progress.header.task_id
+    const existing = groups.get(taskId)
+    if (existing) {
+      groups.set(taskId, mergeEstimatedProgress(existing, progress))
+    }
+  }
+
   return Array.from(groups.values())
+}
+
+function terminalProgressValue(job: TaskLogGroup): number {
+  if (job.status === 'completed') {
+    return 1
+  }
+  return clampTaskPercent(job.percent) ?? 0
+}
+
+function derivePipelinePercent(root: TaskLogGroup, jobs: TaskLogGroup[], status: string): number | null {
+  if (status === 'completed') {
+    return 1
+  }
+
+  const progressJobs = jobs.length > 1
+    ? jobs.filter(job => job.taskId !== root.taskId)
+    : jobs
+  if (progressJobs.length === 0) {
+    return clampTaskPercent(root.percent)
+  }
+
+  const hasProgressSignal = progressJobs.some(job =>
+    job.percent != null || job.status === 'completed' || ['running', 'waiting', 'pending', 'paused', 'blocked'].includes(job.status),
+  )
+  if (!hasProgressSignal) {
+    return clampTaskPercent(root.percent)
+  }
+
+  const total = progressJobs.reduce((sum, job) => sum + terminalProgressValue(job), 0)
+  return clampTaskPercent(total / progressJobs.length)
 }
 
 function buildPipelineViews(groups: TaskLogGroup[]): PipelineView[] {
@@ -495,20 +449,10 @@ function buildPipelineViews(groups: TaskLogGroup[]): PipelineView[] {
       )
       const status = terminal?.status
         ?? (jobs.every(job => job.status === 'completed') ? 'completed' : root.status)
-      const progressValues = jobs.map(job => job.percent).filter((v): v is number => v != null)
-      const percent = progressValues.length
-        ? progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length
-        : null
+      const percent = derivePipelinePercent(root, jobs, status)
       return { root, jobs, latestAt, status, percent }
     })
     .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
-}
-
-function stageJobs(pipeline: PipelineView): TaskLogGroup[] {
-  if (pipeline.jobs.length <= 1) {
-    return pipeline.jobs
-  }
-  return pipeline.jobs.filter(job => job.taskId !== pipeline.root.taskId)
 }
 
 function matchesFilter(pipeline: PipelineView, filter: PipelineFilter): boolean {
@@ -568,26 +512,6 @@ function stageDot(task: TaskLogGroup, selected: boolean) {
   )
 }
 
-function StatusChip({ task }: { task: TaskLogGroup }) {
-  return (
-    <Chip color={taskStatusColor(task.status)} size="sm" variant="soft">
-      <Icon className={task.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(task.status)} />
-      {transStatus(task.status)}
-    </Chip>
-  )
-}
-
-function TaskDurationMeta({ task }: { task: TaskLogGroup }) {
-  const duration = task.durationMs ?? durationBetween(task.startedAt, task.completedAt ?? task.latestAt)
-
-  return (
-    <span className="inline-flex items-center gap-1 tabular-nums">
-      <Icon className="size-3.5" icon="lucide:timer" />
-      {formatDurationMs(duration)}
-    </span>
-  )
-}
-
 function PipelineStages({
   jobs,
   selectedJobId,
@@ -629,80 +553,11 @@ function PipelineStages({
   )
 }
 
-function JobLogView({
-  job,
-  autoScroll,
-}: {
-  job: TaskLogGroup | undefined
-  autoScroll: boolean
-}) {
-  const logRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!autoScroll || !logRef.current) {
-      return
-    }
-    logRef.current.scrollTop = logRef.current.scrollHeight
-  }, [job?.lines, autoScroll])
-
-  if (!job) {
-    return (
-      <div className="flex h-full min-h-32 items-center justify-center px-4 py-8 text-center text-sm text-muted">
-        选择一个 job 后显示日志
-      </div>
-    )
-  }
-
-  const lines = job.lines.length > 0
-    ? job.lines
-    : [{
-        key: `empty-${job.taskId}`,
-        type: 'Pending',
-        receivedAt: job.latestAt,
-        summary: '当前任务还没有调度事件日志',
-        tone: 'default' as EventTone,
-      }]
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-start gap-3 px-3 pb-2">
-        <div className="min-w-0 flex-1">
-          <h3 className="m-0 truncate text-sm font-medium" title={job.label || stageName(job)}>
-            {job.label || stageName(job)}
-          </h3>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-            <StatusChip task={job} />
-            <span className="font-mono tabular-nums">
-              #
-              {job.taskId}
-            </span>
-            <span className="max-w-48 truncate">{transJobType(job.taskType)}</span>
-            <TaskDurationMeta task={job} />
-          </div>
-        </div>
-      </div>
-      <div
-        ref={logRef}
-        className="min-h-0 flex-1 overflow-auto bg-[#1f1f27] px-3 py-2.5 font-mono text-[13px] leading-6 text-neutral-100"
-      >
-        {lines.map((line, index) => (
-          <div key={line.key} className="grid grid-cols-[2.5rem_5rem_minmax(0,1fr)] gap-2">
-            <span className="select-none text-right text-neutral-500">{index + 1}</span>
-            <span className="select-none text-neutral-400">{formatTaskmillTime(line.receivedAt).slice(11, 19)}</span>
-            <span className={line.type === 'Progress' ? 'whitespace-pre-wrap wrap-break-word text-cyan-300' : 'whitespace-pre-wrap wrap-break-word'}>
-              {line.summary}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 interface TaskmillExecLogPanelProps {
   items: TaskmillExecLogEntry[] | undefined
   activeItems?: TaskmillTaskRecord[]
   historyItems?: TaskmillTaskHistoryRecord[]
+  progressItems?: TaskmillEstimatedProgress[]
   loading?: boolean
   runningCount: number
   pendingCount: number
@@ -722,6 +577,7 @@ export function TaskmillExecLogPanel({
   items,
   activeItems,
   historyItems,
+  progressItems,
   loading,
   runningCount,
   pendingCount,
@@ -745,8 +601,8 @@ export function TaskmillExecLogPanel({
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
 
   const groups = useMemo(
-    () => buildTaskLogGroups(items, activeItems, historyItems),
-    [activeItems, historyItems, items],
+    () => buildTaskLogGroups(items, activeItems, historyItems, progressItems),
+    [activeItems, historyItems, items, progressItems],
   )
   const pipelines = useMemo(() => buildPipelineViews(groups), [groups])
   const filteredPipelines = useMemo(() => {
@@ -789,6 +645,16 @@ export function TaskmillExecLogPanel({
   const selectedJob = detailStages.find(job => job.taskId === selectedJobId)
     ?? detailStages[0]
     ?? detailPipeline?.root
+  const selectedJobSupportsSubtitlePreview = selectedJob != null && [
+    'media-jobs::video-subtitle-recognize',
+    'media-jobs::subtitle-translate',
+  ].includes(selectedJob.taskType)
+  const subtitlePreviewQuery = useQuery({
+    enabled: selectedJobSupportsSubtitlePreview && selectedJob != null,
+    queryKey: getTaskSubtitlePreviewJobsQueryKey(selectedJobSupportsSubtitlePreview ? selectedJob?.taskId : null),
+    queryFn: ({ signal }) => taskSubtitlePreviewJobs(selectedJob!.taskId, signal),
+    refetchInterval: selectedJobSupportsSubtitlePreview && selectedJob?.status !== 'completed' ? 1000 : false,
+  })
 
   function openPipelineDetail(pipeline: PipelineView, jobId?: number) {
     const stages = stageJobs(pipeline)
@@ -973,7 +839,7 @@ export function TaskmillExecLogPanel({
                 className="flex-nowrap items-center py-1.5"
               >
                 <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
-                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(10rem,15rem)_minmax(12rem,16rem)] lg:items-center">
+                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)] lg:items-center">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
@@ -998,11 +864,9 @@ export function TaskmillExecLogPanel({
                           jobs
                         </span>
                         <TaskDurationMeta task={pipeline.root} />
-                        {pipeline.percent != null && (
-                          <span className="tabular-nums text-accent">{formatPercent(pipeline.percent)}</span>
-                        )}
                       </div>
                     </div>
+                    <TaskProgressBar percent={pipeline.percent} />
                     <div className="min-w-0 lg:justify-self-center">
                       <PipelineStages
                         compact
@@ -1101,69 +965,21 @@ export function TaskmillExecLogPanel({
         </div>
       </div>
 
-      <Drawer.Backdrop
-        isOpen={Boolean(detailPipeline)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDetailPipelineId(null)
-            setSelectedJobId(null)
-          }
+      <TaskmillPipelineDetailDrawer
+        autoScroll={autoScroll}
+        pipeline={detailPipeline}
+        selectedJob={selectedJob}
+        selectedJobId={selectedJob?.taskId ?? null}
+        selectedJobSupportsSubtitlePreview={selectedJobSupportsSubtitlePreview}
+        stages={detailStages}
+        subtitlePreview={subtitlePreviewQuery.data}
+        subtitlePreviewLoading={subtitlePreviewQuery.isFetching}
+        onClose={() => {
+          setDetailPipelineId(null)
+          setSelectedJobId(null)
         }}
-      >
-        <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-dvh w-full flex-col sm:max-w-3xl">
-            <Drawer.CloseTrigger />
-            <Drawer.Header className="shrink-0 pr-12">
-              <div className="flex min-w-0 flex-col gap-2">
-                <Drawer.Heading className="text-base">
-                  <span className="block truncate" title={detailPipeline ? pipelineTitle(detailPipeline) : undefined}>
-                    {detailPipeline ? pipelineTitle(detailPipeline) : 'Pipeline'}
-                  </span>
-                </Drawer.Heading>
-                {detailPipeline && (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                    <StatusChip task={{ ...detailPipeline.root, status: detailPipeline.status, percent: detailPipeline.percent }} />
-                    <span className="font-mono tabular-nums">
-                      #
-                      {detailPipeline.root.taskId}
-                    </span>
-                    <span className="tabular-nums">
-                      {detailPipeline.jobs.length}
-                      {' '}
-                      jobs
-                    </span>
-                    <TaskDurationMeta task={detailPipeline.root} />
-                    {detailPipeline.percent != null && <span className="tabular-nums text-accent">{formatPercent(detailPipeline.percent)}</span>}
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <Icon className="size-3.5" icon="lucide:clock" />
-                      {formatTaskmillTime(detailPipeline.latestAt)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </Drawer.Header>
-            <Drawer.Body className="min-h-0 flex-1 overflow-hidden px-3 pb-3">
-              {detailPipeline && (
-                <div className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-surface-secondary">
-                  <div className="flex min-w-0 items-center gap-3 px-3 py-2">
-                    <span className="shrink-0 text-xs text-muted">阶段</span>
-                    <div className="min-w-0 flex-1">
-                      <PipelineStages
-                        jobs={detailStages}
-                        selectedJobId={selectedJob?.taskId ?? null}
-                        onSelect={setSelectedJobId}
-                      />
-                    </div>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <JobLogView job={selectedJob} autoScroll={autoScroll} />
-                  </div>
-                </div>
-              )}
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
+        onSelectedJobIdChange={setSelectedJobId}
+      />
     </>
   )
 }

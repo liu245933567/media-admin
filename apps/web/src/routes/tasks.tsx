@@ -106,6 +106,7 @@ function PageComponent() {
         items={execLogQuery.data}
         activeItems={activeQuery.data}
         historyItems={historyQuery.data}
+        progressItems={snapshotQuery.data?.scheduler.progress}
         loading={execLogQuery.isLoading || execLogQuery.isFetching}
         runningCount={runningCount}
         pendingCount={pendingCount}

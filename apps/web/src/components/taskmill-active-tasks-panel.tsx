@@ -194,7 +194,7 @@ export function TaskmillActiveTasksPanel({
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center">
             <TaskHierarchyLabel depth={row.original.depth} />
-            <TooltipText className="max-w-[180px] truncate" content={row.original.item.task_type}>
+            <TooltipText className="max-w-45 truncate" content={row.original.item.task_type}>
               {transJobType(row.original.item.task_type)}
             </TooltipText>
           </div>
@@ -204,7 +204,7 @@ export function TaskmillActiveTasksPanel({
         header: '标签',
         accessorFn: row => row.item.label,
         cell: ({ row }) => (
-          <TooltipText className="max-w-[220px] truncate" content={row.original.item.label}>
+          <TooltipText className="max-w-55 truncate" content={row.original.item.label}>
             {row.original.item.label}
           </TooltipText>
         ),

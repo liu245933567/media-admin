@@ -424,6 +424,34 @@ pub fn recognize_wav_voice(
     )
 }
 
+/// 对已提取的 16kHz mono WAV 做 VAD 切分 + Whisper 识别，并在每个 VAD 区间完成后回调。
+pub fn recognize_wav_voice_incremental<F>(
+    wav_path: &Path,
+    vad_config: Option<VadConfig>,
+    whisper_engine_config: Option<WhisperEngineConfig>,
+    whisper_transcribe_config: Option<WhisperTranscribeConfig>,
+    on_interval: F,
+) -> Result<WhisperTranscribeOutput>
+where
+    F: FnMut(&[WhisperTranscribeItem], usize, usize) -> Result<()>,
+{
+    let samples_i16 = load_wav_i16_mono16k(wav_path)?;
+    tracing::info!(
+        wav = %wav_path.display(),
+        samples = samples_i16.len(),
+        dur_s = samples_i16.len() as f64 / SAMPLE_RATE as f64,
+        "[whisper] 已加载 WAV"
+    );
+
+    recognize_pcm_i16_incremental(
+        &samples_i16,
+        vad_config,
+        whisper_engine_config,
+        whisper_transcribe_config,
+        on_interval,
+    )
+}
+
 /// 识别视频中的语音：经管道提取 PCM，再 VAD + Whisper。
 pub async fn recognize_video_voice(
     video_path: &Path,

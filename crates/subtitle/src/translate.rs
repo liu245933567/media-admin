@@ -472,6 +472,19 @@ pub async fn translate_srt_file(
     dst_srt: Option<&Path>,
     options: &SubtitleTranslateConfig,
 ) -> Result<PathBuf> {
+    translate_srt_file_incremental(src_srt, dst_srt, options, |_| Ok(())).await
+}
+
+/// 翻译 SRT 文件，并在每批翻译结果写回内存条目后回调当前完整字幕列表。
+pub async fn translate_srt_file_incremental<F>(
+    src_srt: &Path,
+    dst_srt: Option<&Path>,
+    options: &SubtitleTranslateConfig,
+    mut on_update: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(&[WhisperTranscribeItem]) -> Result<()>,
+{
     let content = tokio::fs::read_to_string(src_srt)
         .await
         .with_context(|| format!("读取 SRT 失败: {}", src_srt.display()))?;
@@ -508,8 +521,29 @@ pub async fn translate_srt_file(
     );
 
     let translated = run_translate_work(&ctx, work_items, batch_size, concurrency).await?;
-
-    let (ok, fail) = apply_translation_results(&mut entries, translated)?;
+    let total_translated = translated.len();
+    let mut ok = 0usize;
+    let mut fail = 0usize;
+    let mut pending_batch = Vec::with_capacity(batch_size.max(1));
+    for item in translated {
+        pending_batch.push(item);
+        if pending_batch.len() < batch_size.max(1) {
+            continue;
+        }
+        let (chunk_ok, chunk_fail) =
+            apply_translation_results(&mut entries, std::mem::take(&mut pending_batch))?;
+        ok += chunk_ok;
+        fail += chunk_fail;
+        on_update(&srt_entries_to_whisper_items(&entries))?;
+    }
+    if !pending_batch.is_empty() {
+        let (chunk_ok, chunk_fail) = apply_translation_results(&mut entries, pending_batch)?;
+        ok += chunk_ok;
+        fail += chunk_fail;
+        on_update(&srt_entries_to_whisper_items(&entries))?;
+    } else if total_translated == 0 {
+        on_update(&srt_entries_to_whisper_items(&entries))?;
+    }
     tracing::info!("翻译完成: 成功 {}, 失败 {}, 共 {}", ok, fail, entries.len());
 
     let dst = match dst_srt {
@@ -527,6 +561,57 @@ pub async fn translate_srt_file(
     }
 
     Ok(dst)
+}
+
+fn parse_srt_time_cs(value: &str) -> Option<i64> {
+    let value = value.trim().replace(',', ".");
+    let mut parts = value.split(':');
+    let hours = parts.next()?.trim().parse::<i64>().ok()?;
+    let minutes = parts.next()?.trim().parse::<i64>().ok()?;
+    let seconds_part = parts.next()?.trim();
+    if parts.next().is_some() {
+        return None;
+    }
+    let mut sec_parts = seconds_part.split('.');
+    let seconds = sec_parts.next()?.trim().parse::<i64>().ok()?;
+    let frac = sec_parts.next().unwrap_or("0").trim();
+    let millis = match frac.len() {
+        0 => 0,
+        1 => frac.parse::<i64>().ok()?.saturating_mul(100),
+        2 => frac.parse::<i64>().ok()?.saturating_mul(10),
+        _ => frac.get(..3)?.parse::<i64>().ok()?,
+    };
+    Some(
+        hours
+            .saturating_mul(360_000)
+            .saturating_add(minutes.saturating_mul(6_000))
+            .saturating_add(seconds.saturating_mul(100))
+            .saturating_add(millis / 10),
+    )
+}
+
+fn parse_srt_time_line_cs(time_line: &str) -> (i64, i64) {
+    let mut parts = time_line.split("-->");
+    let start = parts.next().and_then(parse_srt_time_cs).unwrap_or_default();
+    let end = parts
+        .next()
+        .and_then(parse_srt_time_cs)
+        .unwrap_or_else(|| start.saturating_add(1));
+    (start, end.max(start.saturating_add(1)))
+}
+
+fn srt_entries_to_whisper_items(entries: &[SrtEntry]) -> Vec<WhisperTranscribeItem> {
+    entries
+        .iter()
+        .map(|entry| {
+            let (start_cs, end_cs) = parse_srt_time_line_cs(&entry.time_line);
+            WhisperTranscribeItem {
+                start_cs,
+                end_cs,
+                text: entry.text.trim().to_string(),
+            }
+        })
+        .collect()
 }
 
 /// 与识别并行：收到 `notify` 时扫描新增条目并提交翻译，结果写回 `segments` 的 `text`。

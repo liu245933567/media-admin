@@ -1,6 +1,11 @@
 //! Taskmill SQLite 持久化调度器（与业务 DB 分离）。
 
-use std::{collections::VecDeque, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::PathBuf,
+    sync::{Arc, Mutex as StdMutex},
+    time::Duration,
+};
 
 use tokio::sync::Mutex;
 
@@ -41,6 +46,77 @@ pub struct TimestampedSchedulerEvent {
     pub received_at: chrono::DateTime<Utc>,
     #[schema(value_type = serde_json::Value)]
     pub event: SchedulerEvent,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TaskmillSubtitlePreviewItem {
+    pub start_cs: i64,
+    pub end_cs: i64,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TaskmillSubtitlePreview {
+    pub task_id: i64,
+    pub updated_at: chrono::DateTime<Utc>,
+    pub completed: bool,
+    pub items: Vec<TaskmillSubtitlePreviewItem>,
+}
+
+#[derive(Clone, Default)]
+pub struct TaskSubtitlePreviewStore {
+    inner: Arc<StdMutex<HashMap<i64, TaskmillSubtitlePreview>>>,
+}
+
+impl TaskSubtitlePreviewStore {
+    pub fn empty(task_id: i64) -> TaskmillSubtitlePreview {
+        TaskmillSubtitlePreview {
+            task_id,
+            updated_at: Utc::now(),
+            completed: false,
+            items: Vec::new(),
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<i64, TaskmillSubtitlePreview>> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn reset(&self, task_id: i64) {
+        self.lock().insert(task_id, Self::empty(task_id));
+    }
+
+    pub fn append_items(&self, task_id: i64, items: Vec<TaskmillSubtitlePreviewItem>) {
+        if items.is_empty() {
+            return;
+        }
+
+        let mut guard = self.lock();
+        let preview = guard.entry(task_id).or_insert_with(|| Self::empty(task_id));
+        preview.items.extend(items);
+        preview.updated_at = Utc::now();
+    }
+
+    pub fn replace_items(
+        &self,
+        task_id: i64,
+        items: Vec<TaskmillSubtitlePreviewItem>,
+        completed: bool,
+    ) {
+        self.lock().insert(
+            task_id,
+            TaskmillSubtitlePreview {
+                task_id,
+                updated_at: Utc::now(),
+                completed,
+                items,
+            },
+        );
+    }
+
+    pub fn get(&self, task_id: i64) -> Option<TaskmillSubtitlePreview> {
+        self.lock().get(&task_id).cloned()
+    }
 }
 
 const EXEC_EVENT_LOG_CAP: usize = 400;
@@ -106,6 +182,7 @@ pub struct TaskmillRuntime {
     pub cancellation: CancellationToken,
     pub setup_download_deps: SetupDownloadDeps,
     pub media_library_scan_deps: MediaLibraryScanDeps,
+    pub subtitle_preview_store: TaskSubtitlePreviewStore,
     exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
@@ -145,6 +222,9 @@ impl TaskmillRuntime {
         let media_library_scan_deps = MediaLibraryScanDeps { db };
         let media_scan_exec =
             super::spawn::MediaLibraryScanExecutor::new(media_library_scan_deps.clone());
+        let subtitle_preview_store = TaskSubtitlePreviewStore::default();
+        let recognize_exec = VideoSubtitleRecognizeExecutor::new(subtitle_preview_store.clone());
+        let translate_exec = SubtitleTranslateExecutor::new(subtitle_preview_store.clone());
 
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
@@ -152,8 +232,8 @@ impl TaskmillRuntime {
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
                     .task::<VideoSubtitleExtractWavTask>(VideoSubtitleExtractWavExecutor)
-                    .task::<VideoSubtitleRecognizeTask>(VideoSubtitleRecognizeExecutor)
-                    .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
+                    .task::<VideoSubtitleRecognizeTask>(recognize_exec)
+                    .task::<SubtitleTranslateJob>(translate_exec)
                     .task::<MediaLibraryScanTask>(media_scan_exec)
                     .task::<WhisperModelDownloadTask>(whisper_dl_exec)
                     .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
@@ -210,6 +290,7 @@ impl TaskmillRuntime {
             cancellation,
             setup_download_deps,
             media_library_scan_deps,
+            subtitle_preview_store,
             exec_event_log,
         })
     }
@@ -294,6 +375,10 @@ impl TaskmillRuntime {
         let guard = self.exec_event_log.lock().await;
         let skip = guard.len().saturating_sub(limit);
         guard.iter().skip(skip).cloned().collect()
+    }
+
+    pub fn subtitle_preview(&self, task_id: i64) -> Option<TaskmillSubtitlePreview> {
+        self.subtitle_preview_store.get(task_id)
     }
 }
 

@@ -101,11 +101,11 @@ function AppSidebarContent() {
           </Sidebar.Menu>
         </Sidebar.Group>
       </Sidebar.Content>
-      <Sidebar.Footer>
+      {/* <Sidebar.Footer>
         <div className="rounded-lg bg-surface-secondary px-3 py-2 text-xs text-muted">
           本地媒体、字幕与任务队列
         </div>
-      </Sidebar.Footer>
+      </Sidebar.Footer> */}
     </>
   )
 }

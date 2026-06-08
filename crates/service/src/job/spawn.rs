@@ -4,15 +4,17 @@ use std::path::Path;
 
 use ma_subtitle::generate::{pending_translate_from, write_srt_from_recognize};
 use ma_subtitle::segment_filter::sanitize_whisper_segments;
-use ma_subtitle::translate::translate_srt_file;
+use ma_subtitle::translate::translate_srt_file_incremental;
 use ma_whisper::decode_gate::acquire_decode_permit;
 use ma_whisper::engine_cache::spawn_idle_eviction_loop;
-use ma_whisper::generate::recognize_wav_voice;
+use ma_whisper::generate::recognize_wav_voice_incremental;
 use ma_whisper::wav::extract_wav_i16_mono16k;
 use taskmill::{DomainTaskContext, TaskError, TypedExecutor};
-use tokio::task::spawn_blocking;
+use tokio::{sync::mpsc, task::spawn_blocking};
 
-use super::storage::{MediaLibraryScanDeps, TaskmillRuntime};
+use super::storage::{
+    MediaLibraryScanDeps, TaskSubtitlePreviewStore, TaskmillRuntime, TaskmillSubtitlePreviewItem,
+};
 use super::types::{
     MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob, VideoSubtitleExtractWavTask,
     VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
@@ -97,7 +99,41 @@ impl TypedExecutor<VideoSubtitleExtractWavTask> for VideoSubtitleExtractWavExecu
     }
 }
 
-pub struct VideoSubtitleRecognizeExecutor;
+pub struct VideoSubtitleRecognizeExecutor {
+    subtitle_preview_store: TaskSubtitlePreviewStore,
+}
+
+impl VideoSubtitleRecognizeExecutor {
+    pub fn new(subtitle_preview_store: TaskSubtitlePreviewStore) -> Self {
+        Self {
+            subtitle_preview_store,
+        }
+    }
+}
+
+struct RecognizeProgressEvent {
+    percent: f32,
+    message: String,
+}
+
+fn map_preview_items(
+    items: &[ma_whisper::types::WhisperTranscribeItem],
+) -> Vec<TaskmillSubtitlePreviewItem> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let text = item.text.trim();
+            if text.is_empty() {
+                return None;
+            }
+            Some(TaskmillSubtitlePreviewItem {
+                start_cs: item.start_cs,
+                end_cs: item.end_cs,
+                text: text.to_string(),
+            })
+        })
+        .collect()
+}
 
 async fn remove_wav_cache_best_effort(wav_path: &str) {
     if wav_path.trim().is_empty() {
@@ -127,27 +163,72 @@ impl TypedExecutor<VideoSubtitleRecognizeTask> for VideoSubtitleRecognizeExecuto
             .report(0.05, Some(format!("开始 VAD + Whisper 识别: {wav_path}")));
         ctx.check_cancelled()?;
 
+        let task_id = ctx.record().id;
+        self.subtitle_preview_store.reset(task_id);
         let vad_config = job.config.vad_config.clone();
         let whisper_engine_config = job.config.whisper_engine_config.clone();
         let whisper_transcribe_config = job.config.whisper_transcribe_config.clone();
         let wav_path_buf = Path::new(wav_path).to_path_buf();
+        let subtitle_preview_store = self.subtitle_preview_store.clone();
 
         let decode_permit = acquire_decode_permit()
             .await
             .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
 
-        let recognize_res = spawn_blocking(move || {
+        let (progress_tx, mut progress_rx) = mpsc::unbounded_channel::<RecognizeProgressEvent>();
+        let mut recognize_handle = spawn_blocking(move || {
             let _decode_permit = decode_permit;
-            recognize_wav_voice(
+            let mut recognized_items = 0usize;
+            recognize_wav_voice_incremental(
                 &wav_path_buf,
                 vad_config,
                 whisper_engine_config,
                 whisper_transcribe_config,
+                move |items, idx, total| {
+                    recognized_items += items.len();
+                    let completed = idx.saturating_add(1);
+                    let percent = if total > 0 {
+                        0.05 + (completed as f32 / total as f32) * 0.8
+                    } else {
+                        0.85
+                    };
+                    let summary = if total > 0 {
+                        format!(
+                            "识别 VAD 片段 {completed}/{total}，新增 {} 条字幕，累计 {recognized_items} 条",
+                            items.len()
+                        )
+                    } else {
+                        format!(
+                            "识别 VAD 片段 {completed}，新增 {} 条字幕，累计 {recognized_items} 条",
+                            items.len()
+                        )
+                    };
+                    subtitle_preview_store.append_items(task_id, map_preview_items(items));
+                    let _ = progress_tx.send(RecognizeProgressEvent {
+                        percent,
+                        message: summary,
+                    });
+                    Ok(())
+                },
             )
-        })
-        .await
-        .map_err(|e| TaskError::retryable(format!("Whisper 任务 join 失败: {e:#}")))?
-        .map_err(|e| TaskError::retryable(format!("{e:#}")));
+        });
+
+        let recognize_res = loop {
+            tokio::select! {
+                Some(event) = progress_rx.recv() => {
+                    ctx.progress().report(event.percent, Some(event.message));
+                }
+                res = &mut recognize_handle => {
+                    break res
+                        .map_err(|e| TaskError::retryable(format!("Whisper 任务 join 失败: {e:#}")))?
+                        .map_err(|e| TaskError::retryable(format!("{e:#}")));
+                }
+            }
+        };
+        while let Ok(event) = progress_rx.try_recv() {
+            ctx.progress().report(event.percent, Some(event.message));
+        }
+
         let recognize_output = match recognize_res {
             Ok(out) => out,
             Err(e) => {
@@ -158,6 +239,8 @@ impl TypedExecutor<VideoSubtitleRecognizeTask> for VideoSubtitleRecognizeExecuto
 
         let detected_lang = recognize_output.lang.clone();
         let source_items = sanitize_whisper_segments(recognize_output.items.clone());
+        self.subtitle_preview_store
+            .replace_items(task_id, map_preview_items(&source_items), false);
         let outcome = write_srt_from_recognize(video_path, recognize_output, None)
             .await
             .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
@@ -193,6 +276,8 @@ impl TypedExecutor<VideoSubtitleRecognizeTask> for VideoSubtitleRecognizeExecuto
             );
         }
 
+        self.subtitle_preview_store
+            .replace_items(task_id, map_preview_items(&source_items), true);
         ctx.progress().report(1.0, Some("识别子任务完成".into()));
         Ok(())
     }
@@ -208,7 +293,17 @@ impl TypedExecutor<VideoSubtitleRecognizeTask> for VideoSubtitleRecognizeExecuto
     }
 }
 
-pub struct SubtitleTranslateExecutor;
+pub struct SubtitleTranslateExecutor {
+    subtitle_preview_store: TaskSubtitlePreviewStore,
+}
+
+impl SubtitleTranslateExecutor {
+    pub fn new(subtitle_preview_store: TaskSubtitlePreviewStore) -> Self {
+        Self {
+            subtitle_preview_store,
+        }
+    }
+}
 
 impl TypedExecutor<SubtitleTranslateJob> for SubtitleTranslateExecutor {
     async fn execute(
@@ -227,10 +322,20 @@ impl TypedExecutor<SubtitleTranslateJob> for SubtitleTranslateExecutor {
         );
         ctx.check_cancelled()?;
 
-        let out = translate_srt_file(src, None, &job.config)
-            .await
-            .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
+        let task_id = ctx.record().id;
+        self.subtitle_preview_store.reset(task_id);
+        let subtitle_preview_store = self.subtitle_preview_store.clone();
+        let out = translate_srt_file_incremental(src, None, &job.config, move |items| {
+            subtitle_preview_store.replace_items(task_id, map_preview_items(items), false);
+            Ok(())
+        })
+        .await
+        .map_err(|e| TaskError::retryable(format!("{e:#}")))?;
 
+        if let Some(preview) = self.subtitle_preview_store.get(task_id) {
+            self.subtitle_preview_store
+                .replace_items(task_id, preview.items, true);
+        }
         ctx.progress()
             .report(1.0, Some(format!("翻译完成: {}", out.display())));
         Ok(())
