@@ -12,7 +12,6 @@ import {
   listFilesMediaLibrary,
   listRootsMediaLibrary,
 } from '@/api'
-import { AppPage } from '@/components/app-page'
 import { useAppToast } from '@/components/app-toast'
 import { useConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable } from '@/components/data-table'
@@ -226,7 +225,7 @@ function PageComponent() {
   const totalPage = Math.max(1, Math.ceil(total / pageSize))
 
   return (
-    <AppPage title="媒体库">
+    <>
       <SubtitleTaskCreateDrawerForm
         open={subtitleTaskCreateOpen}
         onOpenChange={(open) => {
@@ -255,9 +254,10 @@ function PageComponent() {
             />
           </div>
           <Select
-            selectedKey={rootId}
-            onSelectionChange={(key) => {
-              setRootId(key as string | null)
+            value={rootId ?? ''}
+            onChange={(key) => {
+              const nextKey = key == null ? '' : String(key)
+              setRootId(nextKey || null)
               setPage(1)
             }}
           >
@@ -282,9 +282,10 @@ function PageComponent() {
             </Select.Popover>
           </Select>
           <Select
-            selectedKey={hasSubtitle}
-            onSelectionChange={(key) => {
-              setHasSubtitle(key as string | null)
+            value={hasSubtitle ?? ''}
+            onChange={(key) => {
+              const nextKey = key == null ? '' : String(key)
+              setHasSubtitle(nextKey || null)
               setPage(1)
             }}
           >
@@ -371,22 +372,39 @@ function PageComponent() {
             >
               下一页
             </Button>
-            <select
-              className="rounded border border-border bg-surface px-2 py-1"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
+            <Select
+              aria-label="每页数量"
+              className="w-24"
+              value={String(pageSize)}
+              variant="secondary"
+              onChange={(value) => {
+                const nextPageSize = Number(value)
+                if (!Number.isFinite(nextPageSize))
+                  return
+
+                setPageSize(nextPageSize)
                 setPage(1)
               }}
             >
-              {[10, 20, 50, 100].map(size => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
+              <Select.Trigger>
+                <Select.Value>{pageSize}</Select.Value>
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {[10, 20, 50, 100].map(size => (
+                    <ListBox.Item key={size} id={String(size)} textValue={String(size)}>
+                      {size}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
         </div>
       </div>
-    </AppPage>
+    </>
   )
 }
 

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@heroui/styles";
+@import "@heroui-pro/react/css";
 
 /* 与 Tailwind select-none 一致：拖动区避免选中文字（属性在 headerContentRender 中挂载） */
 .app-root-layout [data-tauri-drag-region] {

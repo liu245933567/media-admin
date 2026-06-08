@@ -1,5 +1,5 @@
 import type { AppConfig } from '@/api'
-import { Alert, Button, Card, Spinner } from '@heroui/react'
+import { Button, Card, Spinner } from '@heroui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
@@ -12,19 +12,13 @@ import {
   putAppConfigSettings,
   PutAppConfigSettingsBody,
 } from '@/api'
-import { AppPage } from '@/components/app-page'
 import { useAppToast } from '@/components/app-toast'
-import { FfmpegSetupCard } from '@/components/ffmpeg-setup-card'
-import { MediaRootListCard } from '@/components/media-root-list-card'
 import { StashConfigFormGroup } from '@/components/stash-config-form-group'
 import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
-import {
-  useWhisperModelFilenameOptions,
-  WhisperModelsSetupCard,
-} from '@/components/whisper-models-setup-card'
+import { useWhisperModelFilenameOptions } from '@/components/whisper-models-setup-card'
 
-export const Route = createFileRoute('/setting')({
-  component: RouteComponent,
+export const Route = createFileRoute('/setting/defaults')({
+  component: DefaultsSettingPage,
 })
 
 function AppConfigForm({
@@ -78,7 +72,7 @@ function AppConfigForm({
   )
 }
 
-function RouteComponent() {
+function DefaultsSettingPage() {
   const message = useAppToast()
   const { options: whisperModelFilenameOptions, loading: whisperModelsLoading }
     = useWhisperModelFilenameOptions()
@@ -106,60 +100,41 @@ function RouteComponent() {
       : 'pending'
 
   return (
-    <AppPage title="设置" description="模型与工具下载">
-      <div className="flex w-full flex-col gap-6">
-        <Alert status="accent">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>
-              下载目录与安装路径由服务端配置（环境变量 DOWNLOAD_DIR、MODELS_DIR、FFMPEG_DIR 或默认 ~/.media-admin 下子目录）。
-            </Alert.Title>
-          </Alert.Content>
-        </Alert>
-
-        <Card>
-          <Card.Header>
-            <Card.Title>应用默认参数</Card.Title>
-          </Card.Header>
-          <Card.Content className="flex flex-col gap-4">
-            <p className="m-0 text-sm text-neutral-600">
-              以下参数持久化在本地
-              <code className="mx-1 rounded bg-neutral-100 px-1">app_config.json</code>
-              。翻译与 Stash 的
-              <code className="mx-1 rounded bg-neutral-100 px-1">API Key</code>
-              /
-              <code className="mx-1 rounded bg-neutral-100 px-1">ApiKey</code>
-              留空保存时不覆盖已存密钥。
-            </p>
-            {appCfgQuery.isPending
-              ? (
-                  <div className="flex items-center gap-2 py-6 text-sm text-muted">
-                    <Spinner size="sm" />
-                    加载中...
-                  </div>
-                )
-              : appCfgQuery.data
-                ? (
-                    <AppConfigForm
-                      key={appConfigFormKey}
-                      initialValues={appCfgQuery.data}
-                      whisperModelFilenameOptions={whisperModelFilenameOptions}
-                      whisperModelsLoading={whisperModelsLoading}
-                      onSaved={() => appCfgQuery.refetch()}
-                    />
-                  )
-                : (
-                    <span className="text-sm text-muted">无法加载默认参数</span>
-                  )}
-          </Card.Content>
-        </Card>
-
-        <WhisperModelsSetupCard />
-
-        <FfmpegSetupCard />
-
-        <MediaRootListCard />
-      </div>
-    </AppPage>
+    <Card>
+      <Card.Header>
+        <Card.Title>应用默认参数</Card.Title>
+      </Card.Header>
+      <Card.Content className="flex flex-col gap-4">
+        <p className="m-0 text-sm text-muted">
+          以下参数持久化在本地
+          <code className="mx-1 rounded bg-surface-secondary px-1">app_config.json</code>
+          。翻译与 Stash 的
+          <code className="mx-1 rounded bg-surface-secondary px-1">API Key</code>
+          /
+          <code className="mx-1 rounded bg-surface-secondary px-1">ApiKey</code>
+          留空保存时不覆盖已存密钥。
+        </p>
+        {appCfgQuery.isPending
+          ? (
+              <div className="flex items-center gap-2 py-6 text-sm text-muted">
+                <Spinner size="sm" />
+                加载中...
+              </div>
+            )
+          : appCfgQuery.data
+            ? (
+                <AppConfigForm
+                  key={appConfigFormKey}
+                  initialValues={appCfgQuery.data}
+                  whisperModelFilenameOptions={whisperModelFilenameOptions}
+                  whisperModelsLoading={whisperModelsLoading}
+                  onSaved={() => appCfgQuery.refetch()}
+                />
+              )
+            : (
+                <span className="text-sm text-muted">无法加载默认参数</span>
+              )}
+      </Card.Content>
+    </Card>
   )
 }

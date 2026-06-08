@@ -12,9 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideoPlayRouteImport } from './routes/video-play'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
-import { Route as SettingRouteImport } from './routes/setting'
 import { Route as MediaLibraryRouteImport } from './routes/media-library'
+import { Route as SettingRouteRouteImport } from './routes/setting/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingModelsRouteImport } from './routes/setting/models'
+import { Route as SettingLibraryRouteImport } from './routes/setting/library'
+import { Route as SettingFfmpegRouteImport } from './routes/setting/ffmpeg'
+import { Route as SettingDefaultsRouteImport } from './routes/setting/defaults'
 
 const VideoPlayRoute = VideoPlayRouteImport.update({
   id: '/video-play',
@@ -31,14 +35,14 @@ const StashScenesRoute = StashScenesRouteImport.update({
   path: '/stash-scenes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingRoute = SettingRouteImport.update({
-  id: '/setting',
-  path: '/setting',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MediaLibraryRoute = MediaLibraryRouteImport.update({
   id: '/media-library',
   path: '/media-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingRouteRoute = SettingRouteRouteImport.update({
+  id: '/setting',
+  path: '/setting',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -46,63 +50,107 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingModelsRoute = SettingModelsRouteImport.update({
+  id: '/models',
+  path: '/models',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
+const SettingLibraryRoute = SettingLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
+const SettingFfmpegRoute = SettingFfmpegRouteImport.update({
+  id: '/ffmpeg',
+  path: '/ffmpeg',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
+const SettingDefaultsRoute = SettingDefaultsRouteImport.update({
+  id: '/defaults',
+  path: '/defaults',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/setting': typeof SettingRouteRouteWithChildren
   '/media-library': typeof MediaLibraryRoute
-  '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
+  '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/ffmpeg': typeof SettingFfmpegRoute
+  '/setting/library': typeof SettingLibraryRoute
+  '/setting/models': typeof SettingModelsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/setting': typeof SettingRouteRouteWithChildren
   '/media-library': typeof MediaLibraryRoute
-  '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
+  '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/ffmpeg': typeof SettingFfmpegRoute
+  '/setting/library': typeof SettingLibraryRoute
+  '/setting/models': typeof SettingModelsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/setting': typeof SettingRouteRouteWithChildren
   '/media-library': typeof MediaLibraryRoute
-  '/setting': typeof SettingRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
+  '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/ffmpeg': typeof SettingFfmpegRoute
+  '/setting/library': typeof SettingLibraryRoute
+  '/setting/models': typeof SettingModelsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/media-library'
     | '/setting'
+    | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
+    | '/setting/defaults'
+    | '/setting/ffmpeg'
+    | '/setting/library'
+    | '/setting/models'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/media-library'
     | '/setting'
+    | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
+    | '/setting/defaults'
+    | '/setting/ffmpeg'
+    | '/setting/library'
+    | '/setting/models'
   id:
     | '__root__'
     | '/'
-    | '/media-library'
     | '/setting'
+    | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
+    | '/setting/defaults'
+    | '/setting/ffmpeg'
+    | '/setting/library'
+    | '/setting/models'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingRouteRoute: typeof SettingRouteRouteWithChildren
   MediaLibraryRoute: typeof MediaLibraryRoute
-  SettingRoute: typeof SettingRoute
   StashScenesRoute: typeof StashScenesRoute
   TasksRoute: typeof TasksRoute
   VideoPlayRoute: typeof VideoPlayRoute
@@ -131,18 +179,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StashScenesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/setting': {
-      id: '/setting'
-      path: '/setting'
-      fullPath: '/setting'
-      preLoaderRoute: typeof SettingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/media-library': {
       id: '/media-library'
       path: '/media-library'
       fullPath: '/media-library'
       preLoaderRoute: typeof MediaLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setting': {
+      id: '/setting'
+      path: '/setting'
+      fullPath: '/setting'
+      preLoaderRoute: typeof SettingRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -152,13 +200,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setting/models': {
+      id: '/setting/models'
+      path: '/models'
+      fullPath: '/setting/models'
+      preLoaderRoute: typeof SettingModelsRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
+    '/setting/library': {
+      id: '/setting/library'
+      path: '/library'
+      fullPath: '/setting/library'
+      preLoaderRoute: typeof SettingLibraryRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
+    '/setting/ffmpeg': {
+      id: '/setting/ffmpeg'
+      path: '/ffmpeg'
+      fullPath: '/setting/ffmpeg'
+      preLoaderRoute: typeof SettingFfmpegRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
+    '/setting/defaults': {
+      id: '/setting/defaults'
+      path: '/defaults'
+      fullPath: '/setting/defaults'
+      preLoaderRoute: typeof SettingDefaultsRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
   }
 }
 
+interface SettingRouteRouteChildren {
+  SettingDefaultsRoute: typeof SettingDefaultsRoute
+  SettingFfmpegRoute: typeof SettingFfmpegRoute
+  SettingLibraryRoute: typeof SettingLibraryRoute
+  SettingModelsRoute: typeof SettingModelsRoute
+}
+
+const SettingRouteRouteChildren: SettingRouteRouteChildren = {
+  SettingDefaultsRoute: SettingDefaultsRoute,
+  SettingFfmpegRoute: SettingFfmpegRoute,
+  SettingLibraryRoute: SettingLibraryRoute,
+  SettingModelsRoute: SettingModelsRoute,
+}
+
+const SettingRouteRouteWithChildren = SettingRouteRoute._addFileChildren(
+  SettingRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingRouteRoute: SettingRouteRouteWithChildren,
   MediaLibraryRoute: MediaLibraryRoute,
-  SettingRoute: SettingRoute,
   StashScenesRoute: StashScenesRoute,
   TasksRoute: TasksRoute,
   VideoPlayRoute: VideoPlayRoute,

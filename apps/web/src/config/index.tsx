@@ -23,5 +23,11 @@ export const menu = [
     name: '设置',
     path: '/setting',
     icon: 'lucide:settings',
+    children: [
+      { name: '默认参数', path: '/setting/defaults', icon: 'lucide:sliders-horizontal' },
+      { name: 'Whisper 模型', path: '/setting/models', icon: 'lucide:brain' },
+      { name: 'FFmpeg', path: '/setting/ffmpeg', icon: 'lucide:file-cog' },
+      { name: '媒体库', path: '/setting/library', icon: 'lucide:folder-cog' },
+    ],
   },
 ]

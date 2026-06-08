@@ -17,7 +17,6 @@ import {
   historyJobs,
   snapshotJobs,
 } from '@/api'
-import { AppPage } from '@/components/app-page'
 import { useAppToast } from '@/components/app-toast'
 import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
@@ -77,52 +76,50 @@ function PageComponent() {
   }
 
   return (
-    <AppPage>
-      <div className="flex flex-col gap-3">
-        <SubtitleTaskCreateDrawerForm
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          onCreated={() => {
-            message.success('已提交字幕生成任务')
-            refreshAll()
-          }}
-        />
-        <ScanGenerateSubtitleDrawerForm
-          open={scanGenerateOpen}
-          onOpenChange={setScanGenerateOpen}
-          onCreated={() => {
-            message.success('已提交扫描并生成字幕任务')
-            refreshAll()
-          }}
-        />
-        <SubtitleTranslateTaskCreateDrawerForm
-          open={translateOpen}
-          onOpenChange={setTranslateOpen}
-          onCreated={() => {
-            message.success('已提交字幕翻译任务')
-            refreshAll()
-          }}
-        />
+    <div className="flex flex-col gap-3">
+      <SubtitleTaskCreateDrawerForm
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          message.success('已提交字幕生成任务')
+          refreshAll()
+        }}
+      />
+      <ScanGenerateSubtitleDrawerForm
+        open={scanGenerateOpen}
+        onOpenChange={setScanGenerateOpen}
+        onCreated={() => {
+          message.success('已提交扫描并生成字幕任务')
+          refreshAll()
+        }}
+      />
+      <SubtitleTranslateTaskCreateDrawerForm
+        open={translateOpen}
+        onOpenChange={setTranslateOpen}
+        onCreated={() => {
+          message.success('已提交字幕翻译任务')
+          refreshAll()
+        }}
+      />
 
-        <TaskmillExecLogPanel
-          items={execLogQuery.data}
-          activeItems={activeQuery.data}
-          historyItems={historyQuery.data}
-          loading={execLogQuery.isLoading || execLogQuery.isFetching}
-          runningCount={runningCount}
-          pendingCount={pendingCount}
-          activeCount={activeCount}
-          completedCount={completedCount}
-          failedCount={failedCount}
-          isSchedulerPaused={snapshotQuery.data?.scheduler.is_paused ?? false}
-          execLogAutoRefresh={execLogAutoRefresh}
-          onExecLogAutoRefreshChange={setExecLogAutoRefresh}
-          onQueueChanged={refreshAll}
-          onCreateSubtitle={() => setCreateOpen(true)}
-          onScanGenerate={() => setScanGenerateOpen(true)}
-          onTranslate={() => setTranslateOpen(true)}
-        />
-      </div>
-    </AppPage>
+      <TaskmillExecLogPanel
+        items={execLogQuery.data}
+        activeItems={activeQuery.data}
+        historyItems={historyQuery.data}
+        loading={execLogQuery.isLoading || execLogQuery.isFetching}
+        runningCount={runningCount}
+        pendingCount={pendingCount}
+        activeCount={activeCount}
+        completedCount={completedCount}
+        failedCount={failedCount}
+        isSchedulerPaused={snapshotQuery.data?.scheduler.is_paused ?? false}
+        execLogAutoRefresh={execLogAutoRefresh}
+        onExecLogAutoRefreshChange={setExecLogAutoRefresh}
+        onQueueChanged={refreshAll}
+        onCreateSubtitle={() => setCreateOpen(true)}
+        onScanGenerate={() => setScanGenerateOpen(true)}
+        onTranslate={() => setTranslateOpen(true)}
+      />
+    </div>
   )
 }

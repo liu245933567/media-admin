@@ -5,7 +5,6 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { listScenesStash } from '@/api'
-import { AppPage } from '@/components/app-page'
 import { DataTable } from '@/components/data-table'
 import { StashSceneCover } from '@/components/stash-scene-cover'
 import { SubtitleWebModal } from '@/components/subtitle-web-modal'
@@ -109,66 +108,64 @@ function PageComponent() {
   const totalPage = Math.max(1, Math.ceil(total / pageSize))
 
   return (
-    <AppPage title="Stash 场景">
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div className="flex w-full max-w-md flex-col gap-1">
-            <Label>搜索</Label>
-            <Input
-              value={q}
-              placeholder="搜索标题或文件名"
-              variant="secondary"
-              onChange={(event) => {
-                setQ(event.target.value)
-                setPage(1)
-              }}
-            />
-          </div>
-          <Switch isSelected={screenshotShow} onChange={setScreenshotShow}>
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Switch.Content>
-              <Label className="text-sm">显示封面</Label>
-            </Switch.Content>
-          </Switch>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="flex w-full max-w-md flex-col gap-1">
+          <Label>搜索</Label>
+          <Input
+            value={q}
+            placeholder="搜索标题或文件名"
+            variant="secondary"
+            onChange={(event) => {
+              setQ(event.target.value)
+              setPage(1)
+            }}
+          />
         </div>
-        <DataTable
-          ariaLabel="Stash 场景"
-          columns={columns}
-          data={scenesQuery.data?.data ?? []}
-          emptyText="暂无场景"
-          getRowId={row => String(row.id)}
-          loading={scenesQuery.isFetching}
-          minWidth={760}
-          showPagination={false}
-        />
-        <div className="flex items-center justify-end gap-2 text-sm text-muted">
-          <Button
-            size="sm"
-            variant="tertiary"
-            isDisabled={page <= 1}
-            onPress={() => setPage(prev => Math.max(1, prev - 1))}
-          >
-            上一页
-          </Button>
-          <span>
-            {page}
-            {' '}
-            /
-            {' '}
-            {totalPage}
-          </span>
-          <Button
-            size="sm"
-            variant="tertiary"
-            isDisabled={page >= totalPage}
-            onPress={() => setPage(prev => Math.min(totalPage, prev + 1))}
-          >
-            下一页
-          </Button>
-        </div>
+        <Switch isSelected={screenshotShow} onChange={setScreenshotShow}>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <Label className="text-sm">显示封面</Label>
+          </Switch.Content>
+        </Switch>
       </div>
-    </AppPage>
+      <DataTable
+        ariaLabel="Stash 场景"
+        columns={columns}
+        data={scenesQuery.data?.data ?? []}
+        emptyText="暂无场景"
+        getRowId={row => String(row.id)}
+        loading={scenesQuery.isFetching}
+        minWidth={760}
+        showPagination={false}
+      />
+      <div className="flex items-center justify-end gap-2 text-sm text-muted">
+        <Button
+          size="sm"
+          variant="tertiary"
+          isDisabled={page <= 1}
+          onPress={() => setPage(prev => Math.max(1, prev - 1))}
+        >
+          上一页
+        </Button>
+        <span>
+          {page}
+          {' '}
+          /
+          {' '}
+          {totalPage}
+        </span>
+        <Button
+          size="sm"
+          variant="tertiary"
+          isDisabled={page >= totalPage}
+          onPress={() => setPage(prev => Math.min(totalPage, prev + 1))}
+        >
+          下一页
+        </Button>
+      </div>
+    </div>
   )
 }
