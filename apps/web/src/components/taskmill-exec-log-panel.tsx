@@ -6,11 +6,13 @@ import type {
 } from '@/api'
 import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Card, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch } from '@heroui/react'
+import { Button, Card, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { getTaskSubtitlePreviewJobsQueryKey, taskSubtitlePreviewJobs } from '@/api'
+import { cancelTaskJobs, deleteHistoryJobs } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
 import { transJobType } from '@/components/taskmill-active-tasks-panel'
 import {
   clampTaskPercent,
@@ -22,7 +24,7 @@ import {
   StatusChip,
   statusIcon,
   TaskDurationMeta,
-  TaskProgressBar,
+  TaskProgressCircle,
   taskStatusColor,
 } from '@/components/taskmill-exec-log-shared'
 import { TaskmillPipelineDetailDrawer } from '@/components/taskmill-pipeline-detail-drawer'
@@ -30,6 +32,7 @@ import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
 const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
+const CANCELLABLE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])
 
 interface TaskEventHeaderLike {
   task_id?: number
@@ -268,6 +271,7 @@ function mergeTask(
   task: TaskmillKnownTask,
   existing?: TaskLogGroup,
 ): TaskLogGroup {
+  const isHistory = isHistoryTask(task)
   const completedAt = isHistoryTask(task) ? task.completed_at : null
   const existingPercent = clampTaskPercent(existing?.percent)
   return {
@@ -275,6 +279,7 @@ function mergeTask(
     taskType: task.task_type,
     label: task.label,
     parentId: task.parent_id,
+    isHistory: isHistory || existing?.isHistory === true,
     status: task.status,
     createdAt: task.created_at,
     startedAt: task.started_at,
@@ -342,6 +347,7 @@ function buildTaskLogGroups(
       taskType: existing?.taskType ?? header?.task_type ?? '',
       label: existing?.label ?? header?.label ?? '',
       parentId: existing?.parentId ?? null,
+      isHistory: existing?.isHistory ?? false,
       status,
       createdAt: existing?.createdAt ?? null,
       startedAt: existing?.startedAt ?? null,
@@ -468,6 +474,10 @@ function matchesFilter(pipeline: PipelineView, filter: PipelineFilter): boolean 
   }
 }
 
+function cancellableJobOf(pipeline: PipelineView): TaskLogGroup | undefined {
+  return pipeline.jobs.find(job => CANCELLABLE_STATUSES.has(job.status))
+}
+
 function paginationItems(page: number, totalPages: number): PipelinePageItem[] {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -592,6 +602,8 @@ export function TaskmillExecLogPanel({
   onScanGenerate,
   onTranslate,
 }: TaskmillExecLogPanelProps) {
+  const message = useAppToast()
+  const confirm = useConfirmDialog()
   const [autoScroll, setAutoScroll] = useState(true)
   const [filter, setFilter] = useState<PipelineFilter>('all')
   const [q, setQ] = useState('')
@@ -599,6 +611,38 @@ export function TaskmillExecLogPanel({
   const [pageSize, setPageSize] = useState<number>(PIPELINE_PAGE_SIZE_OPTIONS[0])
   const [detailPipelineId, setDetailPipelineId] = useState<number | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => cancelTaskJobs(id),
+    onSuccess: (res) => {
+      if (res.cancelled) {
+        message.success('已取消任务')
+      }
+      else {
+        message.warning('未找到可取消的任务')
+      }
+      onQueueChanged()
+    },
+    onError: (e) => {
+      message.error((e as Error).message || '取消失败')
+    },
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteHistoryJobs(id),
+    onSuccess: (res) => {
+      if (res.deleted) {
+        message.success('已删除任务记录')
+      }
+      else {
+        message.warning('未找到可删除的任务记录')
+      }
+      onQueueChanged()
+    },
+    onError: (e) => {
+      message.error((e as Error).message || '删除失败')
+    },
+  })
+  const actionPending = cancelMutation.isPending || deleteMutation.isPending
 
   const groups = useMemo(
     () => buildTaskLogGroups(items, activeItems, historyItems, progressItems),
@@ -645,21 +689,35 @@ export function TaskmillExecLogPanel({
   const selectedJob = detailStages.find(job => job.taskId === selectedJobId)
     ?? detailStages[0]
     ?? detailPipeline?.root
-  const selectedJobSupportsSubtitlePreview = selectedJob != null && [
-    'media-jobs::video-subtitle-recognize',
-    'media-jobs::subtitle-translate',
-  ].includes(selectedJob.taskType)
-  const subtitlePreviewQuery = useQuery({
-    enabled: selectedJobSupportsSubtitlePreview && selectedJob != null,
-    queryKey: getTaskSubtitlePreviewJobsQueryKey(selectedJobSupportsSubtitlePreview ? selectedJob?.taskId : null),
-    queryFn: ({ signal }) => taskSubtitlePreviewJobs(selectedJob!.taskId, signal),
-    refetchInterval: selectedJobSupportsSubtitlePreview && selectedJob?.status !== 'completed' ? 1000 : false,
-  })
-
   function openPipelineDetail(pipeline: PipelineView, jobId?: number) {
     const stages = stageJobs(pipeline)
     setDetailPipelineId(pipeline.root.taskId)
     setSelectedJobId(jobId ?? (stages[0] ?? pipeline.root).taskId)
+  }
+
+  function confirmCancelPipeline(pipeline: PipelineView) {
+    const job = cancellableJobOf(pipeline)
+    if (!job) {
+      return
+    }
+
+    confirm({
+      title: '取消此任务？',
+      description: `将取消任务 #${job.taskId}，运行中的执行会停止并进入历史。`,
+      confirmText: '取消任务',
+      danger: true,
+      onConfirm: () => cancelMutation.mutateAsync(job.taskId),
+    })
+  }
+
+  function confirmDeletePipeline(pipeline: PipelineView) {
+    confirm({
+      title: '删除此任务记录？',
+      description: `将删除任务 #${pipeline.root.taskId} 的历史记录，此操作不可恢复。`,
+      confirmText: '删除',
+      danger: true,
+      onConfirm: () => deleteMutation.mutateAsync(pipeline.root.taskId),
+    })
   }
 
   const filterCounts: Record<PipelineFilter, number> = {
@@ -830,6 +888,8 @@ export function TaskmillExecLogPanel({
             const stages = stageJobs(pipeline)
             const title = pipelineTitle(pipeline)
             const latestSummary = latestLineOf(pipeline.root)?.summary
+            const cancellableJob = cancellableJobOf(pipeline)
+            const canDelete = pipeline.root.isHistory
 
             return (
               <ListView.Item
@@ -839,7 +899,7 @@ export function TaskmillExecLogPanel({
                 className="flex-nowrap items-center py-1.5"
               >
                 <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
-                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)] lg:items-center">
+                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)_auto] lg:items-center">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
@@ -866,7 +926,7 @@ export function TaskmillExecLogPanel({
                         <TaskDurationMeta task={pipeline.root} />
                       </div>
                     </div>
-                    <TaskProgressBar percent={pipeline.percent} />
+                    <TaskProgressCircle className="lg:justify-self-start" percent={pipeline.percent} />
                     <div className="min-w-0 lg:justify-self-center">
                       <PipelineStages
                         compact
@@ -880,6 +940,38 @@ export function TaskmillExecLogPanel({
                       <div className="mt-0.5 truncate text-xs" title={latestSummary}>
                         {latestSummary ?? '暂无事件'}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-1 lg:justify-self-end" aria-label="任务操作栏">
+                      <Tooltip delay={0} isDisabled={Boolean(cancellableJob)}>
+                        <Button
+                          isIconOnly
+                          aria-label="取消任务"
+                          isDisabled={!cancellableJob || actionPending}
+                          isPending={cancelMutation.isPending}
+                          size="sm"
+                          variant="tertiary"
+                          onClick={event => event.stopPropagation()}
+                          onPress={() => confirmCancelPipeline(pipeline)}
+                        >
+                          <Icon className="size-4" icon="lucide:ban" />
+                        </Button>
+                        <Tooltip.Content>当前任务不可取消</Tooltip.Content>
+                      </Tooltip>
+                      <Tooltip delay={0} isDisabled={!canDelete}>
+                        <Button
+                          isIconOnly
+                          aria-label="删除任务记录"
+                          isDisabled={!canDelete || actionPending}
+                          isPending={deleteMutation.isPending}
+                          size="sm"
+                          variant="danger-soft"
+                          onClick={event => event.stopPropagation()}
+                          onPress={() => confirmDeletePipeline(pipeline)}
+                        >
+                          <Icon className="size-4" icon="lucide:trash-2" />
+                        </Button>
+                        <Tooltip.Content>仅历史任务可删除</Tooltip.Content>
+                      </Tooltip>
                     </div>
                   </div>
                 </ListView.ItemContent>
@@ -970,10 +1062,7 @@ export function TaskmillExecLogPanel({
         pipeline={detailPipeline}
         selectedJob={selectedJob}
         selectedJobId={selectedJob?.taskId ?? null}
-        selectedJobSupportsSubtitlePreview={selectedJobSupportsSubtitlePreview}
         stages={detailStages}
-        subtitlePreview={subtitlePreviewQuery.data}
-        subtitlePreviewLoading={subtitlePreviewQuery.isFetching}
         onClose={() => {
           setDetailPipelineId(null)
           setSelectedJobId(null)

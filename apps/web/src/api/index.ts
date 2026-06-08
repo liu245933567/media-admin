@@ -4,7 +4,6 @@ export * from './generated.schemas'
 export * from './taskmill-exec-log'
 export * from './taskmill-history'
 export * from './taskmill-snapshot'
-export * from './taskmill-subtitle-preview'
 
 /** 本地视频流 URL（供 video.js / `<video>` 使用，支持 Range） */
 export function buildLocalVideoSrc(path: string): string {

@@ -7,11 +7,10 @@ use axum_extra::extract::WithRejection;
 use ma_service::job::{
     ScanGenerateSubtitleReq, ScanGenerateSubtitleRes, SubtitleGenerateBulkReq,
     SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes, SubtitleGenerateReq,
-    SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord, TaskSubtitlePreviewStore,
-    TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes, TaskmillSnapshot,
-    TaskmillSubtitlePreview, TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate,
-    enqueue_subtitle_generate, enqueue_subtitle_translate_req, scan_and_enqueue_subtitle_generate,
-    subtitle_generate_defaults,
+    SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord, TaskmillCancelRes, TaskmillControlOk,
+    TaskmillDeleteHistoryRes, TaskmillSnapshot, TimestampedSchedulerEvent,
+    bulk_enqueue_subtitle_generate, enqueue_subtitle_generate, enqueue_subtitle_translate_req,
+    scan_and_enqueue_subtitle_generate, subtitle_generate_defaults,
 };
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -70,10 +69,6 @@ pub fn routes() -> StateRouter {
         .route("/history/{id}", delete(delete_history_handler))
         .route("/exec-log", get(exec_log_handler))
         .route("/active", get(active_tasks_handler))
-        .route(
-            "/tasks/{id}/subtitle-preview",
-            get(task_subtitle_preview_handler),
-        )
         .route("/scheduler/pause", post(scheduler_pause_handler))
         .route("/scheduler/resume", post(scheduler_resume_handler))
         .route("/tasks/{id}/cancel", post(task_cancel_handler))
@@ -245,25 +240,6 @@ pub(crate) async fn active_tasks_handler(
         .await
         .map_err(AppError::Internal)?;
     Ok(Json(rows))
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/jobs/tasks/{id}/subtitle-preview",
-    operation_id = "taskSubtitlePreviewJobs",
-    tag = "jobs",
-    params(("id" = i64, Path, description = "任务 ID")),
-    responses((status = 200, body = TaskmillSubtitlePreview))
-)]
-pub(crate) async fn task_subtitle_preview_handler(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> Result<Json<TaskmillSubtitlePreview>, AppError> {
-    let preview = state
-        .taskmill
-        .subtitle_preview(id)
-        .unwrap_or_else(|| TaskSubtitlePreviewStore::empty(id));
-    Ok(Json(preview))
 }
 
 #[utoipa::path(

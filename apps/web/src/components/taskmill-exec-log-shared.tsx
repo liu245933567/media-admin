@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Chip, ProgressBar } from '@heroui/react'
+import { Chip, ProgressCircle } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { transJobType, transStatus } from '@/components/taskmill-active-tasks-panel'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
@@ -20,6 +20,7 @@ export interface TaskLogGroup {
   taskType: string
   label: string
   parentId: number | null
+  isHistory: boolean
   status: string
   createdAt: string | null
   startedAt: string | null
@@ -85,7 +86,7 @@ export function formatPercent(percent: number): string {
   return `${Math.round(safePercent * 1000) / 10}%`
 }
 
-export function progressBarValue(percent: number): number {
+export function progressCircleValue(percent: number): number {
   return (clampTaskPercent(percent) ?? 0) * 100
 }
 
@@ -158,7 +159,7 @@ export function TaskDurationMeta({ task }: { task: TaskLogGroup }) {
   )
 }
 
-export function TaskProgressBar({
+export function TaskProgressCircle({
   percent,
   className,
 }: {
@@ -167,25 +168,31 @@ export function TaskProgressBar({
 }) {
   if (percent == null) {
     return (
-      <div className={['flex items-center gap-2 text-xs text-muted', className].filter(Boolean).join(' ')}>
-        <span className="h-1.5 flex-1 rounded-full bg-surface-tertiary" />
+      <div className={['inline-flex items-center gap-2 text-xs text-muted', className].filter(Boolean).join(' ')}>
+        <ProgressCircle aria-label="任务进度" color="default" size="sm" value={0}>
+          <ProgressCircle.Track>
+            <ProgressCircle.TrackCircle />
+            <ProgressCircle.FillCircle />
+          </ProgressCircle.Track>
+        </ProgressCircle>
         <span className="w-10 text-right tabular-nums">-</span>
       </div>
     )
   }
 
   return (
-    <div className={['flex items-center gap-2', className].filter(Boolean).join(' ')}>
-      <ProgressBar
+    <div className={['inline-flex items-center gap-2', className].filter(Boolean).join(' ')}>
+      <ProgressCircle
         aria-label="任务进度"
-        className="min-w-0 flex-1"
+        color={percent >= 1 ? 'success' : 'accent'}
         size="sm"
-        value={progressBarValue(percent)}
+        value={progressCircleValue(percent)}
       >
-        <ProgressBar.Track>
-          <ProgressBar.Fill />
-        </ProgressBar.Track>
-      </ProgressBar>
+        <ProgressCircle.Track>
+          <ProgressCircle.TrackCircle />
+          <ProgressCircle.FillCircle />
+        </ProgressCircle.Track>
+      </ProgressCircle>
       <span className="w-10 text-right text-xs tabular-nums text-accent">{formatPercent(percent)}</span>
     </div>
   )
