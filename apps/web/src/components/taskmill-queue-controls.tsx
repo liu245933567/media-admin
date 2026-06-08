@@ -62,6 +62,7 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
       {isPaused
         ? (
             <Button
+              size="sm"
               isPending={resumeMutation.isPending}
               onPress={() => resumeMutation.mutate()}
             >
@@ -71,6 +72,7 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
           )
         : (
             <Button
+              size="sm"
               variant="outline"
               isPending={pauseMutation.isPending}
               onPress={() => pauseMutation.mutate()}

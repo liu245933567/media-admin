@@ -4,11 +4,12 @@ import type {
   TaskmillTaskRecord,
 } from '@/api'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Card, Chip, Drawer, Input, Label, ListBox, Pagination, Select, Spinner, Switch, Tooltip } from '@heroui/react'
+import { Button, Card, Chip, Drawer, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { transJobType, transStatus } from '@/components/taskmill-active-tasks-panel'
+import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
-import { transJobType, transStatus } from './taskmill-active-tasks-panel'
 
 const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 
@@ -223,7 +224,7 @@ function stageName(task: TaskLogGroup): string {
 }
 
 /** 将 taskmill `SchedulerEvent` JSON 压缩为一行可读摘要 */
-export function formatTaskmillExecLogSummary(event: Record<string, unknown>): string {
+function formatTaskmillExecLogSummary(event: Record<string, unknown>): string {
   const typeStr = typeof event.type === 'string' ? event.type : '?'
   const h = readEventHeader(event)
   const who = h
@@ -551,7 +552,7 @@ function stageDot(task: TaskLogGroup, selected: boolean) {
   return (
     <span
       className={[
-        'flex size-8 items-center justify-center rounded-full border-2',
+        'flex size-7 items-center justify-center rounded-full border-2',
         selected ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface' : '',
         taskStatusColor(task.status) === 'success'
           ? 'border-success bg-success/15 text-success'
@@ -562,29 +563,28 @@ function stageDot(task: TaskLogGroup, selected: boolean) {
               : 'border-border bg-surface-secondary text-muted',
       ].filter(Boolean).join(' ')}
     >
-      <Icon className={task.status === 'running' ? 'size-4 animate-spin' : 'size-4'} icon={statusIcon(task.status)} />
+      <Icon className={task.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(task.status)} />
     </span>
   )
 }
 
-function StatusBlock({ task }: { task: TaskLogGroup }) {
+function StatusChip({ task }: { task: TaskLogGroup }) {
+  return (
+    <Chip color={taskStatusColor(task.status)} size="sm" variant="soft">
+      <Icon className={task.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(task.status)} />
+      {transStatus(task.status)}
+    </Chip>
+  )
+}
+
+function TaskDurationMeta({ task }: { task: TaskLogGroup }) {
   const duration = task.durationMs ?? durationBetween(task.startedAt, task.completedAt ?? task.latestAt)
 
   return (
-    <div className="flex min-w-28 flex-col items-start gap-1">
-      <Chip color={taskStatusColor(task.status)} size="sm" variant="soft">
-        <Icon className={task.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(task.status)} />
-        {transStatus(task.status)}
-      </Chip>
-      <div className="flex items-center gap-1 text-xs tabular-nums text-muted">
-        <Icon className="size-3.5" icon="lucide:timer" />
-        {formatDurationMs(duration)}
-      </div>
-      <div className="flex items-center gap-1 text-xs text-muted">
-        <Icon className="size-3.5" icon="lucide:calendar" />
-        {formatTaskmillTime(task.createdAt)}
-      </div>
-    </div>
+    <span className="inline-flex items-center gap-1 tabular-nums">
+      <Icon className="size-3.5" icon="lucide:timer" />
+      {formatDurationMs(duration)}
+    </span>
   )
 }
 
@@ -604,12 +604,12 @@ function PipelineStages({
   }
 
   return (
-    <div className="flex min-w-0 items-center overflow-x-auto py-1">
+    <div className="flex min-w-0 items-center overflow-x-auto py-0.5">
       {jobs.map((job, index) => (
         <div key={job.taskId} className="flex items-center">
-          {index > 0 && <span className={compact ? 'h-px w-5 shrink-0 bg-divider' : 'h-px w-10 shrink-0 bg-divider'} />}
+          {index > 0 && <span className={compact ? 'h-px w-4 shrink-0 bg-divider' : 'h-px w-8 shrink-0 bg-divider'} />}
           <button
-            className="group flex shrink-0 flex-col items-center gap-2 text-left"
+            className="group flex shrink-0 flex-col items-center gap-1.5 text-left"
             type="button"
             onClick={(event) => {
               event.stopPropagation()
@@ -647,7 +647,7 @@ function JobLogView({
 
   if (!job) {
     return (
-      <div className="rounded-lg border border-border bg-surface-secondary px-4 py-8 text-center text-sm text-muted">
+      <div className="flex h-full min-h-32 items-center justify-center px-4 py-8 text-center text-sm text-muted">
         选择一个 job 后显示日志
       </div>
     )
@@ -664,60 +664,58 @@ function JobLogView({
       }]
 
   return (
-    <Card>
-      <Card.Header className="items-center justify-between">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-start gap-3 px-3 pb-2">
         <div className="min-w-0 flex-1">
-          <Card.Title className="truncate" title={job.label || stageName(job)}>
+          <h3 className="m-0 truncate text-sm font-medium" title={job.label || stageName(job)}>
             {job.label || stageName(job)}
-          </Card.Title>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <Chip color={taskStatusColor(job.status)} size="sm" variant="soft">
-              {transStatus(job.status)}
-            </Chip>
-            <span>
-              任务 #
+          </h3>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+            <StatusChip task={job} />
+            <span className="font-mono tabular-nums">
+              #
               {job.taskId}
             </span>
-            <span>{transJobType(job.taskType)}</span>
+            <span className="max-w-48 truncate">{transJobType(job.taskType)}</span>
+            <TaskDurationMeta task={job} />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button isIconOnly size="sm" variant="tertiary">
-            <Icon className="size-4" icon="lucide:file-json" />
-          </Button>
-          <Button isIconOnly size="sm" variant="tertiary">
-            <Icon className="size-4" icon="lucide:download" />
-          </Button>
-        </div>
-      </Card.Header>
-      <Card.Content className="p-0">
-        <div className="border-y border-border bg-surface-secondary px-4 py-2 text-xs text-muted">
-          Log timestamps follow server event receive time.
-        </div>
-        <div
-          ref={logRef}
-          className="max-h-[32rem] overflow-auto bg-[#1f1f27] px-4 py-3 font-mono text-[13px] leading-6 text-neutral-100"
-        >
-          {lines.map((line, index) => (
-            <div key={line.key} className="grid grid-cols-[3rem_9rem_minmax(0,1fr)] gap-3">
-              <span className="select-none text-right text-neutral-500">{index + 1}</span>
-              <span className="select-none text-neutral-400">{formatTaskmillTime(line.receivedAt).slice(11)}</span>
-              <span className={line.type === 'Progress' ? 'whitespace-pre-wrap break-words text-cyan-300' : 'whitespace-pre-wrap break-words'}>
-                {line.summary}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Card.Content>
-    </Card>
+      </div>
+      <div
+        ref={logRef}
+        className="min-h-0 flex-1 overflow-auto bg-[#1f1f27] px-3 py-2.5 font-mono text-[13px] leading-6 text-neutral-100"
+      >
+        {lines.map((line, index) => (
+          <div key={line.key} className="grid grid-cols-[2.5rem_5rem_minmax(0,1fr)] gap-2">
+            <span className="select-none text-right text-neutral-500">{index + 1}</span>
+            <span className="select-none text-neutral-400">{formatTaskmillTime(line.receivedAt).slice(11, 19)}</span>
+            <span className={line.type === 'Progress' ? 'whitespace-pre-wrap wrap-break-word text-cyan-300' : 'whitespace-pre-wrap wrap-break-word'}>
+              {line.summary}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
-export interface TaskmillExecLogPanelProps {
+interface TaskmillExecLogPanelProps {
   items: TaskmillExecLogEntry[] | undefined
   activeItems?: TaskmillTaskRecord[]
   historyItems?: TaskmillTaskHistoryRecord[]
   loading?: boolean
+  runningCount: number
+  pendingCount: number
+  activeCount: number
+  completedCount: number
+  failedCount: number
+  isSchedulerPaused: boolean
+  execLogAutoRefresh: boolean
+  onExecLogAutoRefreshChange: (selected: boolean) => void
+  onQueueChanged: () => void
+  onCreateSubtitle: () => void
+  onScanGenerate: () => void
+  onTranslate: () => void
 }
 
 export function TaskmillExecLogPanel({
@@ -725,6 +723,18 @@ export function TaskmillExecLogPanel({
   activeItems,
   historyItems,
   loading,
+  runningCount,
+  pendingCount,
+  activeCount,
+  completedCount,
+  failedCount,
+  isSchedulerPaused,
+  execLogAutoRefresh,
+  onExecLogAutoRefreshChange,
+  onQueueChanged,
+  onCreateSubtitle,
+  onScanGenerate,
+  onTranslate,
 }: TaskmillExecLogPanelProps) {
   const [autoScroll, setAutoScroll] = useState(true)
   const [filter, setFilter] = useState<PipelineFilter>('all')
@@ -801,10 +811,84 @@ export function TaskmillExecLogPanel({
 
   return (
     <>
-      <div className="flex w-full flex-col gap-4">
+      <div className="flex w-full flex-col gap-3">
         <Card>
-          <Card.Content className="flex flex-col gap-3 p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Card.Content className="flex flex-col gap-2 p-3">
+            <div className="grid gap-2 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h2 className="m-0 text-base font-semibold">执行过程</h2>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Chip color={runningCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
+                    执行中
+                    {runningCount}
+                  </Chip>
+                  <Chip color={pendingCount > 0 ? 'warning' : 'default'} size="sm" variant="soft">
+                    排队
+                    {pendingCount}
+                  </Chip>
+                  <Chip color={activeCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
+                    活跃
+                    {activeCount}
+                  </Chip>
+                  <Chip color={completedCount > 0 ? 'success' : 'default'} size="sm" variant="soft">
+                    完成
+                    {completedCount}
+                  </Chip>
+                  <Chip color={failedCount > 0 ? 'danger' : 'default'} size="sm" variant="soft">
+                    失败
+                    {failedCount}
+                  </Chip>
+                  {isSchedulerPaused ? <Chip color="danger" size="sm" variant="soft">调度暂停</Chip> : null}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <TaskmillQueueControls onChanged={onQueueChanged} />
+                <Dropdown>
+                  <Button aria-label="新建任务" size="sm" variant="secondary">
+                    <Icon className="size-4" icon="lucide:plus" />
+                    新建任务
+                    <Icon className="size-4" icon="lucide:chevron-down" />
+                  </Button>
+                  <Dropdown.Popover>
+                    <Dropdown.Menu
+                      onAction={(key) => {
+                        if (key === 'subtitle') {
+                          onCreateSubtitle()
+                        }
+                        else if (key === 'scan') {
+                          onScanGenerate()
+                        }
+                        else if (key === 'translate') {
+                          onTranslate()
+                        }
+                      }}
+                    >
+                      <Dropdown.Item id="subtitle" textValue="字幕生成">
+                        <Icon className="size-4 text-muted" icon="lucide:captions" />
+                        <Label>字幕生成</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="scan" textValue="扫描并生成">
+                        <Icon className="size-4 text-muted" icon="lucide:folder-search" />
+                        <Label>扫描并生成</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="translate" textValue="字幕翻译">
+                        <Icon className="size-4 text-muted" icon="lucide:languages" />
+                        <Label>字幕翻译</Label>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+                <Switch isSelected={execLogAutoRefresh} onChange={onExecLogAutoRefreshChange}>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                  <Switch.Content>
+                    <Label className="text-sm">自动刷新</Label>
+                  </Switch.Content>
+                </Switch>
+              </div>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-[auto_minmax(14rem,24rem)_auto] lg:items-center">
               <div className="flex flex-wrap items-center gap-1">
                 {filterTabs.map(tab => (
                   <Button
@@ -823,10 +907,21 @@ export function TaskmillExecLogPanel({
                   </Button>
                 ))}
               </div>
-              <div className="flex items-center gap-3">
-                <p className="m-0 hidden text-xs text-muted md:block">
-                  最近事件构建，服务端当前保留约 400 条
-                </p>
+              <div className="relative">
+                <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
+                <Input
+                  className="pl-9"
+                  value={q}
+                  placeholder="Filter pipelines"
+                  variant="secondary"
+                  onChange={(event) => {
+                    setQ(event.target.value)
+                    setPage(1)
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-3 lg:justify-end">
+                <span className="hidden text-xs text-muted 2xl:inline">服务端保留约 400 条事件</span>
                 <Switch isSelected={autoScroll} onChange={setAutoScroll}>
                   <Switch.Control>
                     <Switch.Thumb />
@@ -837,30 +932,17 @@ export function TaskmillExecLogPanel({
                 </Switch>
               </div>
             </div>
-            <div className="relative">
-              <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
-              <Input
-                className="pl-9"
-                value={q}
-                placeholder="Filter pipelines"
-                variant="secondary"
-                onChange={(event) => {
-                  setQ(event.target.value)
-                  setPage(1)
-                }}
-              />
-            </div>
           </Card.Content>
         </Card>
 
         <ListView
           aria-label="任务执行过程 Pipeline 列表"
-          className="max-h-[calc(100dvh-18rem)] overflow-y-auto"
+          className="max-h-[calc(100dvh-16rem)] overflow-y-auto"
           items={pagedPipelines}
           selectionMode="none"
           variant="secondary"
           renderEmptyState={() => (
-            <div className="flex items-center justify-center py-10 text-sm text-muted">
+            <div className="flex items-center justify-center py-8 text-sm text-muted">
               {loading
                 ? (
                     <div className="flex items-center gap-2">
@@ -888,77 +970,62 @@ export function TaskmillExecLogPanel({
                 id={String(pipeline.root.taskId)}
                 key={pipeline.root.taskId}
                 textValue={title}
+                className="flex-nowrap items-center py-1.5"
               >
-                <ListView.ItemContent className="min-w-0 flex-1 items-start">
-                  <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-[11rem_minmax(14rem,1fr)_14rem_minmax(12rem,14rem)]">
-                    <StatusBlock task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+                <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
+                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(10rem,15rem)_minmax(12rem,16rem)] lg:items-center">
                     <div className="min-w-0">
-                      <button
-                        className="block max-w-full truncate text-left text-sm font-medium text-accent hover:underline"
-                        title={title}
-                        type="button"
-                        onClick={() => openPipelineDetail(pipeline)}
-                      >
-                        {title}
-                      </button>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                        <span className="font-mono">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+                        <button
+                          className="min-w-0 flex-1 truncate text-left text-sm font-medium text-accent hover:underline"
+                          title={title}
+                          type="button"
+                          onClick={() => openPipelineDetail(pipeline)}
+                        >
+                          {title}
+                        </button>
+                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
                           #
                           {pipeline.root.taskId}
                         </span>
-                        <Chip size="sm" variant="soft">
-                          {transJobType(pipeline.root.taskType)}
-                        </Chip>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Chip color="success" size="sm" variant="soft">taskmill</Chip>
-                        <Chip color="accent" size="sm" variant="soft">
+                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                        <span className="max-w-56 truncate">{transJobType(pipeline.root.taskType)}</span>
+                        <span className="tabular-nums">
                           {pipeline.jobs.length}
                           {' '}
                           jobs
-                        </Chip>
+                        </span>
+                        <TaskDurationMeta task={pipeline.root} />
                         {pipeline.percent != null && (
-                          <Chip color="accent" size="sm" variant="soft">
-                            {formatPercent(pipeline.percent)}
-                          </Chip>
+                          <span className="tabular-nums text-accent">{formatPercent(pipeline.percent)}</span>
                         )}
                       </div>
                     </div>
-                    <PipelineStages
-                      compact
-                      jobs={stages}
-                      selectedJobId={null}
-                      onSelect={id => openPipelineDetail(pipeline, id)}
-                    />
-                    <div className="min-w-0 text-sm text-muted">
-                      <div>{formatTaskmillTime(pipeline.latestAt)}</div>
-                      <div className="mt-1 truncate" title={latestSummary}>
+                    <div className="min-w-0 lg:justify-self-center">
+                      <PipelineStages
+                        compact
+                        jobs={stages}
+                        selectedJobId={null}
+                        onSelect={id => openPipelineDetail(pipeline, id)}
+                      />
+                    </div>
+                    <div className="min-w-0 text-xs text-muted lg:text-right">
+                      <div className="tabular-nums">{formatTaskmillTime(pipeline.latestAt)}</div>
+                      <div className="mt-0.5 truncate text-xs" title={latestSummary}>
                         {latestSummary ?? '暂无事件'}
                       </div>
                     </div>
                   </div>
                 </ListView.ItemContent>
-                <ListView.ItemAction>
-                  <Tooltip delay={0}>
-                    <Button
-                      isIconOnly
-                      aria-label="打开 Pipeline 详情"
-                      size="sm"
-                      variant="tertiary"
-                      onPress={() => openPipelineDetail(pipeline)}
-                    >
-                      <Icon className="size-4" icon="lucide:panel-right-open" />
-                    </Button>
-                    <Tooltip.Content>打开详情</Tooltip.Content>
-                  </Tooltip>
-                </ListView.ItemAction>
               </ListView.Item>
             )
           }}
         </ListView>
 
-        <div className="flex flex-col gap-3 text-sm text-muted md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="tabular-nums">
               显示
               {' '}
@@ -973,11 +1040,11 @@ export function TaskmillExecLogPanel({
               个 Pipeline
             </span>
             <Select
-              className="w-28"
-              selectedKey={String(pageSize)}
+              className="w-24"
+              value={String(pageSize)}
               variant="secondary"
-              onSelectionChange={(key) => {
-                const nextPageSize = Number(key)
+              onChange={(value) => {
+                const nextPageSize = Number(value)
                 if (Number.isFinite(nextPageSize)) {
                   setPageSize(nextPageSize)
                   setPage(1)
@@ -1044,46 +1111,53 @@ export function TaskmillExecLogPanel({
         }}
       >
         <Drawer.Content placement="right">
-          <Drawer.Dialog className="flex h-dvh w-full flex-col">
+          <Drawer.Dialog className="flex h-dvh w-full flex-col sm:max-w-3xl">
             <Drawer.CloseTrigger />
-            <Drawer.Header className="shrink-0 items-start justify-between pr-12">
-              <div className="min-w-0">
-                <Drawer.Heading>
+            <Drawer.Header className="shrink-0 pr-12">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Drawer.Heading className="text-base">
                   <span className="block truncate" title={detailPipeline ? pipelineTitle(detailPipeline) : undefined}>
                     {detailPipeline ? pipelineTitle(detailPipeline) : 'Pipeline'}
                   </span>
                 </Drawer.Heading>
                 {detailPipeline && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-                    <Chip color={taskStatusColor(detailPipeline.status)} size="sm" variant="soft">
-                      <Icon className={detailPipeline.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(detailPipeline.status)} />
-                      {transStatus(detailPipeline.status)}
-                    </Chip>
-                    <span>
-                      Pipeline #
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                    <StatusChip task={{ ...detailPipeline.root, status: detailPipeline.status, percent: detailPipeline.percent }} />
+                    <span className="font-mono tabular-nums">
+                      #
                       {detailPipeline.root.taskId}
                     </span>
-                    <span>
+                    <span className="tabular-nums">
                       {detailPipeline.jobs.length}
                       {' '}
                       jobs
                     </span>
-                    {detailPipeline.percent != null && <span>{formatPercent(detailPipeline.percent)}</span>}
+                    <TaskDurationMeta task={detailPipeline.root} />
+                    {detailPipeline.percent != null && <span className="tabular-nums text-accent">{formatPercent(detailPipeline.percent)}</span>}
+                    <span className="inline-flex items-center gap-1 tabular-nums">
+                      <Icon className="size-3.5" icon="lucide:clock" />
+                      {formatTaskmillTime(detailPipeline.latestAt)}
+                    </span>
                   </div>
                 )}
               </div>
             </Drawer.Header>
-            <Drawer.Body className="min-h-0 flex-1 overflow-y-auto">
+            <Drawer.Body className="min-h-0 flex-1 overflow-hidden px-3 pb-3">
               {detailPipeline && (
-                <div className="flex flex-col gap-4">
-                  <div className="overflow-x-auto rounded-lg border border-border bg-surface px-4 py-6">
-                    <PipelineStages
-                      jobs={detailStages}
-                      selectedJobId={selectedJob?.taskId ?? null}
-                      onSelect={setSelectedJobId}
-                    />
+                <div className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-surface-secondary">
+                  <div className="flex min-w-0 items-center gap-3 px-3 py-2">
+                    <span className="shrink-0 text-xs text-muted">阶段</span>
+                    <div className="min-w-0 flex-1">
+                      <PipelineStages
+                        jobs={detailStages}
+                        selectedJobId={selectedJob?.taskId ?? null}
+                        onSelect={setSelectedJobId}
+                      />
+                    </div>
                   </div>
-                  <JobLogView job={selectedJob} autoScroll={autoScroll} />
+                  <div className="min-h-0 flex-1">
+                    <JobLogView job={selectedJob} autoScroll={autoScroll} />
+                  </div>
                 </div>
               )}
             </Drawer.Body>

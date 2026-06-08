@@ -4,8 +4,8 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 fn decode_concurrency() -> usize {
     match std::env::var("WHISPER_DECODE_CONCURRENCY") {
-        Ok(s) => s.trim().parse::<usize>().unwrap_or(1).max(1),
-        Err(_) => 1,
+        Ok(s) => s.trim().parse::<usize>().unwrap_or(2).max(1),
+        Err(_) => 2,
     }
 }
 
@@ -18,7 +18,7 @@ fn decode_semaphore() -> Arc<Semaphore> {
     }))
 }
 
-/// 获取 Whisper 解码许可；默认全进程仅允许一个解码任务同时运行。
+/// 获取 Whisper 解码许可；默认全进程允许两个解码任务同时运行。
 pub async fn acquire_decode_permit() -> anyhow::Result<OwnedSemaphorePermit> {
     decode_semaphore()
         .acquire_owned()

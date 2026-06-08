@@ -16,6 +16,7 @@
 - 写样式的时候，注意应用主题的兼容
 - 不要去手动修改 `src/api/generated.schemas.ts` 和 `src/api/generated.ts` 文件的内容，只能通过脚本生成
 - 遇到 lint 错误的时候，先尝试使用 lint 指令修复，修完完还不好再手动改
+- 注意 hero 组件的 props 不要使用 deprecated 的 props
 
 ## 后端规范
 

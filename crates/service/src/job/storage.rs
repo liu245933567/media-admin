@@ -47,7 +47,7 @@ const EXEC_EVENT_LOG_CAP: usize = 400;
 
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
 const DEFAULT_GROUP_SUBTITLE_PIPELINE: usize = 2;
-const DEFAULT_GROUP_WHISPER: usize = 1;
+const DEFAULT_GROUP_WHISPER: usize = 2;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
 const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
 const DEFAULT_GROUP_MEDIA_SCAN: usize = 1;
