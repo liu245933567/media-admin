@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { AppToastProvider } from '@/components/app-toast'
 import { ConfirmDialogProvider } from '@/components/confirm-dialog'
 import { routeTree } from './routeTree.gen'
+import '@/lib/iconify-icons'
 import './index.css'
 
 const queryClient = new QueryClient()

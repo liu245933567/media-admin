@@ -6,7 +6,7 @@ import type {
 } from '@/api'
 import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Card, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Switch, Tooltip } from '@heroui/react'
+import { Button, Card, Dropdown, Input, Label, ListBox, Pagination, Select, Spinner, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
@@ -569,14 +569,6 @@ interface TaskmillExecLogPanelProps {
   historyItems?: TaskmillTaskHistoryRecord[]
   progressItems?: TaskmillEstimatedProgress[]
   loading?: boolean
-  runningCount: number
-  pendingCount: number
-  activeCount: number
-  completedCount: number
-  failedCount: number
-  isSchedulerPaused: boolean
-  execLogAutoRefresh: boolean
-  onExecLogAutoRefreshChange: (selected: boolean) => void
   onQueueChanged: () => void
   onCreateSubtitle: () => void
   onScanGenerate: () => void
@@ -589,14 +581,6 @@ export function TaskmillExecLogPanel({
   historyItems,
   progressItems,
   loading,
-  runningCount,
-  pendingCount,
-  activeCount,
-  completedCount,
-  failedCount,
-  isSchedulerPaused,
-  execLogAutoRefresh,
-  onExecLogAutoRefreshChange,
   onQueueChanged,
   onCreateSubtitle,
   onScanGenerate,
@@ -604,7 +588,6 @@ export function TaskmillExecLogPanel({
 }: TaskmillExecLogPanelProps) {
   const message = useAppToast()
   const confirm = useConfirmDialog()
-  const [autoScroll, setAutoScroll] = useState(true)
   const [filter, setFilter] = useState<PipelineFilter>('all')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
@@ -735,252 +718,216 @@ export function TaskmillExecLogPanel({
 
   return (
     <>
-      <div className="flex w-full flex-col gap-3">
+      <div className="grid min-h-0 w-full flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-3">
         <Card>
-          <Card.Content className="flex flex-col gap-2 p-3">
-            <div className="grid gap-2 xl:grid-cols-[minmax(18rem,1fr)_auto] xl:items-center">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h2 className="m-0 text-base font-semibold">执行过程</h2>
-                <div className="flex flex-wrap items-center gap-1">
-                  <Chip color={runningCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
-                    执行中
-                    {runningCount}
-                  </Chip>
-                  <Chip color={pendingCount > 0 ? 'warning' : 'default'} size="sm" variant="soft">
-                    排队
-                    {pendingCount}
-                  </Chip>
-                  <Chip color={activeCount > 0 ? 'accent' : 'default'} size="sm" variant="soft">
-                    活跃
-                    {activeCount}
-                  </Chip>
-                  <Chip color={completedCount > 0 ? 'success' : 'default'} size="sm" variant="soft">
-                    完成
-                    {completedCount}
-                  </Chip>
-                  <Chip color={failedCount > 0 ? 'danger' : 'default'} size="sm" variant="soft">
-                    失败
-                    {failedCount}
-                  </Chip>
-                  {isSchedulerPaused ? <Chip color="danger" size="sm" variant="soft">调度暂停</Chip> : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                <TaskmillQueueControls onChanged={onQueueChanged} />
-                <Dropdown>
-                  <Button aria-label="新建任务" size="sm" variant="secondary">
-                    <Icon className="size-4" icon="lucide:plus" />
-                    新建任务
-                    <Icon className="size-4" icon="lucide:chevron-down" />
-                  </Button>
-                  <Dropdown.Popover>
-                    <Dropdown.Menu
-                      onAction={(key) => {
-                        if (key === 'subtitle') {
-                          onCreateSubtitle()
-                        }
-                        else if (key === 'scan') {
-                          onScanGenerate()
-                        }
-                        else if (key === 'translate') {
-                          onTranslate()
-                        }
-                      }}
-                    >
-                      <Dropdown.Item id="subtitle" textValue="字幕生成">
-                        <Icon className="size-4 text-muted" icon="lucide:captions" />
-                        <Label>字幕生成</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="scan" textValue="扫描并生成">
-                        <Icon className="size-4 text-muted" icon="lucide:folder-search" />
-                        <Label>扫描并生成</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="translate" textValue="字幕翻译">
-                        <Icon className="size-4 text-muted" icon="lucide:languages" />
-                        <Label>字幕翻译</Label>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-                <Switch isSelected={execLogAutoRefresh} onChange={onExecLogAutoRefreshChange}>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  <Switch.Content>
-                    <Label className="text-sm">自动刷新</Label>
-                  </Switch.Content>
-                </Switch>
-              </div>
+          <Card.Content className="grid gap-2 xl:grid-cols-[auto_minmax(0,1fr)_minmax(14rem,22rem)_auto] xl:items-center">
+            <Select
+              aria-label="任务状态筛选"
+              className="w-36"
+              value={filter}
+              variant="secondary"
+              onChange={(value) => {
+                if (typeof value !== 'string') {
+                  return
+                }
+                setFilter(value as PipelineFilter)
+                setPage(1)
+              }}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {filterTabs.map(tab => (
+                    <ListBox.Item key={tab.key} id={tab.key} textValue={`${tab.label} ${filterCounts[tab.key]}`}>
+                      <span>{tab.label}</span>
+                      <span className="ml-auto text-xs tabular-nums text-muted">{filterCounts[tab.key]}</span>
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <div className="relative min-w-0">
+              <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
+              <Input
+                className="pl-9"
+                value={q}
+                placeholder="搜索任务"
+                variant="secondary"
+                onChange={(event) => {
+                  setQ(event.target.value)
+                  setPage(1)
+                }}
+              />
             </div>
-            <div className="grid gap-2 lg:grid-cols-[auto_minmax(14rem,24rem)_auto] lg:items-center">
-              <div className="flex flex-wrap items-center gap-1">
-                {filterTabs.map(tab => (
-                  <Button
-                    key={tab.key}
-                    size="sm"
-                    variant={filter === tab.key ? 'primary' : 'tertiary'}
-                    onPress={() => {
-                      setFilter(tab.key)
-                      setPage(1)
+            <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+              <TaskmillQueueControls onChanged={onQueueChanged} />
+              <Dropdown>
+                <Button aria-label="新建" size="sm" variant="secondary">
+                  <Icon className="size-4" icon="lucide:plus" />
+                  新建
+                  <Icon className="size-4" icon="lucide:chevron-down" />
+                </Button>
+                <Dropdown.Popover>
+                  <Dropdown.Menu
+                    onAction={(key) => {
+                      if (key === 'subtitle') {
+                        onCreateSubtitle()
+                      }
+                      else if (key === 'scan') {
+                        onScanGenerate()
+                      }
+                      else if (key === 'translate') {
+                        onTranslate()
+                      }
                     }}
                   >
-                    {tab.label}
-                    <Chip size="sm" variant="soft">
-                      {filterCounts[tab.key]}
-                    </Chip>
-                  </Button>
-                ))}
-              </div>
-              <div className="relative">
-                <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
-                <Input
-                  className="pl-9"
-                  value={q}
-                  placeholder="Filter pipelines"
-                  variant="secondary"
-                  onChange={(event) => {
-                    setQ(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-3 lg:justify-end">
-                <span className="hidden text-xs text-muted 2xl:inline">服务端保留约 400 条事件</span>
-                <Switch isSelected={autoScroll} onChange={setAutoScroll}>
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                  <Switch.Content>
-                    <Label className="text-sm">日志滚底</Label>
-                  </Switch.Content>
-                </Switch>
-              </div>
+                    <Dropdown.Item id="subtitle" textValue="字幕生成">
+                      <Icon className="size-4 text-muted" icon="lucide:captions" />
+                      <Label>字幕生成</Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="scan" textValue="扫描并生成">
+                      <Icon className="size-4 text-muted" icon="lucide:folder-search" />
+                      <Label>扫描并生成</Label>
+                    </Dropdown.Item>
+                    <Dropdown.Item id="translate" textValue="字幕翻译">
+                      <Icon className="size-4 text-muted" icon="lucide:languages" />
+                      <Label>字幕翻译</Label>
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown.Popover>
+              </Dropdown>
             </div>
           </Card.Content>
         </Card>
 
-        <ListView
-          aria-label="任务执行过程 Pipeline 列表"
-          className="max-h-[calc(100dvh-16rem)] overflow-y-auto"
-          items={pagedPipelines}
-          selectionMode="none"
-          variant="secondary"
-          renderEmptyState={() => (
-            <div className="flex items-center justify-center py-8 text-sm text-muted">
-              {loading
-                ? (
-                    <div className="flex items-center gap-2">
-                      <Spinner size="sm" />
-                      加载中
-                    </div>
-                  )
-                : '暂无 pipeline；提交任务并恢复调度后会显示执行过程。'}
-            </div>
-          )}
-          onAction={(key) => {
-            const pipeline = pagedPipelines.find(item => String(item.root.taskId) === String(key))
-            if (pipeline) {
-              openPipelineDetail(pipeline)
-            }
-          }}
-        >
-          {(pipeline) => {
-            const stages = stageJobs(pipeline)
-            const title = pipelineTitle(pipeline)
-            const latestSummary = latestLineOf(pipeline.root)?.summary
-            const cancellableJob = cancellableJobOf(pipeline)
-            const canDelete = pipeline.root.isHistory
+        <div className="min-h-0 overflow-y-auto">
+          <ListView
+            aria-label="任务执行过程 Pipeline 列表"
+            className="min-h-full"
+            items={pagedPipelines}
+            selectionMode="none"
+            variant="secondary"
+            renderEmptyState={() => (
+              <div className="flex items-center justify-center py-8 text-sm text-muted">
+                {loading
+                  ? (
+                      <div className="flex items-center gap-2">
+                        <Spinner size="sm" />
+                        加载中
+                      </div>
+                    )
+                  : '暂无 pipeline；提交任务并恢复调度后会显示执行过程。'}
+              </div>
+            )}
+            onAction={(key) => {
+              const pipeline = pagedPipelines.find(item => String(item.root.taskId) === String(key))
+              if (pipeline) {
+                openPipelineDetail(pipeline)
+              }
+            }}
+          >
+            {(pipeline) => {
+              const stages = stageJobs(pipeline)
+              const title = pipelineTitle(pipeline)
+              const latestSummary = latestLineOf(pipeline.root)?.summary
+              const cancellableJob = cancellableJobOf(pipeline)
+              const canDelete = pipeline.root.isHistory
 
-            return (
-              <ListView.Item
-                id={String(pipeline.root.taskId)}
-                key={pipeline.root.taskId}
-                textValue={title}
-                className="flex-nowrap items-center py-1.5"
-              >
-                <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
-                  <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)_auto] lg:items-center">
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
-                        <button
-                          className="min-w-0 flex-1 truncate text-left text-sm font-medium text-accent hover:underline"
-                          title={title}
-                          type="button"
-                          onClick={() => openPipelineDetail(pipeline)}
-                        >
-                          {title}
-                        </button>
-                        <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
-                          #
-                          {pipeline.root.taskId}
-                        </span>
+              return (
+                <ListView.Item
+                  id={String(pipeline.root.taskId)}
+                  key={pipeline.root.taskId}
+                  textValue={title}
+                  className="flex-nowrap items-center py-1.5"
+                >
+                  <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
+                    <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)] lg:items-center">
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+                          <button
+                            className="min-w-0 flex-1 truncate text-left text-sm font-medium text-accent hover:underline"
+                            title={title}
+                            type="button"
+                            onClick={() => openPipelineDetail(pipeline)}
+                          >
+                            {title}
+                          </button>
+                          <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
+                            #
+                            {pipeline.root.taskId}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                          <span className="max-w-56 truncate">{transJobType(pipeline.root.taskType)}</span>
+                          <span className="tabular-nums">
+                            {pipeline.jobs.length}
+                            {' '}
+                            jobs
+                          </span>
+                          <TaskDurationMeta task={pipeline.root} />
+                        </div>
                       </div>
-                      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                        <span className="max-w-56 truncate">{transJobType(pipeline.root.taskType)}</span>
-                        <span className="tabular-nums">
-                          {pipeline.jobs.length}
-                          {' '}
-                          jobs
-                        </span>
-                        <TaskDurationMeta task={pipeline.root} />
+                      <TaskProgressCircle className="lg:justify-self-start" percent={pipeline.percent} />
+                      <div className="min-w-0 lg:justify-self-center">
+                        <PipelineStages
+                          compact
+                          jobs={stages}
+                          selectedJobId={null}
+                          onSelect={id => openPipelineDetail(pipeline, id)}
+                        />
+                      </div>
+                      <div className="min-w-0 text-xs text-muted lg:text-right">
+                        <div className="tabular-nums">{formatTaskmillTime(pipeline.latestAt)}</div>
+                        <div className="mt-0.5 truncate text-xs" title={latestSummary}>
+                          {latestSummary ?? '暂无事件'}
+                        </div>
                       </div>
                     </div>
-                    <TaskProgressCircle className="lg:justify-self-start" percent={pipeline.percent} />
-                    <div className="min-w-0 lg:justify-self-center">
-                      <PipelineStages
-                        compact
-                        jobs={stages}
-                        selectedJobId={null}
-                        onSelect={id => openPipelineDetail(pipeline, id)}
-                      />
-                    </div>
-                    <div className="min-w-0 text-xs text-muted lg:text-right">
-                      <div className="tabular-nums">{formatTaskmillTime(pipeline.latestAt)}</div>
-                      <div className="mt-0.5 truncate text-xs" title={latestSummary}>
-                        {latestSummary ?? '暂无事件'}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 lg:justify-self-end" aria-label="任务操作栏">
-                      <Tooltip delay={0} isDisabled={Boolean(cancellableJob)}>
-                        <Button
-                          isIconOnly
-                          aria-label="取消任务"
-                          isDisabled={!cancellableJob || actionPending}
-                          isPending={cancelMutation.isPending}
-                          size="sm"
-                          variant="tertiary"
-                          onClick={event => event.stopPropagation()}
-                          onPress={() => confirmCancelPipeline(pipeline)}
-                        >
-                          <Icon className="size-4" icon="lucide:ban" />
-                        </Button>
-                        <Tooltip.Content>当前任务不可取消</Tooltip.Content>
-                      </Tooltip>
-                      <Tooltip delay={0} isDisabled={!canDelete}>
-                        <Button
-                          isIconOnly
-                          aria-label="删除任务记录"
-                          isDisabled={!canDelete || actionPending}
-                          isPending={deleteMutation.isPending}
-                          size="sm"
-                          variant="danger-soft"
-                          onClick={event => event.stopPropagation()}
-                          onPress={() => confirmDeletePipeline(pipeline)}
-                        >
-                          <Icon className="size-4" icon="lucide:trash-2" />
-                        </Button>
-                        <Tooltip.Content>仅历史任务可删除</Tooltip.Content>
-                      </Tooltip>
-                    </div>
-                  </div>
-                </ListView.ItemContent>
-              </ListView.Item>
-            )
-          }}
-        </ListView>
+                  </ListView.ItemContent>
+                  <ListView.ItemAction className="flex items-center gap-1" aria-label="任务操作栏">
+                    <Tooltip delay={0} isDisabled={Boolean(cancellableJob)}>
+                      <Button
+                        isIconOnly
+                        aria-label="取消任务"
+                        isDisabled={!cancellableJob || actionPending}
+                        isPending={cancelMutation.isPending}
+                        size="sm"
+                        variant="tertiary"
+                        onClick={event => event.stopPropagation()}
+                        onPress={() => confirmCancelPipeline(pipeline)}
+                      >
+                        <Icon className="size-4" icon="lucide:ban" />
+                      </Button>
+                      <Tooltip.Content>当前任务不可取消</Tooltip.Content>
+                    </Tooltip>
+                    <Tooltip delay={0} isDisabled={!canDelete}>
+                      <Button
+                        isIconOnly
+                        aria-label="删除任务记录"
+                        isDisabled={!canDelete || actionPending}
+                        isPending={deleteMutation.isPending}
+                        size="sm"
+                        variant="danger-soft"
+                        onClick={event => event.stopPropagation()}
+                        onPress={() => confirmDeletePipeline(pipeline)}
+                      >
+                        <Icon className="size-4" icon="lucide:trash-2" />
+                      </Button>
+                      <Tooltip.Content>仅历史任务可删除</Tooltip.Content>
+                    </Tooltip>
+                  </ListView.ItemAction>
+                </ListView.Item>
+              )
+            }}
+          </ListView>
+        </div>
 
-        <div className="flex flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
+        <div className="flex shrink-0 flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="tabular-nums">
               显示
@@ -1058,7 +1005,7 @@ export function TaskmillExecLogPanel({
       </div>
 
       <TaskmillPipelineDetailDrawer
-        autoScroll={autoScroll}
+        autoScroll
         pipeline={detailPipeline}
         selectedJob={selectedJob}
         selectedJobId={selectedJob?.taskId ?? null}

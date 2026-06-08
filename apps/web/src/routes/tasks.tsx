@@ -36,7 +36,6 @@ function PageComponent() {
   const [createOpen, setCreateOpen] = useState(false)
   const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
-  const [execLogAutoRefresh, setExecLogAutoRefresh] = useState(true)
 
   const snapshotQuery = useQuery({
     queryKey: getSnapshotJobsQueryKey(),
@@ -59,14 +58,8 @@ function PageComponent() {
   const execLogQuery = useQuery({
     queryKey: getExecLogJobsQueryKey(execLogQueryParams),
     queryFn: () => execLogJobs(execLogQueryParams) as Promise<TaskmillExecLogEntry[]>,
-    refetchInterval: execLogAutoRefresh ? 1200 : false,
+    refetchInterval: 1200,
   })
-
-  const runningCount = snapshotQuery.data?.scheduler.running.length ?? 0
-  const pendingCount = snapshotQuery.data?.scheduler.pending_count ?? 0
-  const activeCount = activeQuery.data?.length ?? 0
-  const completedCount = snapshotQuery.data?.metrics.completed ?? 0
-  const failedCount = snapshotQuery.data?.metrics.failed ?? 0
 
   function refreshAll() {
     void snapshotQuery.refetch()
@@ -76,7 +69,7 @@ function PageComponent() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col">
       <SubtitleTaskCreateDrawerForm
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -108,14 +101,6 @@ function PageComponent() {
         historyItems={historyQuery.data}
         progressItems={snapshotQuery.data?.scheduler.progress}
         loading={execLogQuery.isLoading || execLogQuery.isFetching}
-        runningCount={runningCount}
-        pendingCount={pendingCount}
-        activeCount={activeCount}
-        completedCount={completedCount}
-        failedCount={failedCount}
-        isSchedulerPaused={snapshotQuery.data?.scheduler.is_paused ?? false}
-        execLogAutoRefresh={execLogAutoRefresh}
-        onExecLogAutoRefreshChange={setExecLogAutoRefresh}
         onQueueChanged={refreshAll}
         onCreateSubtitle={() => setCreateOpen(true)}
         onScanGenerate={() => setScanGenerateOpen(true)}
