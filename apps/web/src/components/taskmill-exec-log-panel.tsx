@@ -9,7 +9,7 @@ import type {
 import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
 import { ActionBar } from '@heroui-pro/react/action-bar'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Card, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Separator, Spinner, Tooltip } from '@heroui/react'
+import { Button, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Separator, Spinner, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
@@ -94,6 +94,53 @@ function readEventTaskId(event: Record<string, unknown>): number | undefined {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
+}
+
+function decodePayloadObject(payload: number[] | null | undefined): Record<string, unknown> | undefined {
+  if (!payload?.length) {
+    return undefined
+  }
+
+  try {
+    return asRecord(JSON.parse(new TextDecoder().decode(new Uint8Array(payload))))
+  }
+  catch {
+    return undefined
+  }
+}
+
+function labelAfter(label: string, prefix: string): string | undefined {
+  return label.startsWith(prefix) ? label.slice(prefix.length).trim() : undefined
+}
+
+function normalizeTaskPath(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replaceAll('\\', '/').toLowerCase()
+  return normalized || undefined
+}
+
+function pathWithoutExtension(value: string | undefined): string | undefined {
+  const normalized = normalizeTaskPath(value)
+  return normalized?.replace(/\.[^/.]+$/, '')
+}
+
+function sourceSrtSubject(value: string | undefined): string | undefined {
+  return pathWithoutExtension(value)?.replace(/\.[a-z]{2,8}$/, '')
+}
+
+function historyVideoPath(task: TaskmillTaskHistoryRecord): string | undefined {
+  const payload = decodePayloadObject(task.payload)
+  return readString(payload?.video_path)
+    ?? labelAfter(task.label, '字幕生成: ')
+    ?? labelAfter(task.label, '提取字幕音频: ')
+    ?? labelAfter(task.label, '识别字幕: ')
+}
+
+function historySubjectKey(task: TaskmillTaskHistoryRecord): string | undefined {
+  if (task.task_type.endsWith('subtitle-translate')) {
+    const payload = decodePayloadObject(task.payload)
+    return sourceSrtSubject(readString(payload?.source_srt_path) ?? labelAfter(task.label, '字幕翻译: ')?.split(' -> ')[0])
+  }
+  return pathWithoutExtension(historyVideoPath(task))
 }
 
 function isHistoryTask(task: TaskmillKnownTask): task is TaskmillTaskHistoryRecord {
@@ -295,15 +342,17 @@ function deriveStatusFromEvent(type: string, event: Record<string, unknown>, cur
 function mergeTask(
   task: TaskmillKnownTask,
   existing?: TaskLogGroup,
+  runtimeTaskId = task.id,
 ): TaskLogGroup {
   const isHistory = isHistoryTask(task)
   const completedAt = isHistoryTask(task) ? task.completed_at : null
   const identityKey = isHistory ? historyTaskKey(task.id) : activeTaskKey(task.id)
-  const parentIdentityKey = !isHistory && task.parent_id != null ? activeTaskKey(task.parent_id) : null
+  const parentIdentityKey = task.parent_id != null ? activeTaskKey(task.parent_id) : null
   const existingPercent = clampTaskPercent(existing?.percent)
   return {
     identityKey,
-    taskId: task.id,
+    taskId: runtimeTaskId,
+    historyRecordId: isHistory ? task.id : null,
     taskType: task.task_type,
     label: task.label,
     parentIdentityKey,
@@ -343,12 +392,49 @@ function buildTaskLogGroups(
   const groups = new Map<string, TaskLogGroup>()
   const historyKeys = new Map<string, string>()
   const activeKeys = new Set<string>()
+  const eventTaskIdsByKey = new Map<string, number>()
+  const runtimeHistoryKeys = new Map<number, string>()
+  const parentHistoryKeysBySubject = new Map<string, string>()
+
+  for (const row of items ?? []) {
+    const taskId = readEventTaskId(row.event)
+    const header = readEventHeader(row.event)
+    if (taskId != null && header?.key != null) {
+      eventTaskIdsByKey.set(header.key, taskId)
+    }
+  }
 
   for (const task of historyItems ?? []) {
     const key = historyTaskKey(task.id)
+    const runtimeTaskId = eventTaskIdsByKey.get(task.key) ?? task.id
     historyKeys.set(task.key, key)
-    groups.set(key, mergeTask(task, groups.get(key)))
+    runtimeHistoryKeys.set(runtimeTaskId, key)
+    if (task.parent_id == null && task.task_type.endsWith('video-subtitle-generate')) {
+      const subjectKey = historySubjectKey(task)
+      if (subjectKey) {
+        parentHistoryKeysBySubject.set(subjectKey, key)
+      }
+    }
+    groups.set(key, mergeTask(task, groups.get(key), runtimeTaskId))
   }
+
+  for (const task of historyItems ?? []) {
+    if (task.parent_id == null) {
+      continue
+    }
+    const key = historyTaskKey(task.id)
+    const subjectKey = historySubjectKey(task)
+    const parentKey = runtimeHistoryKeys.get(task.parent_id)
+      ?? (subjectKey != null ? parentHistoryKeysBySubject.get(subjectKey) : undefined)
+    if (!parentKey) {
+      continue
+    }
+    const group = groups.get(key)
+    if (group) {
+      groups.set(key, { ...group, parentIdentityKey: parentKey })
+    }
+  }
+
   for (const task of activeItems ?? []) {
     const key = activeTaskKey(task.id)
     activeKeys.add(key)
@@ -394,6 +480,7 @@ function buildTaskLogGroups(
     groups.set(groupKey, {
       identityKey: groupKey,
       taskId,
+      historyRecordId: existing?.historyRecordId ?? null,
       taskType: existing?.taskType ?? header?.task_type ?? '',
       label: existing?.label ?? header?.label ?? '',
       parentIdentityKey: existing?.parentIdentityKey ?? null,
@@ -529,7 +616,7 @@ function buildPipelineViews(groups: TaskLogGroup[]): PipelineView[] {
       const status = terminal?.status
         ?? (jobs.every(job => job.status === 'completed') ? 'completed' : root.status)
       const percent = derivePipelinePercent(root, jobs, status)
-      const historyRecordId = jobs.find(job => job.isHistory)?.taskId ?? null
+      const historyRecordId = jobs.find(job => job.historyRecordId != null)?.historyRecordId ?? null
       return { root, jobs, historyRecordId, latestAt, status, percent }
     })
     .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
@@ -556,8 +643,8 @@ function historyRecordIdOf(pipeline: PipelineView): number | null {
   if (pipeline.historyRecordId != null) {
     return pipeline.historyRecordId
   }
-  if (pipeline.root.isHistory) {
-    return pipeline.root.taskId
+  if (pipeline.root.historyRecordId != null) {
+    return pipeline.root.historyRecordId
   }
   return null
 }
@@ -916,92 +1003,90 @@ export function TaskmillExecLogPanel({
   return (
     <>
       <div className="grid min-h-0 w-full flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-3">
-        <Card>
-          <Card.Content className="flex flex-col gap-2">
-            <div className="grid gap-2 xl:grid-cols-[auto_minmax(0,1fr)_minmax(14rem,22rem)_auto] xl:items-center">
-              <Select
-                aria-label="任务状态筛选"
-                className="w-36"
-                value={filter}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <Select
+              aria-label="任务状态筛选"
+              className="w-full sm:w-40 sm:shrink-0"
+              value={filter}
+              variant="secondary"
+              onChange={(value) => {
+                if (typeof value !== 'string') {
+                  return
+                }
+                setFilter(value as PipelineFilter)
+                setPage(1)
+              }}
+            >
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  {filterTabs.map(tab => (
+                    <ListBox.Item key={tab.key} id={tab.key} textValue={`${tab.label} ${filterCounts[tab.key]}`}>
+                      <span>{tab.label}</span>
+                      <span className="ml-auto text-xs tabular-nums text-muted">{filterCounts[tab.key]}</span>
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+            </Select>
+            <div className="relative min-w-0 flex-1">
+              <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
+              <Input
+                className="w-full pl-9"
+                value={q}
+                placeholder="搜索任务"
                 variant="secondary"
-                onChange={(value) => {
-                  if (typeof value !== 'string') {
-                    return
-                  }
-                  setFilter(value as PipelineFilter)
+                onChange={(event) => {
+                  setQ(event.target.value)
                   setPage(1)
                 }}
-              >
-                <Select.Trigger>
-                  <Select.Value />
-                  <Select.Indicator />
-                </Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {filterTabs.map(tab => (
-                      <ListBox.Item key={tab.key} id={tab.key} textValue={`${tab.label} ${filterCounts[tab.key]}`}>
-                        <span>{tab.label}</span>
-                        <span className="ml-auto text-xs tabular-nums text-muted">{filterCounts[tab.key]}</span>
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-              <div className="relative min-w-0">
-                <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
-                <Input
-                  className="pl-9"
-                  value={q}
-                  placeholder="搜索任务"
-                  variant="secondary"
-                  onChange={(event) => {
-                    setQ(event.target.value)
-                    setPage(1)
-                  }}
-                />
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
-                <TaskmillQueueControls onChanged={onQueueChanged} />
-                <Dropdown>
-                  <Button aria-label="新建" size="sm" variant="secondary">
-                    <Icon className="size-4" icon="lucide:plus" />
-                    新建
-                    <Icon className="size-4" icon="lucide:chevron-down" />
-                  </Button>
-                  <Dropdown.Popover>
-                    <Dropdown.Menu
-                      onAction={(key) => {
-                        if (key === 'subtitle') {
-                          onCreateSubtitle()
-                        }
-                        else if (key === 'scan') {
-                          onScanGenerate()
-                        }
-                        else if (key === 'translate') {
-                          onTranslate()
-                        }
-                      }}
-                    >
-                      <Dropdown.Item id="subtitle" textValue="字幕生成">
-                        <Icon className="size-4 text-muted" icon="lucide:captions" />
-                        <Label>字幕生成</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="scan" textValue="扫描并生成">
-                        <Icon className="size-4 text-muted" icon="lucide:folder-search" />
-                        <Label>扫描并生成</Label>
-                      </Dropdown.Item>
-                      <Dropdown.Item id="translate" textValue="字幕翻译">
-                        <Icon className="size-4 text-muted" icon="lucide:languages" />
-                        <Label>字幕翻译</Label>
-                      </Dropdown.Item>
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </div>
+              />
             </div>
-          </Card.Content>
-        </Card>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+            <TaskmillQueueControls onChanged={onQueueChanged} />
+            <Dropdown>
+              <Button aria-label="新建" size="sm" variant="secondary">
+                <Icon className="size-4" icon="lucide:plus" />
+                新建
+                <Icon className="size-4" icon="lucide:chevron-down" />
+              </Button>
+              <Dropdown.Popover>
+                <Dropdown.Menu
+                  onAction={(key) => {
+                    if (key === 'subtitle') {
+                      onCreateSubtitle()
+                    }
+                    else if (key === 'scan') {
+                      onScanGenerate()
+                    }
+                    else if (key === 'translate') {
+                      onTranslate()
+                    }
+                  }}
+                >
+                  <Dropdown.Item id="subtitle" textValue="字幕生成">
+                    <Icon className="size-4 text-muted" icon="lucide:captions" />
+                    <Label>字幕生成</Label>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="scan" textValue="扫描并生成">
+                    <Icon className="size-4 text-muted" icon="lucide:folder-search" />
+                    <Label>扫描并生成</Label>
+                  </Dropdown.Item>
+                  <Dropdown.Item id="translate" textValue="字幕翻译">
+                    <Icon className="size-4 text-muted" icon="lucide:languages" />
+                    <Label>字幕翻译</Label>
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown.Popover>
+            </Dropdown>
+          </div>
+        </div>
 
         <div className="min-h-0 overflow-y-auto" onClickCapture={handleListSelectionClickCapture}>
           <ListView

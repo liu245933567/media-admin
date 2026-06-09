@@ -18,6 +18,7 @@ export interface TaskEventLine {
 export interface TaskLogGroup {
   identityKey: string
   taskId: number
+  historyRecordId: number | null
   taskType: string
   label: string
   parentIdentityKey: string | null
