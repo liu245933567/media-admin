@@ -187,7 +187,7 @@ export function AppShell({ children }: AppShellProps) {
         </>
       )}
     >
-      <div className="mx-auto flex w-full flex-col gap-6 px-4">
+      <div className="mx-auto flex h-full min-h-0 w-full flex-col gap-6 px-4">
         {children}
       </div>
     </AppLayout>

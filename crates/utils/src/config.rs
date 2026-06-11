@@ -68,6 +68,14 @@ pub fn get_transcode_cache_dir() -> PathBuf {
     }
 }
 
+/// 获取 字幕 缓存目录
+pub fn get_subtitle_cache_dir() -> PathBuf {
+    match std::env::var("SUBTITLE_CACHE_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => get_default_app_path().join("temp/subtitle"),
+    }
+}
+
 /// 转码时 GPU（NVENC）使用策略，由环境变量 `TRANSCODE_GPU` 控制。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TranscodeGpuMode {

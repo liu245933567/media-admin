@@ -451,6 +451,12 @@
           "data": {
             "items": {
               "properties": {
+                "captions": {
+                  "items": {
+                    "$ref": "#/components/schemas/StashSceneCaption"
+                  },
+                  "type": "array"
+                },
                 "date": {
                   "type": [
                     "string",
@@ -1047,6 +1053,37 @@
           "value",
           "modifier"
         ],
+        "type": "object"
+      },
+      "StashSceneCaption": {
+        "properties": {
+          "caption_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "local_path": {
+            "description": "根据 `stash_config.path_mappings` 映射出的本服务本地字幕路径。",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Stash 视角推导出的字幕文件路径。",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "StashSceneFile": {
@@ -1654,6 +1691,12 @@
       },
       "StashSceneRow": {
         "properties": {
+          "captions": {
+            "items": {
+              "$ref": "#/components/schemas/StashSceneCaption"
+            },
+            "type": "array"
+          },
           "date": {
             "type": [
               "string",

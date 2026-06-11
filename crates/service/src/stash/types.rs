@@ -1,8 +1,16 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use super::filter::StashSceneFilterType;
 use super::path::StashPathMapping;
+
+fn null_as_empty_vec<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 /// Stash 连接配置（持久化于应用 `AppConfig`）。
 #[typeshare::typeshare]
@@ -85,7 +93,21 @@ pub struct StashScenePaths {
     // pub sprite: String,
     // pub funscript: String,
     // pub interactive_heatmap: String,
-    // pub caption: String,
+}
+
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct StashSceneCaption {
+    #[serde(default)]
+    pub language_code: Option<String>,
+    #[serde(default)]
+    pub caption_type: Option<String>,
+    /// Stash 视角推导出的字幕文件路径。
+    #[serde(default)]
+    pub path: Option<String>,
+    /// 根据 `stash_config.path_mappings` 映射出的本服务本地字幕路径。
+    #[serde(default)]
+    pub local_path: Option<String>,
 }
 
 #[typeshare::typeshare]
@@ -96,6 +118,8 @@ pub struct StashSceneRow {
     pub date: Option<String>,
     pub files: Vec<StashSceneFile>,
     pub paths: StashScenePaths,
+    #[serde(default, deserialize_with = "null_as_empty_vec")]
+    pub captions: Vec<StashSceneCaption>,
     /// 最后播放时间
     pub last_played_at: Option<String>,
 }

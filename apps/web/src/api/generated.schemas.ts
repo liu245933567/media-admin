@@ -977,6 +977,12 @@ export const ListScenesStashBody = zod.object({
 
 export const ListScenesStashResponse = zod.object({
   "data": zod.array(zod.object({
+  "captions": zod.array(zod.object({
+  "caption_type": zod.string().nullish(),
+  "language_code": zod.string().nullish(),
+  "local_path": zod.string().nullish().describe('根据 `stash_config.path_mappings` 映射出的本服务本地字幕路径。'),
+  "path": zod.string().nullish().describe('Stash 视角推导出的字幕文件路径。')
+})).optional(),
   "date": zod.string().nullish(),
   "files": zod.array(zod.object({
   "basename": zod.string(),

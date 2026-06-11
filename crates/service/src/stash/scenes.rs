@@ -3,7 +3,7 @@ use ma_utils::types::PageResult;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::stash::types::{StashConnectConfig, StashSceneListReq};
+use crate::stash::types::{StashConnectConfig, StashSceneCaption, StashSceneListReq};
 use crate::stash::{StashScenePaths, map_stash_file_path};
 
 use super::forward_graphql;
@@ -110,6 +110,7 @@ impl StashSceneRow {
         cfg: &StashConnectConfig,
         stash_host: &str,
     ) -> Self {
+        let first_file_path = self.files.first().map(|file| file.path.clone());
         self.files = self
             .files
             .into_iter()
@@ -119,7 +120,54 @@ impl StashSceneRow {
             })
             .collect();
         self.paths = self.paths.with_proxy_hosts(stash_host);
+        self.captions = self
+            .captions
+            .into_iter()
+            .map(|caption| caption.with_paths(first_file_path.as_deref(), cfg))
+            .collect();
         self
+    }
+}
+
+impl StashSceneCaption {
+    fn with_paths(mut self, video_path: Option<&str>, cfg: &StashConnectConfig) -> Self {
+        let Some(video_path) = video_path else {
+            return self;
+        };
+        let Some(path) = infer_stash_caption_path(video_path, &self) else {
+            return self;
+        };
+        self.local_path = map_stash_file_path(&path, &cfg.path_mappings);
+        self.path = Some(path);
+        self
+    }
+}
+
+fn infer_stash_caption_path(video_path: &str, caption: &StashSceneCaption) -> Option<String> {
+    let extension = caption_extension(caption)?;
+    let lang = caption
+        .language_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let (base, _) = video_path.rsplit_once('.').unwrap_or((video_path, ""));
+
+    Some(match lang {
+        Some(lang) => format!("{base}.{lang}.{extension}"),
+        None => format!("{base}.{extension}"),
+    })
+}
+
+fn caption_extension(caption: &StashSceneCaption) -> Option<String> {
+    let raw = caption
+        .caption_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let normalized = raw.trim_start_matches('.').to_ascii_lowercase();
+    match normalized.as_str() {
+        "srt" | "vtt" => Some(normalized),
+        _ => None,
     }
 }
 
@@ -198,6 +246,11 @@ fragment SlimSceneData on Scene {
     funscript
     interactive_heatmap
     caption
+    __typename
+  }
+  captions {
+    language_code
+    caption_type
     __typename
   }
   scene_markers {

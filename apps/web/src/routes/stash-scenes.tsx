@@ -1,15 +1,16 @@
-import type { StashEntityKind, StashEntitySearchItem, StashSceneFilterType, StashSceneRow } from '@/api'
+import type { StashEntityKind, StashEntitySearchItem, StashSceneCaption, StashSceneFilterType, StashSceneRow } from '@/api'
 import { ActionBar } from '@heroui-pro/react/action-bar'
-import { Button, Card, Checkbox, Chip, Disclosure, Drawer, Dropdown, Input, Label, ListBox, ScrollShadow, Select, Separator, Slider, Spinner, Switch, Tooltip } from '@heroui/react'
+import { Alert, Button, Card, Checkbox, Chip, Disclosure, Drawer, Dropdown, Input, Label, ListBox, ScrollShadow, Select, Separator, Slider, Spinner, Switch, Tabs, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import dayjs from 'dayjs'
-import { useMemo, useState } from 'react'
-import { listScenesStash, searchEntitiesStash } from '@/api'
+import { useEffect, useMemo, useState } from 'react'
+import { listScenesStash, readTextFs, searchEntitiesStash } from '@/api'
 import { StashSceneCover } from '@/components/stash-scene-cover'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleWebModal } from '@/components/subtitle-web-modal'
+import { deserializeSubtitleText } from '@/utils/subtitle'
 
 export const Route = createFileRoute('/stash-scenes')({
   component: PageComponent,
@@ -27,6 +28,7 @@ const STASH_SORT_OPTIONS = [
 ] as const
 
 const STASH_PAGE_SIZE_OPTIONS = [20, 40, 80, 120] as const
+const STASH_SCENES_VIEW_STORAGE_KEY = 'media-admin:stash-scenes:view'
 
 type StashSort = typeof STASH_SORT_OPTIONS[number]['value']
 type StashSortDirection = 'ASC' | 'DESC'
@@ -113,23 +115,92 @@ interface FilterRangePreset {
   value: [number, number]
 }
 
+interface StashScenesViewState {
+  screenshotShow: boolean
+  q: string
+  page: number
+  sort: StashSort
+  direction: StashSortDirection
+  pageSize: number
+}
+
+const DEFAULT_STASH_SCENES_VIEW_STATE: StashScenesViewState = {
+  screenshotShow: false,
+  q: '',
+  page: 1,
+  sort: 'last_played_at',
+  direction: 'ASC',
+  pageSize: 20,
+}
+
+function loadStashScenesViewState(): StashScenesViewState {
+  if (typeof window === 'undefined')
+    return DEFAULT_STASH_SCENES_VIEW_STATE
+
+  try {
+    const raw = window.localStorage.getItem(STASH_SCENES_VIEW_STORAGE_KEY)
+    if (!raw)
+      return DEFAULT_STASH_SCENES_VIEW_STATE
+
+    const parsed = JSON.parse(raw) as Partial<StashScenesViewState>
+    const sort = isStashSort(parsed.sort) ? parsed.sort : DEFAULT_STASH_SCENES_VIEW_STATE.sort
+    const direction = parsed.direction === 'ASC' || parsed.direction === 'DESC'
+      ? parsed.direction
+      : DEFAULT_STASH_SCENES_VIEW_STATE.direction
+    const pageSize = typeof parsed.pageSize === 'number' && STASH_PAGE_SIZE_OPTIONS.includes(parsed.pageSize as typeof STASH_PAGE_SIZE_OPTIONS[number])
+      ? parsed.pageSize
+      : DEFAULT_STASH_SCENES_VIEW_STATE.pageSize
+    const page = typeof parsed.page === 'number' && Number.isFinite(parsed.page) && parsed.page > 0
+      ? Math.floor(parsed.page)
+      : DEFAULT_STASH_SCENES_VIEW_STATE.page
+
+    return {
+      screenshotShow: typeof parsed.screenshotShow === 'boolean'
+        ? parsed.screenshotShow
+        : DEFAULT_STASH_SCENES_VIEW_STATE.screenshotShow,
+      q: typeof parsed.q === 'string' ? parsed.q : DEFAULT_STASH_SCENES_VIEW_STATE.q,
+      page,
+      sort,
+      direction,
+      pageSize,
+    }
+  }
+  catch {
+    return DEFAULT_STASH_SCENES_VIEW_STATE
+  }
+}
+
+function saveStashScenesViewState(value: StashScenesViewState) {
+  try {
+    window.localStorage.setItem(STASH_SCENES_VIEW_STORAGE_KEY, JSON.stringify(value))
+  }
+  catch {
+    // 忽略隐私模式或存储配额导致的失败。
+  }
+}
+
+function isStashSort(value: unknown): value is StashSort {
+  return typeof value === 'string' && STASH_SORT_OPTIONS.some(option => option.value === value)
+}
+
 function PageComponent() {
   const navigate = useNavigate()
-  const [screenshotShow, setScreenshotShow] = useState(false)
-  const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
-  const [sort, setSort] = useState<StashSort>('last_played_at')
-  const [direction, setDirection] = useState<StashSortDirection>('ASC')
-  const [pageSize, setPageSize] = useState<number>(20)
+  const [viewState, setViewState] = useState(loadStashScenesViewState)
+  const { direction, page, pageSize, q, screenshotShow, sort } = viewState
   const [filterOpen, setFilterOpen] = useState(false)
   const [stashFilterValues, setStashFilterValues] = useState<StashSceneFilterValues>(DEFAULT_STASH_FILTER_VALUES)
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
   const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<StashSceneRow[] | undefined>()
+  const [subtitleDetailRow, setSubtitleDetailRow] = useState<StashSceneRow | undefined>()
   const [selectedSceneKeys, setSelectedSceneKeys] = useState<Set<string>>(() => new Set())
 
   const sceneFilter = useMemo(() => buildStashSceneFilter(stashFilterValues), [stashFilterValues])
   const activeFilterCount = useMemo(() => countActiveStashFilters(stashFilterValues), [stashFilterValues])
+
+  useEffect(() => {
+    saveStashScenesViewState(viewState)
+  }, [viewState])
 
   const scenesQuery = useQuery({
     queryKey: ['stash-scenes', { direction, page, pageSize, q, sceneFilter, sort }],
@@ -156,6 +227,10 @@ function PageComponent() {
   const selectedCurrentPageCount = currentPageKeys.filter(key => selectedSceneKeys.has(key)).length
   const isCurrentPageSelected = currentPageKeys.length > 0 && selectedCurrentPageCount === currentPageKeys.length
   const isCurrentPageIndeterminate = selectedCurrentPageCount > 0 && selectedCurrentPageCount < currentPageKeys.length
+
+  function updateViewState(patch: Partial<StashScenesViewState>) {
+    setViewState(prev => ({ ...prev, ...patch }))
+  }
 
   function setSceneSelected(row: StashSceneRow, selected: boolean) {
     const key = String(row.id)
@@ -187,7 +262,7 @@ function PageComponent() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full max-h-[calc(100dvh-5rem)] min-h-0 flex-col gap-3">
       <SubtitleTaskCreateDrawerForm
         open={subtitleTaskCreateOpen}
         onOpenChange={(open) => {
@@ -207,18 +282,27 @@ function PageComponent() {
         onOpenChange={setFilterOpen}
         onApply={(values) => {
           setStashFilterValues(values)
-          setPage(1)
+          updateViewState({ page: 1 })
           clearSelection()
           setFilterOpen(false)
         }}
         onReset={() => {
           setStashFilterValues(DEFAULT_STASH_FILTER_VALUES)
-          setPage(1)
+          updateViewState({ page: 1 })
           clearSelection()
           setFilterOpen(false)
         }}
       />
-      <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_280px_auto] md:items-end">
+      <StashSubtitleDetailDrawer
+        key={subtitleDetailRow?.id ?? 'stash-subtitle-detail'}
+        row={subtitleDetailRow}
+        open={Boolean(subtitleDetailRow)}
+        onOpenChange={(open) => {
+          if (!open)
+            setSubtitleDetailRow(undefined)
+        }}
+      />
+      <div className="shrink-0 grid gap-3 md:grid-cols-[minmax(220px,1fr)_280px_auto] md:items-end">
         <div className="flex min-w-0 flex-col gap-1">
 
           <Input
@@ -226,8 +310,7 @@ function PageComponent() {
             placeholder="搜索标题或文件名"
             variant="secondary"
             onChange={(event) => {
-              setQ(event.target.value)
-              setPage(1)
+              updateViewState({ q: event.target.value, page: 1 })
               clearSelection()
             }}
           />
@@ -243,9 +326,11 @@ function PageComponent() {
                 if (typeof key !== 'string')
                   return
                 const nextSort = key as StashSort
-                setSort(nextSort)
-                setDirection(STASH_SORT_OPTIONS.find(option => option.value === nextSort)?.defaultDirection ?? 'DESC')
-                setPage(1)
+                updateViewState({
+                  sort: nextSort,
+                  direction: STASH_SORT_OPTIONS.find(option => option.value === nextSort)?.defaultDirection ?? 'DESC',
+                  page: 1,
+                })
                 clearSelection()
               }}
             >
@@ -270,8 +355,10 @@ function PageComponent() {
                 className="rounded-l-none"
                 variant="secondary"
                 onPress={() => {
-                  setDirection(prev => prev === 'DESC' ? 'ASC' : 'DESC')
-                  setPage(1)
+                  updateViewState({
+                    direction: direction === 'DESC' ? 'ASC' : 'DESC',
+                    page: 1,
+                  })
                   clearSelection()
                 }}
               >
@@ -282,7 +369,7 @@ function PageComponent() {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 pb-1 md:justify-self-end">
-          <Switch isSelected={screenshotShow} onChange={setScreenshotShow}>
+          <Switch isSelected={screenshotShow} onChange={value => updateViewState({ screenshotShow: value })}>
             <Switch.Control>
               <Switch.Thumb />
             </Switch.Control>
@@ -303,32 +390,7 @@ function PageComponent() {
           </Button>
         </div>
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <Checkbox
-            aria-label="选择本页场景"
-            isIndeterminate={isCurrentPageIndeterminate}
-            isSelected={isCurrentPageSelected}
-            isDisabled={!currentPageKeys.length || scenesQuery.isFetching}
-            variant="secondary"
-            onChange={setCurrentPageSelected}
-          >
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Checkbox.Content>
-              选择本页
-            </Checkbox.Content>
-          </Checkbox>
-          <span className="tabular-nums">
-            共
-            {' '}
-            {total}
-            {' '}
-            个场景
-          </span>
-        </div>
-
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <StashSceneCardGrid
           rows={scenes}
           loading={scenesQuery.isFetching}
@@ -345,17 +407,20 @@ function PageComponent() {
             setSubtitleTaskCreateInitialPath(videoPath)
             setSubtitleTaskCreateOpen(true)
           }}
+          onOpenSubtitles={setSubtitleDetailRow}
         />
-
+      </div>
+      <div className="shrink-0">
         <StashScenePagination
           current={page}
           pageSize={pageSize}
           pageSizeOptions={STASH_PAGE_SIZE_OPTIONS}
           total={total}
           onChange={(nextPage, nextPageSize) => {
-            if (nextPageSize !== pageSize)
-              setPageSize(nextPageSize)
-            setPage(nextPage)
+            updateViewState({
+              pageSize: nextPageSize,
+              page: nextPage,
+            })
             clearSelection()
           }}
         />
@@ -363,43 +428,67 @@ function PageComponent() {
 
       <ActionBar aria-label="Stash 场景批量操作" isOpen={selectedCount > 0}>
         <ActionBar.Prefix>
+          <Checkbox
+            aria-label="选择本页场景"
+            isIndeterminate={isCurrentPageIndeterminate}
+            isSelected={isCurrentPageSelected}
+            isDisabled={!currentPageKeys.length || scenesQuery.isFetching}
+            variant="secondary"
+            onChange={setCurrentPageSelected}
+          >
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Checkbox.Content>
+              选择本页
+            </Checkbox.Content>
+          </Checkbox>
           <Chip className="shrink-0 tabular-nums" size="sm">
             已选
-            {' '}
             {selectedCount}
           </Chip>
         </ActionBar.Prefix>
         <Separator />
         <ActionBar.Content>
-          <Button
-            isDisabled={!selectedRows.some(row => Boolean(row.files?.[0]?.local_path?.trim()))}
-            size="sm"
-            variant="secondary"
-            onPress={() => {
-              setSubtitleTaskCreateInitialPath(undefined)
-              setSubtitleTaskBulkRows(selectedRows.filter(row => Boolean(row.files?.[0]?.local_path?.trim())))
-              setSubtitleTaskCreateOpen(true)
-            }}
-          >
-            <Icon className="size-4" icon="lucide:captions" />
-            批量生成字幕
-          </Button>
+          {selectedCount > 0
+            ? (
+                <Button
+                  isDisabled={!selectedRows.some(row => Boolean(row.files?.[0]?.local_path?.trim()))}
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => {
+                    setSubtitleTaskCreateInitialPath(undefined)
+                    setSubtitleTaskBulkRows(selectedRows.filter(row => Boolean(row.files?.[0]?.local_path?.trim())))
+                    setSubtitleTaskCreateOpen(true)
+                  }}
+                >
+                  <Icon className="size-4" icon="lucide:captions" />
+                  批量生成字幕
+                </Button>
+              )
+            : null}
         </ActionBar.Content>
-        <Separator />
-        <ActionBar.Suffix>
-          <Tooltip delay={0}>
-            <Button
-              isIconOnly
-              aria-label="清空选择"
-              size="sm"
-              variant="ghost"
-              onPress={clearSelection}
-            >
-              <Icon className="size-4" icon="lucide:x" />
-            </Button>
-            <Tooltip.Content>清空选择</Tooltip.Content>
-          </Tooltip>
-        </ActionBar.Suffix>
+        {selectedCount > 0
+          ? (
+              <>
+                <Separator />
+                <ActionBar.Suffix>
+                  <Tooltip delay={0}>
+                    <Button
+                      isIconOnly
+                      aria-label="清空选择"
+                      size="sm"
+                      variant="ghost"
+                      onPress={clearSelection}
+                    >
+                      <Icon className="size-4" icon="lucide:x" />
+                    </Button>
+                    <Tooltip.Content>清空选择</Tooltip.Content>
+                  </Tooltip>
+                </ActionBar.Suffix>
+              </>
+            )
+          : null}
       </ActionBar>
     </div>
   )
@@ -413,6 +502,7 @@ interface StashSceneCardGridProps {
   onSelectedChange: (row: StashSceneRow, selected: boolean) => void
   onPlay: (videoPath: string) => void
   onCreateSubtitle: (videoPath: string) => void
+  onOpenSubtitles: (row: StashSceneRow) => void
 }
 
 function StashSceneCardGrid({
@@ -423,6 +513,7 @@ function StashSceneCardGrid({
   onSelectedChange,
   onPlay,
   onCreateSubtitle,
+  onOpenSubtitles,
 }: StashSceneCardGridProps) {
   if (loading && !rows.length) {
     return (
@@ -456,6 +547,7 @@ function StashSceneCardGrid({
           onSelectedChange={selected => onSelectedChange(row, selected)}
           onPlay={onPlay}
           onCreateSubtitle={onCreateSubtitle}
+          onOpenSubtitles={() => onOpenSubtitles(row)}
         />
       ))}
     </div>
@@ -469,6 +561,7 @@ interface StashSceneCardProps {
   onSelectedChange: (selected: boolean) => void
   onPlay: (videoPath: string) => void
   onCreateSubtitle: (videoPath: string) => void
+  onOpenSubtitles: () => void
 }
 
 function StashSceneCard({
@@ -478,6 +571,7 @@ function StashSceneCard({
   onSelectedChange,
   onPlay,
   onCreateSubtitle,
+  onOpenSubtitles,
 }: StashSceneCardProps) {
   const firstFile = row.files?.[0]
   const stashPath = firstFile?.path
@@ -490,6 +584,8 @@ function StashSceneCard({
     : '未播放'
   const dateText = row.date ? dayjs(row.date).format('MM-DD') : undefined
   const durationText = formatDurationSeconds(firstFile?.duration)
+  const subtitles = row.captions ?? []
+  const subtitleCount = subtitles.length
 
   return (
     <Card className={`gap-0 overflow-hidden p-0 [contain-intrinsic-size:220px] [content-visibility:auto] ${selected ? 'ring-2 ring-accent/60' : ''}`}>
@@ -518,6 +614,21 @@ function StashSceneCard({
             <Chip className="shrink-0" size="sm" variant="soft">
               {localPath ? '已映射' : '未映射'}
             </Chip>
+            {localPath
+              ? (
+                  <Button
+                    className="h-6 min-w-0 gap-1 rounded-full px-2 text-xs tabular-nums"
+                    size="sm"
+                    variant="tertiary"
+                    onPress={onOpenSubtitles}
+                  >
+                    <Icon className="size-3.5" icon="lucide:captions" />
+                    字幕
+                    {' '}
+                    {subtitleCount}
+                  </Button>
+                )
+              : null}
             <span className="tabular-nums">{lastPlayedText}</span>
             {dateText
               ? (
@@ -558,6 +669,222 @@ function StashSceneCard({
       </Card.Header>
     </Card>
   )
+}
+
+interface StashSubtitleDetailDrawerProps {
+  row?: StashSceneRow
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+function StashSubtitleDetailDrawer({
+  row,
+  open,
+  onOpenChange,
+}: StashSubtitleDetailDrawerProps) {
+  const captions = useMemo(() => row?.captions ?? [], [row?.captions])
+  const captionOptions = useMemo(() => {
+    const keyCounts = new Map<string, number>()
+
+    return captions.map((caption, index) => {
+      const baseKey = caption.local_path?.trim()
+        || caption.path?.trim()
+        || `${caption.language_code?.trim() || 'unknown'}-${caption.caption_type?.trim() || 'caption'}`
+      const count = keyCounts.get(baseKey) ?? 0
+      keyCounts.set(baseKey, count + 1)
+
+      return {
+        caption,
+        index,
+        key: count ? `${baseKey}-${count + 1}` : baseKey,
+        label: formatCaptionLabel(caption, index),
+        localPath: caption.local_path?.trim() || undefined,
+        stashPath: caption.path?.trim() || undefined,
+      }
+    })
+  }, [captions])
+  const [selectedCaptionKey, setSelectedCaptionKey] = useState<string>()
+  const effectiveSelectedCaptionKey = captionOptions.some(option => option.key === selectedCaptionKey)
+    ? selectedCaptionKey
+    : captionOptions[0]?.key
+  const selectedOption = captionOptions.find(option => option.key === effectiveSelectedCaptionKey)
+  const selectedPath = selectedOption?.localPath
+  const selectedDisplayPath = selectedOption?.localPath ?? selectedOption?.stashPath
+  const title = row?.title?.trim() || row?.files?.[0]?.basename || row?.id || '字幕详情'
+
+  const readSubtitleQuery = useQuery({
+    queryKey: ['stash-subtitle-content', selectedPath],
+    queryFn: async () => {
+      if (!selectedPath)
+        return []
+      const res = await readTextFs({ path: selectedPath })
+      return deserializeSubtitleText(res.content)
+    },
+    enabled: open && Boolean(selectedPath),
+  })
+
+  function handleOpenChange(nextOpen: boolean) {
+    onOpenChange(nextOpen)
+    if (!nextOpen)
+      setSelectedCaptionKey(undefined)
+  }
+
+  return (
+    <Drawer.Backdrop
+      isOpen={open}
+      onOpenChange={handleOpenChange}
+    >
+      <Drawer.Content placement="right" className="sm:max-w-180">
+        <Drawer.Dialog className="flex h-dvh w-full flex-col">
+          <Drawer.CloseTrigger />
+          <Drawer.Header className="shrink-0 border-b border-separator pr-12">
+            <Drawer.Heading className="truncate text-base" title={title}>
+              字幕详情
+            </Drawer.Heading>
+          </Drawer.Header>
+          <Drawer.Body className="min-h-0 flex-1 overflow-hidden p-0">
+            {captionOptions.length
+              ? (
+                  <Tabs
+                    className="flex h-full min-h-0 flex-col"
+                    selectedKey={effectiveSelectedCaptionKey}
+                    onSelectionChange={key => setSelectedCaptionKey(String(key))}
+                  >
+                    <div className="shrink-0 border-b border-separator px-3 py-2">
+                      <div className="overflow-x-auto">
+                        <Tabs.ListContainer>
+                          <Tabs.List
+                            aria-label="字幕列表"
+                            className="w-max *:h-7 *:w-fit *:px-2.5 *:text-xs *:font-normal"
+                          >
+                            {captionOptions.map(option => (
+                              <Tabs.Tab
+                                key={option.key}
+                                id={option.key}
+                                className={option.localPath ? undefined : 'text-muted'}
+                              >
+                                {option.index > 0 ? <Tabs.Separator /> : null}
+                                {option.label}
+                                <Tabs.Indicator />
+                              </Tabs.Tab>
+                            ))}
+                          </Tabs.List>
+                        </Tabs.ListContainer>
+                      </div>
+                      <div
+                        className="mt-1 truncate font-mono text-[11px] text-muted"
+                        title={selectedDisplayPath}
+                      >
+                        {selectedDisplayPath ?? '未映射字幕路径'}
+                      </div>
+                    </div>
+                    {captionOptions.map(option => (
+                      <Tabs.Panel
+                        key={option.key}
+                        id={option.key}
+                        className="min-h-0 flex-1 overflow-hidden"
+                      >
+                        {selectedOption?.key === option.key
+                          ? (
+                              <ScrollShadow className="h-full p-3" hideScrollBar>
+                                <StashSubtitleContent
+                                  isPending={readSubtitleQuery.isFetching}
+                                  error={readSubtitleQuery.error}
+                                  items={readSubtitleQuery.data}
+                                  selectedPath={selectedPath}
+                                />
+                              </ScrollShadow>
+                            )
+                          : null}
+                      </Tabs.Panel>
+                    ))}
+                  </Tabs>
+                )
+              : <div className="px-3 py-4 text-sm text-muted">暂无字幕</div>}
+          </Drawer.Body>
+          <Drawer.Footer className="shrink-0 border-t border-separator">
+            <Button
+              size="sm"
+              variant="secondary"
+              isDisabled={!selectedPath}
+              isPending={readSubtitleQuery.isFetching}
+              onPress={() => void readSubtitleQuery.refetch()}
+            >
+              刷新
+            </Button>
+          </Drawer.Footer>
+        </Drawer.Dialog>
+      </Drawer.Content>
+    </Drawer.Backdrop>
+  )
+}
+
+function StashSubtitleContent({
+  isPending,
+  error,
+  items,
+  selectedPath,
+}: {
+  isPending: boolean
+  error: Error | null
+  items?: ReturnType<typeof deserializeSubtitleText>
+  selectedPath?: string
+}) {
+  if (!selectedPath) {
+    return (
+      <div className="py-8 text-center text-sm text-muted">
+        选择已映射字幕查看内容
+      </div>
+    )
+  }
+
+  if (isPending) {
+    return (
+      <div className="flex items-center gap-2 py-6 text-sm text-muted">
+        <Spinner size="sm" />
+        加载中
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <Alert status="danger">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>读取字幕失败</Alert.Title>
+          <Alert.Description>{error.message}</Alert.Description>
+        </Alert.Content>
+      </Alert>
+    )
+  }
+
+  if (!items?.length) {
+    return <div className="py-8 text-center text-sm text-muted">暂无内容</div>
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 text-xs">
+      {items.map(item => (
+        <div key={`${item.startTime}-${item.endTime}`} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 rounded-md px-2 py-1.5 hover:bg-surface-secondary">
+          <div className="font-mono text-[11px] tabular-nums text-muted">
+            {item.startTime}
+            <span className="mx-1">~</span>
+            {item.endTime}
+          </div>
+          <div className="min-w-0 whitespace-pre-wrap leading-relaxed">
+            {item.text}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function formatCaptionLabel(caption: StashSceneCaption, index: number): string {
+  const lang = caption.language_code?.trim() || `字幕 ${index + 1}`
+  const type = caption.caption_type?.trim()
+  return type ? `${lang}.${type}` : lang
 }
 
 interface StashFilterDrawerProps {
@@ -1211,17 +1538,27 @@ function StashScenePagination({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-surface-secondary px-3 py-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-      <span className="tabular-nums">
-        第
-        {' '}
-        {current}
-        {' '}
-        /
-        {' '}
-        {pageCount}
-        {' '}
-        页
-      </span>
+      <div className="flex flex-wrap items-center gap-2 tabular-nums">
+        <span>
+          第
+          {' '}
+          {current}
+          {' '}
+          /
+          {' '}
+          {pageCount}
+          {' '}
+          页
+        </span>
+        <span className="text-muted/70">/</span>
+        <span>
+          共
+          {' '}
+          {total}
+          {' '}
+          个场景
+        </span>
+      </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         <Button
           size="sm"

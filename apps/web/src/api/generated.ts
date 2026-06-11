@@ -334,6 +334,23 @@ export interface MediaVideosQuery {
   root_id: number;
 }
 
+export interface StashSceneCaption {
+  /** @nullable */
+  caption_type?: string | null;
+  /** @nullable */
+  language_code?: string | null;
+  /**
+     * 根据 `stash_config.path_mappings` 映射出的本服务本地字幕路径。
+     * @nullable
+     */
+  local_path?: string | null;
+  /**
+     * Stash 视角推导出的字幕文件路径。
+     * @nullable
+     */
+  path?: string | null;
+}
+
 export interface StashSceneFile {
   basename: string;
   /**
@@ -355,6 +372,7 @@ export interface StashScenePaths {
 }
 
 export type PageResultStashSceneRowDataItem = {
+  captions?: StashSceneCaption[];
   /** @nullable */
   date?: string | null;
   files: StashSceneFile[];
@@ -686,6 +704,7 @@ export interface StashSceneListReq {
 }
 
 export interface StashSceneRow {
+  captions?: StashSceneCaption[];
   /** @nullable */
   date?: string | null;
   files: StashSceneFile[];
