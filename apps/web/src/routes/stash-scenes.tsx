@@ -7,10 +7,10 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
+import { BasePagination } from '@/components/base-pagination'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { StashFilterDrawer } from '@/features/stash-scenes/stash-filter-drawer'
 import { StashSceneCardGrid } from '@/features/stash-scenes/stash-scene-card-grid'
-import { StashScenePagination } from '@/features/stash-scenes/stash-scene-pagination'
 import { buildStashSceneFilter, countActiveStashFilters, DEFAULT_STASH_FILTER_VALUES, isMappedStashSceneWithoutSubtitles, loadStashScenesFilterValues, loadStashScenesViewState, saveStashScenesFilterValues, saveStashScenesViewState, STASH_PAGE_SIZE_OPTIONS, STASH_SORT_OPTIONS, stashSceneToBulkSourceRow } from '@/features/stash-scenes/stash-scenes-state'
 import { StashSubtitleDetailDrawer } from '@/features/stash-scenes/stash-subtitle-detail-drawer'
 
@@ -274,11 +274,33 @@ function PageComponent() {
         />
       </div>
       <div className="shrink-0">
-        <StashScenePagination
+        <BasePagination
+          showSizeChanger
+          showQuickJumper
+          className="rounded-lg bg-surface-secondary px-3 py-2 text-sm text-muted"
           current={page}
           pageSize={pageSize}
           pageSizeOptions={STASH_PAGE_SIZE_OPTIONS}
           total={total}
+          showTotal={(total, range) => (
+            <>
+              第
+              {' '}
+              {page}
+              {' '}
+              页
+              <span className="mx-2 text-muted/70">/</span>
+              {range[0]}
+              -
+              {range[1]}
+              <span className="mx-1 text-muted/70">/</span>
+              共
+              {' '}
+              {total}
+              {' '}
+              个场景
+            </>
+          )}
           onChange={(nextPage, nextPageSize) => {
             updateViewState({
               pageSize: nextPageSize,
