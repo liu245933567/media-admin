@@ -13,53 +13,93 @@ import {
 } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
 
-export interface DataTableProps<TData> {
-  ariaLabel: string
-  data: TData[]
-  columns: ColumnDef<TData, unknown>[]
-  getRowId?: (row: TData, index: number) => string
-  loading?: boolean
-  emptyText?: string
-  pageSize?: number
-  enableRowSelection?: boolean
-  onRowSelectionChange?: (rows: TData[]) => void
-  onRowPress?: (row: TData) => void
-  minWidth?: number
-  showPagination?: boolean
-  pagination?: {
-    page: number
-    pageSize: number
-    total: number
-    pageSizeOptions?: readonly number[]
-    itemLabel?: string
-    onPageChange: (page: number) => void
-    onPageSizeChange?: (pageSize: number) => void
-  }
-  selectionActionRender?: ((rows: TData[]) => ReactNode[])
+/** 表格分页配置（同 antd TablePaginationConfig 子集） */
+interface DataTablePaginationConfig {
+  /** 当前页码 */
+  current: number
+  /** 每页条数 */
+  pageSize: number
+  /** 数据总数 */
+  total: number
+  /** 数据总量标签后缀，如 '个视频' */
+  showTotalLabel?: string
+  /** 指定每页可显示的数据条数 */
+  pageSizeOptions?: readonly number[]
+  /** 页码或 pageSize 变化时的回调 */
+  onChange: (page: number, pageSize: number) => void
 }
 
-export function DataTable<TData>({
-  ariaLabel,
-  data,
-  columns,
-  getRowId,
-  loading,
-  emptyText = '暂无数据',
-  pageSize = 10,
-  enableRowSelection,
-  onRowSelectionChange,
-  onRowPress,
-  minWidth = 720,
-  showPagination = true,
-  pagination: controlledPagination,
-  selectionActionRender,
-}: DataTableProps<TData>) {
+/** 表格行选择配置（同 antd rowSelection 子集） */
+interface DataTableRowSelection<TData> {
+  /** 选中项的行 key 数组 */
+  selectedRowKeys?: string[]
+  /** 选中项发生变化时的回调 */
+  onChange?: (selectedRowKeys: string[], selectedRows: TData[]) => void
+  /** 已选批量操作渲染函数 */
+  actions?: (rows: TData[]) => ReactNode[]
+}
+
+/** 表格行属性回调返回值（同 antd onRow 子集） */
+interface DataTableRowProps {
+  /** 行点击回调 */
+  onClick?: () => void
+}
+
+export interface DataTableProps<TData> {
+  /** 表格 aria-label，用于无障碍访问 */
+  ariaLabel: string
+  /** 数据源 */
+  data: TData[]
+  /** 列定义（基于 @tanstack/react-table ColumnDef） */
+  columns: ColumnDef<TData, unknown>[]
+  /** 表格行 key 的取值，可为数据属性名字符串或取值函数（同 antd rowKey） */
+  rowKey?: string | ((record: TData, index: number) => string)
+  /** 加载中状态（同 antd loading） */
+  loading?: boolean
+  /** 国际化文案占位（同 antd locale 子集） */
+  locale?: {
+    /** 空数据提示文本 */
+    emptyText?: string
+  }
+  /** 表格滚动配置（同 antd scroll 子集） */
+  scroll?: {
+    /** 横向滚动最小宽度 */
+    x?: number | string
+  }
+  /** 分页配置：false 隐藏分页，对象开启受控分页（同 antd pagination） */
+  pagination?: false | DataTablePaginationConfig
+  /** 行选择配置（同 antd rowSelection） */
+  rowSelection?: DataTableRowSelection<TData>
+  /** 设置行属性回调（同 antd onRow） */
+  onRow?: (record: TData, index: number) => DataTableRowProps
+}
+
+const PAGE_SIZE_DEFAULT = 10
+const SCROLL_X_DEFAULT = 720
+const EMPTY_TEXT_DEFAULT = '暂无数据'
+
+export function DataTable<TData>(props: DataTableProps<TData>) {
+  const {
+    ariaLabel,
+    data,
+    columns,
+    rowKey,
+    loading,
+    locale,
+    scroll,
+    pagination,
+    rowSelection,
+    onRow,
+  } = props
+
   const [sorting, setSorting] = useState<SortingState>([])
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
-  const [pagination, setPagination] = useState<PaginationState>({
+  const [rowSelectionState, setRowSelectionState] = useState<RowSelectionState>({})
+  const [localPagination, setLocalPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize,
+    pageSize: PAGE_SIZE_DEFAULT,
   })
+
+  const enableRowSelection = !!rowSelection
 
   const tableColumns = useMemo(() => {
     if (!enableRowSelection)
@@ -93,38 +133,47 @@ export function DataTable<TData>({
     return [selectColumn, ...columns]
   }, [columns, enableRowSelection])
 
+  const resolvedRowKey = useMemo(() => {
+    if (rowKey === undefined)
+      return undefined
+    if (typeof rowKey === 'string') {
+      return (record: TData) => String((record as Record<string, unknown>)[rowKey])
+    }
+    return rowKey
+  }, [rowKey])
+
   const table = useReactTable({
     data,
     columns: tableColumns,
-    getRowId,
+    getRowId: resolvedRowKey,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: showPagination && !controlledPagination ? getPaginationRowModel() : undefined,
+    getPaginationRowModel: pagination !== false && !pagination ? getPaginationRowModel() : undefined,
     state: {
       sorting,
-      rowSelection,
-      pagination,
+      rowSelection: rowSelectionState,
+      pagination: localPagination,
     },
     enableRowSelection,
     onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    onRowSelectionChange: setRowSelection,
+    onPaginationChange: setLocalPagination,
+    onRowSelectionChange: setRowSelectionState,
   })
   const headerGroup = table.getHeaderGroups()[0]
   const rowHeaderColumnId = headerGroup?.headers.find(header => header.id !== '__select')?.id
     ?? headerGroup?.headers[0]?.id
   const selectedKeys = useMemo<Selection>(
     () => new Set(
-      Object.entries(rowSelection)
+      Object.entries(rowSelectionState)
         .filter(([, selected]) => selected)
         .map(([rowId]) => rowId),
     ),
-    [rowSelection],
+    [rowSelectionState],
   )
   const selectedRows = useMemo(() => {
     const rows = table.getCoreRowModel().rows
-    return rows.filter(row => rowSelection[row.id]).map(row => row.original)
-  }, [rowSelection, table])
+    return rows.filter(row => rowSelectionState[row.id]).map(row => row.original)
+  }, [rowSelectionState, table])
 
   function handleSelectionChange(keys: Selection) {
     const nextSelection: RowSelectionState = {}
@@ -136,28 +185,29 @@ export function DataTable<TData>({
       nextSelection[rowId] = true
     }
 
-    setRowSelection(nextSelection)
-    onRowSelectionChange?.(
-      table.getCoreRowModel().rows
-        .filter(row => nextSelection[row.id])
-        .map(row => row.original),
-    )
+    setRowSelectionState(nextSelection)
+    const nextSelectedRows
+      = table.getCoreRowModel().rows.filter(row => nextSelection[row.id]).map(row => row.original)
+    const nextSelectedKeys = Object.keys(nextSelection)
+    rowSelection?.onChange?.(nextSelectedKeys, nextSelectedRows)
   }
 
   function clearSelection() {
-    setRowSelection({})
-    onRowSelectionChange?.([])
+    setRowSelectionState({})
+    rowSelection?.onChange?.([], [])
   }
 
   const selectedCount = selectedRows.length
-  const footerPagination = controlledPagination
+  const footerPagination = pagination === false ? undefined : pagination
   const footerPageCount = footerPagination
     ? Math.max(1, Math.ceil(footerPagination.total / footerPagination.pageSize))
     : Math.max(table.getPageCount(), 1)
-  const footerPage = footerPagination?.page ?? table.getState().pagination.pageIndex + 1
+  const footerPage = footerPagination?.current ?? table.getState().pagination.pageIndex + 1
   const footerTotal = footerPagination?.total
-  const footerItemLabel = footerPagination?.itemLabel ?? '条'
+  const footerShowTotalLabel = footerPagination?.showTotalLabel ?? '条'
   const footerPageSizeOptions = footerPagination?.pageSizeOptions ?? [10, 20, 50, 100]
+
+  const scrollX = scroll?.x ?? SCROLL_X_DEFAULT
 
   return (
     <div className="flex flex-col gap-3">
@@ -167,7 +217,7 @@ export function DataTable<TData>({
             aria-label={ariaLabel}
             selectedKeys={enableRowSelection ? selectedKeys : undefined}
             selectionMode={enableRowSelection ? 'multiple' : undefined}
-            style={{ minWidth }}
+            style={{ minWidth: scrollX }}
             onSelectionChange={enableRowSelection ? handleSelectionChange : undefined}
           >
             <Table.Header>
@@ -225,8 +275,8 @@ export function DataTable<TData>({
                         <Table.Row
                           key={row.id}
                           id={row.id}
-                          className={onRowPress ? 'cursor-pointer' : undefined}
-                          onClick={() => onRowPress?.(row.original)}
+                          className={onRow?.(row.original, row.index)?.onClick ? 'cursor-pointer' : undefined}
+                          onClick={() => onRow?.(row.original, row.index)?.onClick?.()}
                         >
                           {row.getVisibleCells().map(cell => (
                             <Table.Cell key={cell.id} className={cell.column.id === '__select' ? 'pr-0' : undefined}>
@@ -239,14 +289,14 @@ export function DataTable<TData>({
                   : (
                       <Table.Row>
                         <Table.Cell colSpan={tableColumns.length}>
-                          <div className="py-8 text-center text-sm text-muted">{emptyText}</div>
+                          <div className="py-8 text-center text-sm text-muted">{locale?.emptyText ?? EMPTY_TEXT_DEFAULT}</div>
                         </Table.Cell>
                       </Table.Row>
                     )}
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
-        {showPagination || footerPagination
+        {footerPagination !== undefined
           ? (
               <Table.Footer>
                 <div className="flex flex-col gap-2 px-2 py-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
@@ -271,7 +321,7 @@ export function DataTable<TData>({
                             {' '}
                             {footerTotal}
                             {' '}
-                            {footerItemLabel}
+                            {footerShowTotalLabel}
                           </>
                         )}
                   </span>
@@ -282,7 +332,7 @@ export function DataTable<TData>({
                       isDisabled={footerPage <= 1}
                       onPress={() => {
                         if (footerPagination) {
-                          footerPagination.onPageChange(Math.max(1, footerPage - 1))
+                          footerPagination.onChange(Math.max(1, footerPage - 1), footerPagination.pageSize)
                         }
                         else {
                           table.previousPage()
@@ -304,7 +354,7 @@ export function DataTable<TData>({
                       isDisabled={footerPage >= footerPageCount}
                       onPress={() => {
                         if (footerPagination) {
-                          footerPagination.onPageChange(Math.min(footerPageCount, footerPage + 1))
+                          footerPagination.onChange(Math.min(footerPageCount, footerPage + 1), footerPagination.pageSize)
                         }
                         else {
                           table.nextPage()
@@ -313,7 +363,7 @@ export function DataTable<TData>({
                     >
                       下一页
                     </Button>
-                    {footerPagination?.onPageSizeChange
+                    {footerPagination
                       ? (
                           <Select
                             aria-label="每页数量"
@@ -324,7 +374,7 @@ export function DataTable<TData>({
                               const next = Number(key)
                               if (!Number.isFinite(next))
                                 return
-                              footerPagination.onPageSizeChange?.(next)
+                              footerPagination.onChange(1, next)
                             }}
                           >
                             <Select.Trigger>
@@ -334,10 +384,10 @@ export function DataTable<TData>({
                             <Select.Popover>
                               <ListBox>
                                 {footerPageSizeOptions.map(size => (
-                                  <ListBox.Item key={size} id={String(size)} textValue={`${size} ${footerItemLabel}`}>
+                                  <ListBox.Item key={size} id={String(size)} textValue={`${size} ${footerShowTotalLabel}`}>
                                     {size}
                                     {' '}
-                                    {footerItemLabel}
+                                    {footerShowTotalLabel}
                                     <ListBox.ItemIndicator />
                                   </ListBox.Item>
                                 ))}
@@ -362,12 +412,12 @@ export function DataTable<TData>({
                   {selectedCount}
                 </Chip>
               </ActionBar.Prefix>
-              {selectionActionRender
+              {rowSelection?.actions
                 ? (
                     <>
                       <Separator />
                       <ActionBar.Content>
-                        {selectionActionRender(selectedRows)}
+                        {rowSelection?.actions(selectedRows)}
                       </ActionBar.Content>
                     </>
                   )

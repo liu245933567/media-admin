@@ -122,24 +122,27 @@ export function VideoPlaylistDrawer({
                 ariaLabel="视频选集"
                 columns={columns}
                 data={pageItems}
-                emptyText="暂无视频，请先在设置页添加媒体路径并扫描"
-                getRowId={row => row.file_path}
-                minWidth={460}
-                onRowPress={(row) => {
-                  if (row.file_path !== currentVideoPath)
-                    onSelect(row)
-                }}
+                locale={{ emptyText: '暂无视频，请先在设置页添加媒体路径并扫描' }}
+                rowKey={row => row.file_path}
+                scroll={{ x: 460 }}
+                onRow={record => ({
+                  onClick: record.file_path !== currentVideoPath ? () => onSelect(record) : undefined,
+                })}
                 pagination={{
-                  itemLabel: '个视频',
-                  page: currentPage,
+                  showTotalLabel: '个视频',
+                  current: currentPage,
                   pageSize,
                   pageSizeOptions: [10, 20, 50, 100],
                   total: items.length,
-                  onPageChange: nextPage => setPageState({ page: nextPage, sessionKey }),
-                  onPageSizeChange: (nextPageSize) => {
-                    const nextSessionKey = getPlaylistSessionKey(open, currentVideoPath, items.length, nextPageSize)
-                    setPageSize(nextPageSize)
-                    setPageState({ page: 1, sessionKey: nextSessionKey })
+                  onChange: (nextPage, nextPageSize) => {
+                    if (nextPageSize !== pageSize) {
+                      setPageSize(nextPageSize)
+                      const nextSessionKey = getPlaylistSessionKey(open, currentVideoPath, items.length, nextPageSize)
+                      setPageState({ page: 1, sessionKey: nextSessionKey })
+                    }
+                    else {
+                      setPageState({ page: nextPage, sessionKey })
+                    }
                   },
                 }}
               />

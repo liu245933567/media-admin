@@ -309,41 +309,42 @@ function PageComponent() {
           ariaLabel="媒体文件"
           columns={fileColumns}
           data={filesQuery.data?.data ?? []}
-          emptyText="暂无媒体文件"
-          enableRowSelection
-          getRowId={row => String(row.id)}
+          locale={{ emptyText: '暂无媒体文件' }}
+          rowSelection={{
+            actions: rows => [
+              <Button
+                key="delete"
+                variant="danger-soft"
+                isDisabled={!rows.length}
+                isPending={deleteVideosMutation.isPending}
+                onPress={() => confirmDeleteVideos(rows)}
+              >
+                批量删除
+              </Button>,
+              <Button
+                key="subtitle"
+                isDisabled={!rows.length}
+                onPress={() => openSubtitleCreateBulk(rows)}
+              >
+                批量生成字幕
+              </Button>,
+            ],
+          }}
+          rowKey={row => String(row.id)}
           loading={filesQuery.isFetching}
-          minWidth={1120}
+          scroll={{ x: 1120 }}
           pagination={{
-            itemLabel: '个视频',
-            page,
+            showTotalLabel: '个视频',
+            current: page,
             pageSize,
             pageSizeOptions: [10, 20, 50, 100],
             total,
-            onPageChange: setPage,
-            onPageSizeChange: (nextPageSize) => {
-              setPageSize(nextPageSize)
-              setPage(1)
+            onChange: (nextPage, nextPageSize) => {
+              if (nextPageSize !== pageSize)
+                setPageSize(nextPageSize)
+              setPage(nextPage)
             },
           }}
-          selectionActionRender={rows => [
-            <Button
-              key="delete"
-              variant="danger-soft"
-              isDisabled={!rows.length}
-              isPending={deleteVideosMutation.isPending}
-              onPress={() => confirmDeleteVideos(rows)}
-            >
-              批量删除
-            </Button>,
-            <Button
-              key="subtitle"
-              isDisabled={!rows.length}
-              onPress={() => openSubtitleCreateBulk(rows)}
-            >
-              批量生成字幕
-            </Button>,
-          ]}
         />
       </div>
     </>

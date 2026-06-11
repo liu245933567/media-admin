@@ -50,9 +50,9 @@ export function XunleiSubtitleSearchDrawer({ trigger }: XunleiSubtitleSearchDraw
                 ariaLabel="迅雷字幕"
                 columns={columns}
                 data={[]}
-                emptyText="暂无字幕"
-                getRowId={row => String(row.id)}
-                minWidth={760}
+                locale={{ emptyText: '暂无字幕' }}
+                rowKey={row => String(row.id)}
+                scroll={{ x: 760 }}
               />
             </Drawer.Body>
           </Drawer.Dialog>

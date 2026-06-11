@@ -83,7 +83,7 @@ function PageComponent() {
           if (!row.original.files?.length)
             return '-'
           return (
-            <div className="flex max-w-[360px] flex-col gap-1">
+            <div className="flex max-w-90 flex-col gap-1">
               {row.original.files.map(file => (
                 <div key={file.path} className="min-w-0">
                   <div className="truncate text-sm" title={file.basename}>
@@ -287,42 +287,44 @@ function PageComponent() {
         ariaLabel="Stash 场景"
         columns={columns}
         data={scenesQuery.data?.data ?? []}
-        emptyText="暂无场景"
-        enableRowSelection
-        getRowId={row => String(row.id)}
+        locale={{ emptyText: '暂无场景' }}
+        rowSelection={{
+          actions: (rows) => {
+            const mappedRows = rows.filter(row => Boolean(row.files?.[0]?.local_path?.trim()))
+            return [
+              <Button
+                key="subtitle"
+                isDisabled={!mappedRows.length}
+                size="sm"
+                variant="secondary"
+                onPress={() => {
+                  setSubtitleTaskCreateInitialPath(undefined)
+                  setSubtitleTaskBulkRows(mappedRows)
+                  setSubtitleTaskCreateOpen(true)
+                }}
+              >
+                <Icon className="size-4" icon="lucide:captions" />
+                批量生成字幕
+              </Button>,
+            ]
+          },
+        }}
+        rowKey={row => String(row.id)}
         loading={scenesQuery.isFetching}
-        minWidth={760}
+        scroll={{ x: 760 }}
         pagination={{
-          itemLabel: '个场景',
-          page,
+          showTotalLabel: '个场景',
+          current: page,
           pageSize,
           pageSizeOptions: STASH_PAGE_SIZE_OPTIONS,
           total,
-          onPageChange: setPage,
-          onPageSizeChange: (nextPageSize) => {
-            setPageSize(nextPageSize)
-            setPage(1)
+          onChange: (nextPage, nextPageSize) => {
+            if (nextPageSize !== pageSize)
+              setPageSize(nextPageSize)
+            setPage(nextPage)
           },
         }}
-        selectionActionRender={(rows) => {
-          const mappedRows = rows.filter(row => Boolean(row.files?.[0]?.local_path?.trim()))
-          return [
-            <Button
-              key="subtitle"
-              isDisabled={!mappedRows.length}
-              size="sm"
-              variant="secondary"
-              onPress={() => {
-                setSubtitleTaskCreateInitialPath(undefined)
-                setSubtitleTaskBulkRows(mappedRows)
-                setSubtitleTaskCreateOpen(true)
-              }}
-            >
-              <Icon className="size-4" icon="lucide:captions" />
-              批量生成字幕
-            </Button>,
-          ]
-        }}
+
       />
     </div>
   )

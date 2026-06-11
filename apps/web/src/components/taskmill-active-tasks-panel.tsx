@@ -309,9 +309,9 @@ export function TaskmillActiveTasksPanel({
       loading={loading}
       columns={columns}
       data={treeRows}
-      emptyText="当前无活跃任务"
-      getRowId={row => String(row.item.id)}
-      minWidth={820}
+      locale={{ emptyText: '当前无活跃任务' }}
+      rowKey={row => String(row.item.id)}
+      scroll={{ x: 820 }}
     />
   )
 }

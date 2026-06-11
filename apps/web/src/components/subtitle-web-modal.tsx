@@ -115,10 +115,10 @@ export function SubtitleWebModal({
                   ariaLabel="网络字幕"
                   columns={columns}
                   data={subtitleWebSearchQuery.data?.items ?? []}
-                  emptyText="无候选字幕"
-                  getRowId={row => String(row.id)}
+                  locale={{ emptyText: "无候选字幕" }}
+                  rowKey={row => String(row.id)}
                   loading={subtitleWebSearchQuery.isFetching}
-                  minWidth={760}
+                  scroll={{ x: 760 }}
                 />
               </div>
             </Modal.Body>

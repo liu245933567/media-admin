@@ -310,11 +310,11 @@ export function WhisperModelsSetupCard() {
           ariaLabel="Whisper 模型"
           columns={whisperModelColumns}
           data={models}
-          emptyText="暂无模型"
-          getRowId={row => row.id}
+          locale={{ emptyText: '暂无模型' }}
+          rowKey={row => row.id}
           loading={whisperModelsQuery.isPending}
-          minWidth={760}
-          showPagination={false}
+          scroll={{ x: 760 }}
+          pagination={false}
         />
       </Card.Content>
     </Card>
