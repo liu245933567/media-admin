@@ -93,4 +93,6 @@ pub struct StashSceneRow {
     pub date: Option<String>,
     pub files: Vec<StashSceneFile>,
     pub paths: StashScenePaths,
+    /// 最后播放时间
+    pub last_played_at: Option<String>,
 }

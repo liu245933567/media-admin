@@ -640,6 +640,8 @@ export interface StashSceneRow {
   id: string;
   paths: StashScenePaths;
   title: string;
+  /** @nullable */
+  last_played_at?: string | null;
 }
 
 export interface SubtitleGenerateBulkReq {

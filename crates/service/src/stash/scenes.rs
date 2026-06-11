@@ -183,6 +183,7 @@ fragment SlimSceneData on Scene {
   resume_time
   play_duration
   play_count
+  last_played_at
   files {
     ...VideoFileData
     __typename

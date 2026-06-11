@@ -1588,6 +1588,13 @@
           },
           "title": {
             "type": "string"
+          },
+          "last_played_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "nullable": true
           }
         },
         "required": [

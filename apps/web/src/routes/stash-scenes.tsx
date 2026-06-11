@@ -4,6 +4,7 @@ import { Button, Chip, Input, Label, ListBox, Select, Switch, Tooltip } from '@h
 import { Icon } from '@iconify/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 import { listScenesStash } from '@/api'
 import { DataTable } from '@/components/data-table'
@@ -111,6 +112,13 @@ function PageComponent() {
             {row.original.title}
           </span>
         ),
+      },
+      {
+        header: '最后播放',
+        accessorKey: 'last_played_at',
+        cell: ({ row }) => row.original.last_played_at
+          ? dayjs(row.original.last_played_at).format('YYYY-MM-DD HH:mm:ss')
+          : '-',
       },
       {
         header: '操作',
