@@ -23,6 +23,33 @@ const TASKMILL_GROUPS: Array<{ key: string, label: string, icon: string }> = [
   { key: 'media:scan', label: '媒体扫描', icon: 'lucide:folder-search' },
 ] as const
 
+function taskTypeName(taskType: string): string {
+  return taskType.split('::').at(-1) ?? taskType
+}
+
+function inferTaskGroup(taskType: string): string | null {
+  switch (taskTypeName(taskType)) {
+    case 'video-subtitle-generate':
+    case 'video-subtitle-extract-wav':
+      return 'media:subtitle-pipeline'
+    case 'video-subtitle-recognize':
+      return 'media:whisper'
+    case 'subtitle-translate':
+      return 'media:translate'
+    case 'whisper-model-download':
+    case 'ffmpeg-setup-download':
+      return 'media:setup-download'
+    case 'media-library-scan':
+      return 'media:scan'
+    default:
+      return null
+  }
+}
+
+function taskGroupKey(task: { group_key?: string | null, task_type: string }): string | null {
+  return task.group_key?.trim() || inferTaskGroup(task.task_type)
+}
+
 interface TaskEventHeaderLike {
   task_id?: number
   key?: string
@@ -362,7 +389,7 @@ function mergeTask(
     taskKey: task.key,
     label: task.label,
     parentIdentityKey,
-    groupKey: task.group_key,
+    groupKey: taskGroupKey(task),
     priority: task.priority,
     retryCount: task.retry_count,
     lastError: task.last_error,
@@ -725,11 +752,15 @@ export function pagePipelines(pipelines: PipelineView[], page: number, pageSize:
 export function pipelineLaneKey(pipeline: PipelineView): string {
   return pipeline.root.groupKey
     ?? pipeline.jobs.find(job => job.groupKey)?.groupKey
-    ?? 'unknown'
+    ?? inferTaskGroup(pipeline.root.taskType)
+    ?? 'ungrouped'
 }
 
 export function groupLabel(key: string | null | undefined): string {
   if (!key) {
+    return '未分组'
+  }
+  if (key === 'ungrouped') {
     return '未分组'
   }
   return TASKMILL_GROUPS.find(group => group.key === key)?.label ?? key
@@ -737,6 +768,9 @@ export function groupLabel(key: string | null | undefined): string {
 
 export function groupIcon(key: string | null | undefined): string {
   if (!key) {
+    return 'lucide:circle-help'
+  }
+  if (key === 'ungrouped') {
     return 'lucide:circle-help'
   }
   return TASKMILL_GROUPS.find(group => group.key === key)?.icon ?? 'lucide:package'
@@ -755,7 +789,7 @@ export function buildTaskmillGroupLanes(
   const keys = new Set<string>(TASKMILL_GROUPS.map(group => group.key))
 
   for (const item of activeItems ?? []) {
-    const key = item.group_key ?? 'unknown'
+    const key = taskGroupKey(item) ?? 'ungrouped'
     keys.add(key)
     const current = activeByGroup.get(key) ?? { running: 0, pending: 0 }
     if (item.status === 'running') {

@@ -8,7 +8,7 @@ use taskmill::{
 };
 use utoipa::ToSchema;
 
-use super::storage::TaskmillRuntime;
+use super::storage::{TaskmillRuntime, normalize_task_record_group};
 use super::types::{
     FfmpegSetupDownloadTask, MediaLibraryScanTask, SubtitleTranslateJob,
     VideoSubtitleExtractWavTask, VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
@@ -193,7 +193,7 @@ impl TaskmillRuntime {
             .await
             .context("读取活跃任务失败")?;
         tasks.truncate(limit);
-        Ok(tasks)
+        Ok(tasks.into_iter().map(normalize_task_record_group).collect())
     }
 }
 

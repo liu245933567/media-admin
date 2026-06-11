@@ -10,6 +10,7 @@ use futures::Stream;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, RANGE};
 use std::pin::Pin;
 
+pub use entities::search_entities;
 pub use filter::{
     StashCriterionModifier, StashCustomFieldCriterion, StashDateCriterion,
     StashDuplicationCriterion, StashHierarchicalMultiCriterion, StashIdCriterion,
@@ -18,7 +19,6 @@ pub use filter::{
     StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
 };
 pub use path::{StashPathMapping, map_stash_file_path};
-pub use entities::search_entities;
 pub use scenes::list_scenes;
 pub use types::{
     StashConnectConfig, StashEntityKind, StashEntitySearchItem, StashEntitySearchReq,

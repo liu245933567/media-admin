@@ -734,8 +734,8 @@ function StashSubtitleDetailDrawer({
       isOpen={open}
       onOpenChange={handleOpenChange}
     >
-      <Drawer.Content placement="right" className="sm:max-w-180">
-        <Drawer.Dialog className="flex h-dvh w-full flex-col">
+      <Drawer.Content placement="right" className="inset-y-0 right-0 left-auto w-[min(720px,calc(100vw-2rem))] sm:max-w-180">
+        <Drawer.Dialog className="ml-auto flex h-dvh w-full flex-col">
           <Drawer.CloseTrigger />
           <Drawer.Header className="shrink-0 border-b border-separator pr-12">
             <Drawer.Heading className="truncate text-base" title={title}>
@@ -750,12 +750,12 @@ function StashSubtitleDetailDrawer({
                     selectedKey={effectiveSelectedCaptionKey}
                     onSelectionChange={key => setSelectedCaptionKey(String(key))}
                   >
-                    <div className="shrink-0 border-b border-separator px-3 py-2">
+                    <div className="shrink-0 border-b border-separator px-3 py-1.5">
                       <div className="overflow-x-auto">
                         <Tabs.ListContainer>
                           <Tabs.List
                             aria-label="字幕列表"
-                            className="w-max *:h-7 *:w-fit *:px-2.5 *:text-xs *:font-normal"
+                            className="w-max *:h-6 *:w-fit *:px-2 *:text-xs *:font-normal"
                           >
                             {captionOptions.map(option => (
                               <Tabs.Tab
@@ -786,7 +786,7 @@ function StashSubtitleDetailDrawer({
                       >
                         {selectedOption?.key === option.key
                           ? (
-                              <ScrollShadow className="h-full p-3" hideScrollBar>
+                              <ScrollShadow className="h-full px-3 py-2" hideScrollBar>
                                 <StashSubtitleContent
                                   isPending={readSubtitleQuery.isFetching}
                                   error={readSubtitleQuery.error}
@@ -802,17 +802,6 @@ function StashSubtitleDetailDrawer({
                 )
               : <div className="px-3 py-4 text-sm text-muted">暂无字幕</div>}
           </Drawer.Body>
-          <Drawer.Footer className="shrink-0 border-t border-separator">
-            <Button
-              size="sm"
-              variant="secondary"
-              isDisabled={!selectedPath}
-              isPending={readSubtitleQuery.isFetching}
-              onPress={() => void readSubtitleQuery.refetch()}
-            >
-              刷新
-            </Button>
-          </Drawer.Footer>
         </Drawer.Dialog>
       </Drawer.Content>
     </Drawer.Backdrop>
@@ -864,15 +853,15 @@ function StashSubtitleContent({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 text-xs">
+    <div className="flex flex-col text-xs">
       {items.map(item => (
-        <div key={`${item.startTime}-${item.endTime}`} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 rounded-md px-2 py-1.5 hover:bg-surface-secondary">
-          <div className="font-mono text-[11px] tabular-nums text-muted">
+        <div key={`${item.startTime}-${item.endTime}`} className="grid grid-cols-[12.5rem_minmax(0,1fr)] gap-2 rounded px-1.5 py-1 hover:bg-surface-secondary max-sm:grid-cols-1 max-sm:gap-0.5">
+          <div className="whitespace-nowrap font-mono text-[10px] leading-5 tabular-nums text-muted">
             {item.startTime}
             <span className="mx-1">~</span>
             {item.endTime}
           </div>
-          <div className="min-w-0 whitespace-pre-wrap leading-relaxed">
+          <div className="min-w-0 whitespace-pre-wrap leading-5">
             {item.text}
           </div>
         </div>

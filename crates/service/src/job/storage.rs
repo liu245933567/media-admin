@@ -10,7 +10,7 @@ use ma_utils::config::get_app_data_dir;
 use serde::Serialize;
 use taskmill::{
     Domain, DomainHandle, MetricsSnapshot, Scheduler, SchedulerEvent, SchedulerSnapshot,
-    SubmitOutcome, TaskHistoryRecord,
+    SubmitOutcome, TaskHistoryRecord, TaskRecord, TypedTask,
 };
 use tokio_util::sync::CancellationToken;
 use utoipa::ToSchema;
@@ -41,6 +41,42 @@ pub struct TimestampedSchedulerEvent {
     pub received_at: chrono::DateTime<Utc>,
     #[schema(value_type = serde_json::Value)]
     pub event: SchedulerEvent,
+}
+
+/// 兼容早期入库或外部恢复的任务记录：按任务类型补齐资源组。
+pub fn infer_task_group(task_type: &str) -> Option<&'static str> {
+    match task_type
+        .rsplit_once("::")
+        .map(|(_, ty)| ty)
+        .unwrap_or(task_type)
+    {
+        VideoSubtitleGenerateTask::TASK_TYPE | VideoSubtitleExtractWavTask::TASK_TYPE => {
+            Some(GROUP_SUBTITLE_PIPELINE)
+        }
+        VideoSubtitleRecognizeTask::TASK_TYPE => Some(GROUP_WHISPER),
+        SubtitleTranslateJob::TASK_TYPE => Some(GROUP_TRANSLATE),
+        MediaLibraryScanTask::TASK_TYPE => Some(GROUP_MEDIA_SCAN),
+        WhisperModelDownloadTask::TASK_TYPE | FfmpegSetupDownloadTask::TASK_TYPE => {
+            Some(GROUP_SETUP_DOWNLOAD)
+        }
+        _ => None,
+    }
+}
+
+/// 给活跃任务记录补齐缺失的资源组，避免 UI 出现 unknown 分组。
+pub fn normalize_task_record_group(mut task: TaskRecord) -> TaskRecord {
+    if task.group_key.as_deref().is_none_or(str::is_empty) {
+        task.group_key = infer_task_group(&task.task_type).map(str::to_string);
+    }
+    task
+}
+
+/// 给历史任务记录补齐缺失的资源组。
+pub fn normalize_history_record_group(mut task: TaskHistoryRecord) -> TaskHistoryRecord {
+    if task.group_key.as_deref().is_none_or(str::is_empty) {
+        task.group_key = infer_task_group(&task.task_type).map(str::to_string);
+    }
+    task
 }
 
 const EXEC_EVENT_LOG_CAP: usize = 400;
@@ -267,11 +303,16 @@ impl TaskmillRuntime {
     }
 
     pub async fn snapshot(&self) -> anyhow::Result<TaskmillSnapshot> {
-        let scheduler = self
+        let mut scheduler = self
             .scheduler
             .snapshot()
             .await
             .context("读取 taskmill 快照失败")?;
+        scheduler.running = scheduler
+            .running
+            .into_iter()
+            .map(normalize_task_record_group)
+            .collect();
         let metrics = self.scheduler.metrics_snapshot().await;
         Ok(TaskmillSnapshot { scheduler, metrics })
     }
@@ -285,6 +326,11 @@ impl TaskmillRuntime {
             .store()
             .history(limit, offset)
             .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(normalize_history_record_group)
+                    .collect()
+            })
             .context("读取 taskmill 任务历史失败")
     }
 

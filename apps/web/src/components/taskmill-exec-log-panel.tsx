@@ -726,7 +726,7 @@ export function TaskmillExecLogPanel({
   const message = useAppToast()
   const confirm = useConfirmDialog()
   const [viewMode, setViewMode] = useState<TaskmillViewMode>('queue')
-  const [filter, setFilter] = useState<PipelineFilter>('active')
+  const [filter, setFilter] = useState<PipelineFilter>('all')
   const [q, setQ] = useState('')
   const [queuePage, setQueuePage] = useState(1)
   const [historyPage, setHistoryPage] = useState(1)
