@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use super::filter::StashSceneFilterType;
 use super::path::StashPathMapping;
@@ -66,6 +66,9 @@ pub struct StashFilter {
 pub struct StashSceneFile {
     pub path: String,
     pub basename: String,
+    /// 影片时长，单位为秒。
+    #[serde(default)]
+    pub duration: Option<f64>,
     /// 根据 `stash_config.path_mappings` 映射出的本服务本地路径。
     #[serde(default)]
     pub local_path: Option<String>,
@@ -95,4 +98,55 @@ pub struct StashSceneRow {
     pub paths: StashScenePaths,
     /// 最后播放时间
     pub last_played_at: Option<String>,
+}
+
+/// Stash 可搜索实体类型。
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum StashEntityKind {
+    /// 工作室
+    Studio,
+    /// 演员
+    Performer,
+    /// 标签
+    Tag,
+}
+
+fn default_entity_search_page_size() -> i32 {
+    20
+}
+
+/// Stash 实体搜索查询参数。
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+pub struct StashEntitySearchReq {
+    /// 实体类型。
+    pub kind: StashEntityKind,
+    /// 搜索关键词。
+    pub q: Option<String>,
+    /// 返回数量。
+    #[serde(default = "default_entity_search_page_size")]
+    pub page_size: i32,
+}
+
+/// Stash 实体搜索项。
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct StashEntitySearchItem {
+    /// Stash 实体 ID。
+    pub id: String,
+    /// 显示名称。
+    pub name: String,
+    /// 演员重名区分信息，其他实体为空。
+    #[serde(default)]
+    pub disambiguation: Option<String>,
+}
+
+/// Stash 实体搜索结果。
+#[typeshare::typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct StashEntitySearchRes {
+    /// 命中的实体列表。
+    pub items: Vec<StashEntitySearchItem>,
 }

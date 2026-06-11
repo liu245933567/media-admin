@@ -37,10 +37,11 @@ function seekVideoTo(video: HTMLVideoElement, time: number) {
 export interface StashSceneCoverProps {
   screenshot?: string
   preview?: string
+  className?: string
 }
 
 /** 仿 Stash 场景卡片：悬停播放预览，仅在底部进度条上拖动定位进度 */
-export function StashSceneCover({ screenshot, preview }: StashSceneCoverProps) {
+export function StashSceneCover({ screenshot, preview, className }: StashSceneCoverProps) {
   const scrubberRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -203,7 +204,7 @@ export function StashSceneCover({ screenshot, preview }: StashSceneCoverProps) {
 
   return (
     <div
-      className="group relative inline-block h-[90px] w-40 overflow-hidden rounded bg-gray-100"
+      className={`group relative inline-block overflow-hidden rounded bg-surface-secondary ${className ?? 'h-[90px] w-40'}`}
       onMouseEnter={handleContainerMouseEnter}
       onMouseLeave={handleContainerMouseLeave}
     >
@@ -278,7 +279,7 @@ export function StashSceneCover({ screenshot, preview }: StashSceneCoverProps) {
 
 function CoverEmpty({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-[90px] w-40 items-center justify-center rounded bg-gray-100 text-xs text-gray-400">
+    <div className="flex size-full min-h-[90px] min-w-40 items-center justify-center rounded bg-surface-secondary text-xs text-muted">
       {children}
     </div>
   )
@@ -286,7 +287,7 @@ function CoverEmpty({ children }: { children: React.ReactNode }) {
 
 function CoverOverlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center rounded bg-gray-100">
+    <div className="absolute inset-0 flex items-center justify-center rounded bg-surface-secondary">
       {children}
     </div>
   )

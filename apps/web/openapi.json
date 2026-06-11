@@ -466,6 +466,13 @@
                 "id": {
                   "type": "string"
                 },
+                "last_played_at": {
+                  "description": "最后播放时间",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "paths": {
                   "$ref": "#/components/schemas/StashScenePaths"
                 },
@@ -593,25 +600,21 @@
         "type": "object"
       },
       "StashCriterionModifier": {
-        "description": "Stash `CriterionModifier`（与 GraphQL 枚举值一致）",
+        "description": "Stash `CriterionModifier`。",
         "enum": [
-          "=",
-          "Equals",
-          "!=",
-          "NotEquals",
-          ">",
-          "GreaterThan",
-          "<",
-          "LessThan",
-          "IS NULL",
-          "IS NOT NULL",
-          "INCLUDES ALL",
-          "Includes",
-          "Excludes",
-          "MATCHES REGEX",
-          "NOT MATCHES REGEX",
-          ">= AND <=",
-          "< OR >"
+          "EQUALS",
+          "NOT_EQUALS",
+          "GREATER_THAN",
+          "LESS_THAN",
+          "IS_NULL",
+          "NOT_NULL",
+          "INCLUDES_ALL",
+          "INCLUDES",
+          "EXCLUDES",
+          "MATCHES_REGEX",
+          "NOT_MATCHES_REGEX",
+          "BETWEEN",
+          "NOT_BETWEEN"
         ],
         "type": "string"
       },
@@ -693,6 +696,81 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "StashEntityKind": {
+        "description": "Stash 可搜索实体类型。",
+        "enum": [
+          "studio",
+          "performer",
+          "tag"
+        ],
+        "type": "string"
+      },
+      "StashEntitySearchItem": {
+        "description": "Stash 实体搜索项。",
+        "properties": {
+          "disambiguation": {
+            "description": "演员重名区分信息，其他实体为空。",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "Stash 实体 ID。",
+            "type": "string"
+          },
+          "name": {
+            "description": "显示名称。",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "StashEntitySearchReq": {
+        "description": "Stash 实体搜索查询参数。",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StashEntityKind",
+            "description": "实体类型。"
+          },
+          "page_size": {
+            "description": "返回数量。",
+            "format": "int32",
+            "type": "integer"
+          },
+          "q": {
+            "description": "搜索关键词。",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "StashEntitySearchRes": {
+        "description": "Stash 实体搜索结果。",
+        "properties": {
+          "items": {
+            "description": "命中的实体列表。",
+            "items": {
+              "$ref": "#/components/schemas/StashEntitySearchItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
         "type": "object"
       },
       "StashFilter": {
@@ -975,6 +1053,14 @@
         "properties": {
           "basename": {
             "type": "string"
+          },
+          "duration": {
+            "description": "影片时长，单位为秒。",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
           },
           "local_path": {
             "description": "根据 `stash_config.path_mappings` 映射出的本服务本地路径。",
@@ -1583,18 +1669,18 @@
           "id": {
             "type": "string"
           },
+          "last_played_at": {
+            "description": "最后播放时间",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "paths": {
             "$ref": "#/components/schemas/StashScenePaths"
           },
           "title": {
             "type": "string"
-          },
-          "last_played_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "nullable": true
           }
         },
         "required": [
@@ -3246,6 +3332,59 @@
         },
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/api/stash/entities/search": {
+      "get": {
+        "operationId": "searchEntitiesStash",
+        "parameters": [
+          {
+            "description": "实体类型。",
+            "in": "query",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/StashEntityKind"
+            }
+          },
+          {
+            "description": "搜索关键词。",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "description": "返回数量。",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StashEntitySearchRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "stash"
         ]
       }
     },

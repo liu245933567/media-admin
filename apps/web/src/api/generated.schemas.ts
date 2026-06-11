@@ -715,6 +715,21 @@ export const ListWhisperModelsSetupResponse = zod.object({
 })
 
 
+export const SearchEntitiesStashQueryParams = zod.object({
+  "kind": zod.enum(['studio', 'performer', 'tag']).describe('实体类型。'),
+  "q": zod.string().nullish().describe('搜索关键词。'),
+  "page_size": zod.number().optional().describe('返回数量。')
+})
+
+export const SearchEntitiesStashResponse = zod.object({
+  "items": zod.array(zod.object({
+  "disambiguation": zod.string().nullish().describe('演员重名区分信息，其他实体为空。'),
+  "id": zod.string().describe('Stash 实体 ID。'),
+  "name": zod.string().describe('显示名称。')
+}).describe('Stash 实体搜索项。')).describe('命中的实体列表。')
+}).describe('Stash 实体搜索结果。')
+
+
 export const ListScenesStashBody = zod.object({
   "filter": zod.object({
   "direction": zod.string().nullish().describe('`ASC` 或 `DESC`'),
@@ -728,47 +743,47 @@ export const ListScenesStashBody = zod.object({
   "NOT": zod.union([zod.null(),zod.unknown()]).optional(),
   "OR": zod.union([zod.null(),zod.unknown()]).optional(),
   "audio_codec": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "bitrate": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "captions": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "checksum": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "code": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "created_at": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string(),
   "value2": zod.string().nullish()
 }).describe('Stash `DateCriterionInput` \/ `TimestampCriterionInput`')]).optional(),
   "custom_fields": zod.array(zod.object({
   "field": zod.string(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.unknown())
 }).describe('Stash `CustomFieldCriterionInput`（`value` 为 GraphQL `Any`，透传 JSON）')).nullish(),
   "date": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string(),
   "value2": zod.string().nullish()
 }).describe('Stash `DateCriterionInput` \/ `TimestampCriterionInput`')]).optional(),
   "details": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "director": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "duplicated": zod.union([zod.null(),zod.object({
@@ -779,61 +794,61 @@ export const ListScenesStashBody = zod.object({
   "url": zod.boolean().nullish()
 }).describe('Stash `DuplicationCriterionInput`')]).optional(),
   "duration": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "file_count": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "files_filter": zod.unknown().optional(),
   "framerate": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "galleries": zod.union([zod.null(),zod.object({
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `MultiCriterionInput`')]).optional(),
   "galleries_filter": zod.unknown().optional().describe('关联实体过滤器（结构体庞大，按需透传 Stash 原生 JSON）'),
   "groups": zod.union([zod.null(),zod.object({
   "depth": zod.number().nullish(),
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `HierarchicalMultiCriterionInput`')]).optional(),
   "groups_filter": zod.unknown().optional(),
   "has_markers": zod.string().nullish(),
   "id": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "interactive": zod.boolean().nullish(),
   "interactive_speed": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "is_missing": zod.string().nullish(),
   "last_played_at": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string(),
   "value2": zod.string().nullish()
 }).describe('Stash `DateCriterionInput` \/ `TimestampCriterionInput`')]).optional(),
   "markers_filter": zod.unknown().optional(),
   "movies": zod.union([zod.null(),zod.object({
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `MultiCriterionInput`')]).optional(),
   "movies_filter": zod.unknown().optional(),
   "o_counter": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
@@ -842,20 +857,20 @@ export const ListScenesStashBody = zod.object({
   "value": zod.array(zod.enum(['LANDSCAPE', 'PORTRAIT', 'SQUARE']).describe('Stash `OrientationEnum`'))
 }).describe('Stash `OrientationCriterionInput`')]).optional(),
   "oshash": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "path": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "performer_age": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "performer_count": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
@@ -863,97 +878,97 @@ export const ListScenesStashBody = zod.object({
   "performer_tags": zod.union([zod.null(),zod.object({
   "depth": zod.number().nullish(),
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `HierarchicalMultiCriterionInput`')]).optional(),
   "performers": zod.union([zod.null(),zod.object({
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `MultiCriterionInput`')]).optional(),
   "performers_filter": zod.unknown().optional(),
   "phash": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "phash_distance": zod.union([zod.null(),zod.object({
   "distance": zod.number().nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `PhashDistanceCriterionInput`')]).optional(),
   "play_count": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "play_duration": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "rating100": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "resolution": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.enum(['VERY_LOW', 'LOW', 'R360P', 'STANDARD', 'WEB_HD', 'STANDARD_HD', 'FULL_HD', 'QUAD_HD', 'FOUR_K', 'FIVE_K', 'SIX_K', 'SEVEN_K', 'EIGHT_K', 'HUGE']).describe('Stash `ResolutionEnum`')
 }).describe('Stash `ResolutionCriterionInput`')]).optional(),
   "resume_time": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "stash_id_count": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "stash_id_endpoint": zod.union([zod.null(),zod.object({
   "endpoint": zod.string().nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "stash_id": zod.string().nullish()
 }).describe('Stash `StashIDCriterionInput`')]).optional(),
   "stash_ids_endpoint": zod.union([zod.null(),zod.object({
   "endpoint": zod.string().nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "stash_ids": zod.array(zod.string()).nullish()
 }).describe('Stash `StashIDsCriterionInput`')]).optional(),
   "studios": zod.union([zod.null(),zod.object({
   "depth": zod.number().nullish(),
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `HierarchicalMultiCriterionInput`')]).optional(),
   "studios_filter": zod.unknown().optional(),
   "tag_count": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.number(),
   "value2": zod.number().nullish()
 }).describe('Stash `IntCriterionInput`')]).optional(),
   "tags": zod.union([zod.null(),zod.object({
   "depth": zod.number().nullish(),
   "excludes": zod.array(zod.string()).nullish(),
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.array(zod.string()).nullish()
 }).describe('Stash `HierarchicalMultiCriterionInput`')]).optional(),
   "tags_filter": zod.unknown().optional(),
   "title": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "updated_at": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string(),
   "value2": zod.string().nullish()
 }).describe('Stash `DateCriterionInput` \/ `TimestampCriterionInput`')]).optional(),
   "url": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional(),
   "video_codec": zod.union([zod.null(),zod.object({
-  "modifier": zod.enum(['=', 'Equals', '!=', 'NotEquals', '>', 'GreaterThan', '<', 'LessThan', 'IS NULL', 'IS NOT NULL', 'INCLUDES ALL', 'Includes', 'Excludes', 'MATCHES REGEX', 'NOT MATCHES REGEX', '>= AND <=', '< OR >']).describe('Stash `CriterionModifier`（与 GraphQL 枚举值一致）'),
+  "modifier": zod.enum(['EQUALS', 'NOT_EQUALS', 'GREATER_THAN', 'LESS_THAN', 'IS_NULL', 'NOT_NULL', 'INCLUDES_ALL', 'INCLUDES', 'EXCLUDES', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX', 'BETWEEN', 'NOT_BETWEEN']).describe('Stash `CriterionModifier`。'),
   "value": zod.string()
 }).describe('Stash `StringCriterionInput`')]).optional()
 }).describe('对应 GraphQL `SceneFilterType`')]).optional(),
@@ -965,10 +980,12 @@ export const ListScenesStashResponse = zod.object({
   "date": zod.string().nullish(),
   "files": zod.array(zod.object({
   "basename": zod.string(),
+  "duration": zod.number().nullish().describe('影片时长，单位为秒。'),
   "local_path": zod.string().nullish().describe('根据 `stash_config.path_mappings` 映射出的本服务本地路径。'),
   "path": zod.string()
 })),
   "id": zod.string(),
+  "last_played_at": zod.string().nullish().describe('最后播放时间'),
   "paths": zod.object({
   "preview": zod.string(),
   "screenshot": zod.string()

@@ -6,37 +6,35 @@ use utoipa::ToSchema;
 #[typeshare::typeshare(serialized_as = "unknown")]
 pub type StashJsonValue = JsonValue;
 
-/// Stash `CriterionModifier`（与 GraphQL 枚举值一致）
+/// Stash `CriterionModifier`。
 #[typeshare::typeshare]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 pub enum StashCriterionModifier {
-    #[serde(rename = "=")]
-    Eq,
+    #[serde(rename = "EQUALS", alias = "=", alias = "Equals")]
     Equals,
-    #[serde(rename = "!=")]
-    NotEq,
+    #[serde(rename = "NOT_EQUALS", alias = "!=", alias = "NotEquals")]
     NotEquals,
-    #[serde(rename = ">")]
-    GreaterThanSymbol,
+    #[serde(rename = "GREATER_THAN", alias = ">", alias = "GreaterThan")]
     GreaterThan,
-    #[serde(rename = "<")]
-    LessThanSymbol,
+    #[serde(rename = "LESS_THAN", alias = "<", alias = "LessThan")]
     LessThan,
-    #[serde(rename = "IS NULL")]
+    #[serde(rename = "IS_NULL", alias = "IS NULL")]
     IsNull,
-    #[serde(rename = "IS NOT NULL")]
+    #[serde(rename = "NOT_NULL", alias = "IS NOT NULL")]
     NotNull,
-    #[serde(rename = "INCLUDES ALL")]
+    #[serde(rename = "INCLUDES_ALL", alias = "INCLUDES ALL")]
     IncludesAll,
+    #[serde(rename = "INCLUDES", alias = "Includes")]
     Includes,
+    #[serde(rename = "EXCLUDES", alias = "Excludes")]
     Excludes,
-    #[serde(rename = "MATCHES REGEX")]
+    #[serde(rename = "MATCHES_REGEX", alias = "MATCHES REGEX")]
     MatchesRegex,
-    #[serde(rename = "NOT MATCHES REGEX")]
+    #[serde(rename = "NOT_MATCHES_REGEX", alias = "NOT MATCHES REGEX")]
     NotMatchesRegex,
-    #[serde(rename = ">= AND <=")]
+    #[serde(rename = "BETWEEN", alias = ">= AND <=")]
     Between,
-    #[serde(rename = "< OR >")]
+    #[serde(rename = "NOT_BETWEEN", alias = "< OR >")]
     NotBetween,
 }
 

@@ -9,7 +9,10 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use futures_util::StreamExt;
-use ma_service::stash::{StashSceneListReq, StashSceneRow, list_scenes, proxy_media};
+use ma_service::stash::{
+    StashEntitySearchReq, StashEntitySearchRes, StashSceneListReq, StashSceneRow, list_scenes,
+    proxy_media, search_entities,
+};
 use ma_utils::types::PageResult;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -17,6 +20,7 @@ use utoipa::ToSchema;
 pub fn routes() -> StateRouter {
     Router::new()
         .route("/scenes/list", post(scenes_list_handler))
+        .route("/entities/search", get(entities_search_handler))
         .route("/media", get(media_proxy_handler))
 }
 
@@ -34,6 +38,25 @@ pub(crate) async fn scenes_list_handler(
 ) -> Result<Json<PageResult<StashSceneRow>>, AppError> {
     let stash_config = state.app_config.read().await.stash_config.clone();
     let res = list_scenes(&stash_config, body)
+        .await
+        .map_err(map_stash_err)?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/stash/entities/search",
+    operation_id = "searchEntitiesStash",
+    tag = "stash",
+    params(StashEntitySearchReq),
+    responses((status = 200, body = StashEntitySearchRes))
+)]
+pub(crate) async fn entities_search_handler(
+    State(state): State<AppState>,
+    Query(q): Query<StashEntitySearchReq>,
+) -> Result<Json<StashEntitySearchRes>, AppError> {
+    let stash_config = state.app_config.read().await.stash_config.clone();
+    let res = search_entities(&stash_config, q)
         .await
         .map_err(map_stash_err)?;
     Ok(Json(res))

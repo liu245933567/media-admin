@@ -3,7 +3,7 @@ import type { SubtitleWebRow } from '@/api'
 import { Button, Modal, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { downloadSubtitleWeb, searchSubtitleWeb } from '@/api'
 import { useAppToast } from './app-toast'
 import { DataTable } from './data-table'
@@ -37,8 +37,10 @@ function DownloadButton({ videoPath, subtitle, onDownloaded }: { videoPath: stri
 }
 
 export interface SubtitleWebModalProps {
-  trigger: (props: { setOpen: (open: boolean) => void }) => React.ReactNode
+  trigger?: (props: { setOpen: (open: boolean) => void }) => React.ReactNode
   videoPath: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   onClose?: () => void
   onDownloaded?: () => void
 }
@@ -46,16 +48,38 @@ export interface SubtitleWebModalProps {
 export function SubtitleWebModal({
   trigger,
   videoPath,
+  open,
+  onOpenChange,
   onClose,
   onDownloaded,
 }: SubtitleWebModalProps) {
-  const [open, setOpen] = useState(false)
+  const [innerOpen, setInnerOpen] = useState(false)
+  const resolvedOpen = open ?? innerOpen
 
-  const subtitleWebSearchQuery = useQuery({
+  const {
+    data: subtitleWebSearchData,
+    isFetching: subtitleWebSearchFetching,
+    refetch: refetchSubtitleWebSearch,
+  } = useQuery({
     queryKey: ['subtitle-web-search', videoPath],
     queryFn: () => searchSubtitleWeb({ video_path: videoPath }),
     enabled: false,
   })
+
+  function setResolvedOpen(open: boolean) {
+    if (onOpenChange)
+      onOpenChange(open)
+    else
+      setInnerOpen(open)
+
+    if (!open)
+      onClose?.()
+  }
+
+  useEffect(() => {
+    if (resolvedOpen)
+      void refetchSubtitleWebSearch()
+  }, [refetchSubtitleWebSearch, resolvedOpen])
 
   const columns = useMemo<ColumnDef<SubtitleWebRow, unknown>[]>(
     () => [
@@ -81,19 +105,10 @@ export function SubtitleWebModal({
 
   return (
     <>
-      {trigger({ setOpen: (open) => {
-        setOpen(open)
-        if (open) {
-          subtitleWebSearchQuery.refetch()
-        }
-      } })}
+      {trigger?.({ setOpen: setResolvedOpen })}
       <Modal.Backdrop
-        isOpen={open}
-        onOpenChange={(nextOpen) => {
-          setOpen(nextOpen)
-          if (!nextOpen)
-            onClose?.()
-        }}
+        isOpen={resolvedOpen}
+        onOpenChange={setResolvedOpen}
       >
         <Modal.Container size="lg" className="max-w-[900px]">
           <Modal.Dialog>
@@ -114,10 +129,10 @@ export function SubtitleWebModal({
                 <DataTable
                   ariaLabel="网络字幕"
                   columns={columns}
-                  data={subtitleWebSearchQuery.data?.items ?? []}
-                  locale={{ emptyText: "无候选字幕" }}
+                  data={subtitleWebSearchData?.items ?? []}
+                  locale={{ emptyText: '无候选字幕' }}
                   rowKey={row => String(row.id)}
-                  loading={subtitleWebSearchQuery.isFetching}
+                  loading={subtitleWebSearchFetching}
                   scroll={{ x: 760 }}
                 />
               </div>

@@ -337,6 +337,11 @@ export interface MediaVideosQuery {
 export interface StashSceneFile {
   basename: string;
   /**
+     * 影片时长，单位为秒。
+     * @nullable
+     */
+  duration?: number | null;
+  /**
      * 根据 `stash_config.path_mappings` 映射出的本服务本地路径。
      * @nullable
      */
@@ -354,6 +359,11 @@ export type PageResultStashSceneRowDataItem = {
   date?: string | null;
   files: StashSceneFile[];
   id: string;
+  /**
+     * 最后播放时间
+     * @nullable
+     */
+  last_played_at?: string | null;
   paths: StashScenePaths;
   title: string;
 };
@@ -397,9 +407,9 @@ export interface ScanGenerateSubtitleRes {
 }
 
 /**
- * Stash `CriterionModifier`（与 GraphQL 枚举值一致）
+ * Stash `CriterionModifier`。
  */
-export type StashCriterionModifier = '=' | 'Equals' | '!=' | 'NotEquals' | '>' | 'GreaterThan' | '<' | 'LessThan' | 'IS NULL' | 'IS NOT NULL' | 'INCLUDES ALL' | 'Includes' | 'Excludes' | 'MATCHES REGEX' | 'NOT MATCHES REGEX' | '>= AND <=' | '< OR >';
+export type StashCriterionModifier = 'EQUALS' | 'NOT_EQUALS' | 'GREATER_THAN' | 'LESS_THAN' | 'IS_NULL' | 'NOT_NULL' | 'INCLUDES_ALL' | 'INCLUDES' | 'EXCLUDES' | 'MATCHES_REGEX' | 'NOT_MATCHES_REGEX' | 'BETWEEN' | 'NOT_BETWEEN';
 /**
  * Stash `CustomFieldCriterionInput`（`value` 为 GraphQL `Any`，透传 JSON）
  */
@@ -433,6 +443,48 @@ export interface StashDuplicationCriterion {
   title?: boolean | null;
   /** @nullable */
   url?: boolean | null;
+}
+
+/**
+ * Stash 可搜索实体类型。
+ */
+export type StashEntityKind = 'studio' | 'performer' | 'tag';
+/**
+ * Stash 实体搜索项。
+ */
+export interface StashEntitySearchItem {
+  /**
+     * 演员重名区分信息，其他实体为空。
+     * @nullable
+     */
+  disambiguation?: string | null;
+  /** Stash 实体 ID。 */
+  id: string;
+  /** 显示名称。 */
+  name: string;
+}
+
+/**
+ * Stash 实体搜索查询参数。
+ */
+export interface StashEntitySearchReq {
+  /** 实体类型。 */
+  kind: StashEntityKind;
+  /** 返回数量。 */
+  page_size?: number;
+  /**
+     * 搜索关键词。
+     * @nullable
+     */
+  q?: string | null;
+}
+
+/**
+ * Stash 实体搜索结果。
+ */
+export interface StashEntitySearchRes {
+  /** 命中的实体列表。 */
+  items: StashEntitySearchItem[];
 }
 
 /**
@@ -638,10 +690,13 @@ export interface StashSceneRow {
   date?: string | null;
   files: StashSceneFile[];
   id: string;
+  /**
+     * 最后播放时间
+     * @nullable
+     */
+  last_played_at?: string | null;
   paths: StashScenePaths;
   title: string;
-  /** @nullable */
-  last_played_at?: string | null;
 }
 
 export interface SubtitleGenerateBulkReq {
@@ -849,6 +904,22 @@ current?: number | null;
  * @nullable
  */
 page_size?: number | null;
+};
+
+export type SearchEntitiesStashParams = {
+/**
+ * 实体类型。
+ */
+kind: StashEntityKind;
+/**
+ * 搜索关键词。
+ * @nullable
+ */
+q?: string | null;
+/**
+ * 返回数量。
+ */
+page_size?: number;
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -3162,6 +3233,94 @@ export function useListWhisperModelsSetup<TData = Awaited<ReturnType<typeof list
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListWhisperModelsSetupQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const searchEntitiesStash = (
+    params: SearchEntitiesStashParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<StashEntitySearchRes>(
+      {url: `/api/stash/entities/search`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getSearchEntitiesStashQueryKey = (params?: SearchEntitiesStashParams,) => {
+    return [
+    `/api/stash/entities/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchEntitiesStashQueryOptions = <TData = Awaited<ReturnType<typeof searchEntitiesStash>>, TError = ErrorType<unknown>>(params: SearchEntitiesStashParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchEntitiesStashQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchEntitiesStash>>> = ({ signal }) => searchEntitiesStash(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SearchEntitiesStashQueryResult = NonNullable<Awaited<ReturnType<typeof searchEntitiesStash>>>
+export type SearchEntitiesStashQueryError = ErrorType<unknown>
+
+
+export function useSearchEntitiesStash<TData = Awaited<ReturnType<typeof searchEntitiesStash>>, TError = ErrorType<unknown>>(
+ params: SearchEntitiesStashParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchEntitiesStash>>,
+          TError,
+          Awaited<ReturnType<typeof searchEntitiesStash>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchEntitiesStash<TData = Awaited<ReturnType<typeof searchEntitiesStash>>, TError = ErrorType<unknown>>(
+ params: SearchEntitiesStashParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchEntitiesStash>>,
+          TError,
+          Awaited<ReturnType<typeof searchEntitiesStash>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchEntitiesStash<TData = Awaited<ReturnType<typeof searchEntitiesStash>>, TError = ErrorType<unknown>>(
+ params: SearchEntitiesStashParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useSearchEntitiesStash<TData = Awaited<ReturnType<typeof searchEntitiesStash>>, TError = ErrorType<unknown>>(
+ params: SearchEntitiesStashParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchEntitiesStash>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSearchEntitiesStashQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
