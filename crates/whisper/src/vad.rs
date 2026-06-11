@@ -3,6 +3,8 @@ use webrtc_vad::{SampleRate, Vad, VadMode};
 
 use crate::types::VadConfig;
 
+const LONG_SEGMENT_OVERLAP_MS: u32 = 800;
+
 /// 把过长的语音段硬切成多段（在 16kHz 采样率下计算）。
 fn split_long_intervals(
     intervals: Vec<(usize, usize)>,
@@ -12,6 +14,8 @@ fn split_long_intervals(
         return intervals;
     }
     let max_samples = (max_segment_ms as usize) * 16; // 16 samples / ms @ 16kHz
+    let overlap_samples = ((LONG_SEGMENT_OVERLAP_MS.min(max_segment_ms / 2)) as usize) * 16;
+    let step_samples = max_samples.saturating_sub(overlap_samples).max(1);
     let mut out = Vec::with_capacity(intervals.len());
     for (s, e) in intervals {
         if e <= s {
@@ -20,7 +24,7 @@ fn split_long_intervals(
         let mut cur = s;
         while e - cur > max_samples {
             out.push((cur, cur + max_samples));
-            cur += max_samples;
+            cur += step_samples;
         }
         out.push((cur, e));
     }
@@ -114,4 +118,19 @@ pub fn detect_vad_intervals_i16(pcm: &[i16], config: &VadConfig) -> Result<Vec<(
 
     // 硬切超长段，避免单段送给 whisper 后内部滑窗过慢、上下文飘移
     Ok(split_long_intervals(out, config.max_segment_ms))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_long_intervals_keeps_boundary_overlap() {
+        let intervals = split_long_intervals(vec![(0, 70_000)], 2_000);
+
+        assert_eq!(intervals[0], (0, 32_000));
+        assert_eq!(intervals[1], (19_200, 51_200));
+        assert_eq!(intervals[0].1 - intervals[1].0, 12_800);
+        assert_eq!(intervals.last(), Some(&(38_400, 70_000)));
+    }
 }

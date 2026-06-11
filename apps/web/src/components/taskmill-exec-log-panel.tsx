@@ -140,11 +140,13 @@ function SchedulerOverview({
   snapshot,
   activeCount,
   failedCount,
+  completedTaskCount,
   onQueueChanged,
 }: {
   snapshot?: TaskmillJobSnapshot
   activeCount: number
   failedCount: number
+  completedTaskCount: number
   onQueueChanged: () => void
 }) {
   const scheduler = snapshot?.scheduler
@@ -189,8 +191,8 @@ function SchedulerOverview({
         <SchedulerMetric
           detail={`失败 Pipeline ${failedCount}`}
           icon="lucide:history"
-          label="历史完成"
-          value={metricValue(metrics?.completed)}
+          label="累计完成任务"
+          value={metricValue(completedTaskCount)}
         />
       </div>
 
@@ -914,11 +916,15 @@ export function TaskmillExecLogPanel({
     })
   }
 
+  const allHistoryPipelines = useMemo(
+    () => pipelines.filter(pipeline => !ACTIVE_STATUSES.has(pipeline.status) && pipelineMatchesKeyword(pipeline, keyword)),
+    [keyword, pipelines],
+  )
   const filterCounts: Record<PipelineFilter, number> = {
-    all: pipelines.filter(pipeline => !ACTIVE_STATUSES.has(pipeline.status)).length,
+    all: allHistoryPipelines.length,
     active: activePipelines.length,
-    finished: pipelines.filter(pipeline => pipeline.status === 'completed').length,
-    failed: pipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length,
+    finished: allHistoryPipelines.filter(pipeline => pipeline.status === 'completed').length,
+    failed: allHistoryPipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length,
   }
   const filterTabs: { key: PipelineFilter, label: string }[] = [
     { key: 'all', label: '全部历史' },
@@ -928,12 +934,14 @@ export function TaskmillExecLogPanel({
 
   const activeCount = pipelines.filter(pipeline => ACTIVE_STATUSES.has(pipeline.status)).length
   const failedCount = pipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length
+  const completedTaskCount = Number(snapshot?.metrics?.completed ?? 0)
 
   return (
     <>
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
         <SchedulerOverview
           activeCount={activeCount}
+          completedTaskCount={completedTaskCount}
           failedCount={failedCount}
           snapshot={snapshot}
           onQueueChanged={onQueueChanged}

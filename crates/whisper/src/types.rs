@@ -109,7 +109,7 @@ pub struct VadConfig {
     pub frame_ms: u16,
     /// 模式 0..=3（越大越激进，默认 2）
     pub mode: u8,
-    /// 语音段两侧 padding（ms）（默认 300）
+    /// 语音段两侧 padding（ms）（默认 500）
     pub padding_ms: u32,
     /// 丢弃短于该值的语音段（ms）（默认 200）
     pub min_speech_ms: u32,
@@ -123,7 +123,7 @@ impl Default for VadConfig {
         Self {
             frame_ms: 30,
             mode: 2,
-            padding_ms: 300,
+            padding_ms: 500,
             min_speech_ms: 200,
             max_segment_ms: 30_000,
         }
