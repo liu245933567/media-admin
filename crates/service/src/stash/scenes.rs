@@ -3,8 +3,8 @@ use ma_utils::types::PageResult;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::stash::StashScenePaths;
 use crate::stash::types::{StashConnectConfig, StashSceneListReq};
+use crate::stash::{StashScenePaths, map_stash_file_path};
 
 use super::forward_graphql;
 use super::types::StashSceneRow;
@@ -97,15 +97,27 @@ pub async fn list_scenes(
         data: find_scenes
             .scenes
             .into_iter()
-            .map(|row| row.with_proxy_paths(&stash_host))
+            .map(|row| row.with_local_paths_and_proxy_paths(cfg, &stash_host))
             .collect(),
         total: find_scenes.count,
     })
 }
 
 impl StashSceneRow {
-    /// 将 paths 中的 Stash 绝对 URL 替换为经本服务代理的路径。
-    fn with_proxy_paths(mut self, stash_host: &str) -> Self {
+    /// 补齐本地文件路径，并将 paths 中的 Stash 绝对 URL 替换为经本服务代理的路径。
+    fn with_local_paths_and_proxy_paths(
+        mut self,
+        cfg: &StashConnectConfig,
+        stash_host: &str,
+    ) -> Self {
+        self.files = self
+            .files
+            .into_iter()
+            .map(|mut file| {
+                file.local_path = map_stash_file_path(&file.path, &cfg.path_mappings);
+                file
+            })
+            .collect();
         self.paths = self.paths.with_proxy_hosts(stash_host);
         self
     }

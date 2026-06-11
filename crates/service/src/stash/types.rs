@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::filter::StashSceneFilterType;
+use super::path::StashPathMapping;
 
 /// Stash 连接配置（持久化于应用 `AppConfig`）。
 #[typeshare::typeshare]
@@ -11,6 +12,9 @@ pub struct StashConnectConfig {
     pub base_url: String,
     /// GraphQL / 媒体请求使用的 ApiKey；无鉴权时可留空
     pub api_key: String,
+    /// Stash 视角文件路径到本服务本地文件路径的前缀映射。
+    #[serde(default)]
+    pub path_mappings: Vec<StashPathMapping>,
 }
 
 impl Default for StashConnectConfig {
@@ -18,6 +22,7 @@ impl Default for StashConnectConfig {
         Self {
             base_url: String::new(),
             api_key: String::new(),
+            path_mappings: Vec::new(),
         }
     }
 }
@@ -61,6 +66,9 @@ pub struct StashFilter {
 pub struct StashSceneFile {
     pub path: String,
     pub basename: String,
+    /// 根据 `stash_config.path_mappings` 映射出的本服务本地路径。
+    #[serde(default)]
+    pub local_path: Option<String>,
 }
 
 #[typeshare::typeshare]

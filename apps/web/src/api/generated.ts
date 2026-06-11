@@ -26,6 +26,16 @@ import type {
 import { axiosInstance } from './axios-instance';
 import type { ErrorType , BodyType } from './axios-instance';
 /**
+ * Stash 文件路径到本服务本地路径的前缀映射。
+ */
+export interface StashPathMapping {
+  /** 本服务运行环境可访问的本地路径前缀。 */
+  local_prefix: string;
+  /** Stash 返回的文件路径前缀。 */
+  stash_prefix: string;
+}
+
+/**
  * Stash 连接配置（持久化于应用 `AppConfig`）。
  */
 export interface StashConnectConfig {
@@ -33,6 +43,8 @@ export interface StashConnectConfig {
   api_key: string;
   /** 实例根地址，如 `http://127.0.0.1:9999` */
   base_url: string;
+  /** Stash 视角文件路径到本服务本地文件路径的前缀映射。 */
+  path_mappings?: StashPathMapping[];
 }
 
 /**
@@ -324,6 +336,11 @@ export interface MediaVideosQuery {
 
 export interface StashSceneFile {
   basename: string;
+  /**
+     * 根据 `stash_config.path_mappings` 映射出的本服务本地路径。
+     * @nullable
+     */
+  local_path?: string | null;
   path: string;
 }
 

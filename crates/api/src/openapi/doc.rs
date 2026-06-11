@@ -101,6 +101,7 @@ use utoipa::OpenApi;
         ma_service::stash::StashMultiCriterion,
         ma_service::stash::StashOrientation,
         ma_service::stash::StashOrientationCriterion,
+        ma_service::stash::StashPathMapping,
         ma_service::stash::StashPhashDistanceCriterion,
         ma_service::stash::StashResolution,
         ma_service::stash::StashResolutionCriterion,

@@ -7,28 +7,22 @@ import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import {
   getAppConfigSettings,
-  getGenerateDefaultsJobsQueryKey,
   getGetAppConfigSettingsQueryKey,
   putAppConfigSettings,
   PutAppConfigSettingsBody,
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
-import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
-import { useWhisperModelFilenameOptions } from '@/components/whisper-models-setup-card'
+import { StashConfigFormGroup } from '@/components/stash-config-form-group'
 
-export const Route = createFileRoute('/setting/defaults')({
-  component: DefaultsSettingPage,
+export const Route = createFileRoute('/setting/stash')({
+  component: StashSettingPage,
 })
 
-function AppConfigForm({
+function StashConfigForm({
   initialValues,
-  whisperModelFilenameOptions,
-  whisperModelsLoading,
   onSaved,
 }: {
   initialValues: AppConfig
-  whisperModelFilenameOptions: { label: string, value: string }[]
-  whisperModelsLoading: boolean
   onSaved: () => void
 }) {
   const message = useAppToast()
@@ -42,9 +36,9 @@ function AppConfigForm({
   async function handleSubmit(values: AppConfig) {
     try {
       await putAppConfigSettings(values)
-      message.success('已保存全局默认参数')
+      message.success('已保存 Stash 设置')
       void queryClient.invalidateQueries({ queryKey: appConfigQueryKey })
-      void queryClient.invalidateQueries({ queryKey: getGenerateDefaultsJobsQueryKey() })
+      void queryClient.invalidateQueries({ queryKey: ['stash-scenes'] })
       onSaved()
     }
     catch (e) {
@@ -54,26 +48,18 @@ function AppConfigForm({
 
   return (
     <form className="flex flex-col gap-6" onSubmit={form.handleSubmit(handleSubmit)}>
-      <SubtitlePipelineFormGroups
-        control={form.control}
-        whisperModelFilenameOptions={whisperModelFilenameOptions}
-        whisperModelsLoading={whisperModelsLoading}
-        showTranslateGroup
-        variant="setting"
-      />
+      <StashConfigFormGroup control={form.control} variant="setting" />
       <div>
         <Button type="submit" isPending={form.formState.isSubmitting}>
-          保存默认参数
+          保存 Stash 设置
         </Button>
       </div>
     </form>
   )
 }
 
-function DefaultsSettingPage() {
+function StashSettingPage() {
   const message = useAppToast()
-  const { options: whisperModelFilenameOptions, loading: whisperModelsLoading }
-    = useWhisperModelFilenameOptions()
   const appConfigQueryKey = getGetAppConfigSettingsQueryKey()
 
   const appCfgQuery = useQuery({
@@ -86,7 +72,7 @@ function DefaultsSettingPage() {
       message.error(
         appCfgQuery.error instanceof Error
           ? appCfgQuery.error.message
-          : '加载全局默认参数失败',
+          : '加载 Stash 设置失败',
       )
     }
   }, [appCfgQuery.isError, appCfgQuery.error, message])
@@ -100,15 +86,13 @@ function DefaultsSettingPage() {
   return (
     <Card>
       <Card.Header>
-        <Card.Title>应用默认参数</Card.Title>
+        <Card.Title>Stash 设置</Card.Title>
       </Card.Header>
       <Card.Content className="flex flex-col gap-4">
         <p className="m-0 text-sm text-muted">
-          以下参数持久化在本地
+          Stash 连接与路径映射持久化在本地
           <code className="mx-1 rounded bg-surface-secondary px-1">app_config.json</code>
-          。翻译的
-          <code className="mx-1 rounded bg-surface-secondary px-1">API Key</code>
-          留空保存时不覆盖已存密钥。
+          。ApiKey 留空保存时不覆盖已存密钥。
         </p>
         {appCfgQuery.isPending
           ? (
@@ -119,16 +103,14 @@ function DefaultsSettingPage() {
             )
           : appCfgQuery.data
             ? (
-                <AppConfigForm
+                <StashConfigForm
                   key={appConfigFormKey}
                   initialValues={appCfgQuery.data}
-                  whisperModelFilenameOptions={whisperModelFilenameOptions}
-                  whisperModelsLoading={whisperModelsLoading}
                   onSaved={() => appCfgQuery.refetch()}
                 />
               )
             : (
-                <span className="text-sm text-muted">无法加载默认参数</span>
+                <span className="text-sm text-muted">无法加载 Stash 设置</span>
               )}
       </Card.Content>
     </Card>

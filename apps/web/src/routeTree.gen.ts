@@ -15,6 +15,7 @@ import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as MediaLibraryRouteImport } from './routes/media-library'
 import { Route as SettingRouteRouteImport } from './routes/setting/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingStashRouteImport } from './routes/setting/stash'
 import { Route as SettingModelsRouteImport } from './routes/setting/models'
 import { Route as SettingLibraryRouteImport } from './routes/setting/library'
 import { Route as SettingFfmpegRouteImport } from './routes/setting/ffmpeg'
@@ -50,6 +51,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingStashRoute = SettingStashRouteImport.update({
+  id: '/stash',
+  path: '/stash',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
 const SettingModelsRoute = SettingModelsRouteImport.update({
   id: '/models',
   path: '/models',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
+  '/setting/stash': typeof SettingStashRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
+  '/setting/stash': typeof SettingStashRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
+  '/setting/stash': typeof SettingStashRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
+    | '/setting/stash'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
+    | '/setting/stash'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
+    | '/setting/stash'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -200,6 +212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setting/stash': {
+      id: '/setting/stash'
+      path: '/stash'
+      fullPath: '/setting/stash'
+      preLoaderRoute: typeof SettingStashRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
     '/setting/models': {
       id: '/setting/models'
       path: '/models'
@@ -236,6 +255,7 @@ interface SettingRouteRouteChildren {
   SettingFfmpegRoute: typeof SettingFfmpegRoute
   SettingLibraryRoute: typeof SettingLibraryRoute
   SettingModelsRoute: typeof SettingModelsRoute
+  SettingStashRoute: typeof SettingStashRoute
 }
 
 const SettingRouteRouteChildren: SettingRouteRouteChildren = {
@@ -243,6 +263,7 @@ const SettingRouteRouteChildren: SettingRouteRouteChildren = {
   SettingFfmpegRoute: SettingFfmpegRoute,
   SettingLibraryRoute: SettingLibraryRoute,
   SettingModelsRoute: SettingModelsRoute,
+  SettingStashRoute: SettingStashRoute,
 }
 
 const SettingRouteRouteWithChildren = SettingRouteRoute._addFileChildren(

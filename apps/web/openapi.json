@@ -577,6 +577,13 @@
           "base_url": {
             "description": "实例根地址，如 `http://127.0.0.1:9999`",
             "type": "string"
+          },
+          "path_mappings": {
+            "description": "Stash 视角文件路径到本服务本地文件路径的前缀映射。",
+            "items": {
+              "$ref": "#/components/schemas/StashPathMapping"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -887,6 +894,24 @@
         ],
         "type": "object"
       },
+      "StashPathMapping": {
+        "description": "Stash 文件路径到本服务本地路径的前缀映射。",
+        "properties": {
+          "local_prefix": {
+            "description": "本服务运行环境可访问的本地路径前缀。",
+            "type": "string"
+          },
+          "stash_prefix": {
+            "description": "Stash 返回的文件路径前缀。",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stash_prefix",
+          "local_prefix"
+        ],
+        "type": "object"
+      },
       "StashPhashDistanceCriterion": {
         "description": "Stash `PhashDistanceCriterionInput`",
         "properties": {
@@ -950,6 +975,13 @@
         "properties": {
           "basename": {
             "type": "string"
+          },
+          "local_path": {
+            "description": "根据 `stash_config.path_mappings` 映射出的本服务本地路径。",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "path": {
             "type": "string"

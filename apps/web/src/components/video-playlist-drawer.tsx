@@ -2,7 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { MediaVideoRow } from '@/api'
 import { Chip, Drawer, Spinner } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { formatBytes } from '@/utils'
 import { getParentPath } from '@/utils/video-path'
 import { DataTable } from './data-table'
@@ -29,7 +29,7 @@ export function VideoPlaylistDrawer({
   loading = false,
   rootName,
 }: VideoPlaylistDrawerProps) {
-  const [page, setPage] = useState(1)
+  const [pageState, setPageState] = useState({ page: 1, sessionKey: null as string | null })
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   const currentIndex = useMemo(
@@ -37,23 +37,15 @@ export function VideoPlaylistDrawer({
     [items, currentVideoPath],
   )
 
-  useEffect(() => {
-    if (!open || currentIndex < 0)
-      return
-    setPage(Math.floor(currentIndex / pageSize) + 1)
-  }, [open, currentIndex, pageSize])
-
-  useEffect(() => {
-    if (!open)
-      return
-    const maxPage = Math.max(1, Math.ceil(items.length / pageSize))
-    if (page > maxPage)
-      setPage(maxPage)
-  }, [open, items.length, page, pageSize])
+  const currentItemPage = currentIndex >= 0 ? Math.floor(currentIndex / pageSize) + 1 : null
+  const sessionKey = getPlaylistSessionKey(open, currentVideoPath, items.length, pageSize)
+  const requestedPage = pageState.sessionKey === sessionKey ? pageState.page : currentItemPage ?? 1
+  const maxPage = Math.max(1, Math.ceil(items.length / pageSize))
+  const currentPage = Math.min(Math.max(requestedPage, 1), maxPage)
 
   const pageItems = useMemo(
-    () => items.slice((page - 1) * pageSize, page * pageSize),
-    [items, page, pageSize],
+    () => items.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, items, pageSize],
   )
 
   const columns = useMemo<ColumnDef<MediaVideoRow, unknown>[]>(() => [
@@ -102,8 +94,6 @@ export function VideoPlaylistDrawer({
     },
   ], [currentVideoPath])
 
-  const totalPage = Math.max(1, Math.ceil(items.length / pageSize))
-
   return (
     <Drawer.Backdrop isOpen={open} onOpenChange={nextOpen => !nextOpen && onClose()}>
       <Drawer.Content placement="right" className="sm:max-w-[520px]">
@@ -139,54 +129,20 @@ export function VideoPlaylistDrawer({
                   if (row.file_path !== currentVideoPath)
                     onSelect(row)
                 }}
-                showPagination={false}
+                pagination={{
+                  itemLabel: '个视频',
+                  page: currentPage,
+                  pageSize,
+                  pageSizeOptions: [10, 20, 50, 100],
+                  total: items.length,
+                  onPageChange: nextPage => setPageState({ page: nextPage, sessionKey }),
+                  onPageSizeChange: (nextPageSize) => {
+                    const nextSessionKey = getPlaylistSessionKey(open, currentVideoPath, items.length, nextPageSize)
+                    setPageSize(nextPageSize)
+                    setPageState({ page: 1, sessionKey: nextSessionKey })
+                  },
+                }}
               />
-              <div className="flex items-center justify-between gap-2 text-xs text-muted">
-                <span>
-                  共
-                  {' '}
-                  {items.length}
-                  {' '}
-                  个视频
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded px-2 py-1 hover:bg-surface-secondary disabled:opacity-40"
-                    disabled={page <= 1}
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                  >
-                    上一页
-                  </button>
-                  <span>
-                    {page}
-                    {' '}
-                    /
-                    {' '}
-                    {totalPage}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded px-2 py-1 hover:bg-surface-secondary disabled:opacity-40"
-                    disabled={page >= totalPage}
-                    onClick={() => setPage(p => Math.min(totalPage, p + 1))}
-                  >
-                    下一页
-                  </button>
-                  <select
-                    className="rounded border border-border bg-surface px-1 py-1"
-                    value={pageSize}
-                    onChange={(event) => {
-                      setPageSize(Number(event.target.value))
-                      setPage(1)
-                    }}
-                  >
-                    {[10, 20, 50, 100].map(size => (
-                      <option key={size} value={size}>{size}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
             </div>
             <p className="m-0 flex items-center gap-1 text-xs text-muted">
               <Icon className="size-3" icon="lucide:circle-play" />
@@ -197,4 +153,13 @@ export function VideoPlaylistDrawer({
       </Drawer.Content>
     </Drawer.Backdrop>
   )
+}
+
+function getPlaylistSessionKey(
+  open: boolean,
+  currentVideoPath: string,
+  itemCount: number,
+  pageSize: number,
+) {
+  return open ? `${currentVideoPath}:${itemCount}:${pageSize}` : null
 }

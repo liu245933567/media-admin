@@ -1,4 +1,5 @@
 mod filter;
+mod path;
 mod scenes;
 mod types;
 
@@ -15,6 +16,7 @@ pub use filter::{
     StashOrientationCriterion, StashPhashDistanceCriterion, StashResolution,
     StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
 };
+pub use path::{StashPathMapping, map_stash_file_path};
 pub use scenes::list_scenes;
 pub use types::{
     StashConnectConfig, StashFilter, StashSceneFile, StashSceneListReq, StashScenePaths,
@@ -176,6 +178,7 @@ mod tests {
         StashConnectConfig {
             base_url: "https://stash.example.com:55001".to_string(),
             api_key: String::new(),
+            path_mappings: Vec::new(),
         }
     }
 

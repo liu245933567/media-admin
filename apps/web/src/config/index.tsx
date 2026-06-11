@@ -28,6 +28,7 @@ export const menu = [
       { name: 'Whisper 模型', path: '/setting/models', icon: 'lucide:brain' },
       { name: 'FFmpeg', path: '/setting/ffmpeg', icon: 'lucide:file-cog' },
       { name: '媒体库', path: '/setting/library', icon: 'lucide:folder-cog' },
+      { name: 'Stash', path: '/setting/stash', icon: 'lucide:hard-drive' },
     ],
   },
 ]

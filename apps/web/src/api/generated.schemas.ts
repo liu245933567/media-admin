@@ -531,7 +531,11 @@ export const getAppConfigSettingsResponseVadConfigPaddingMsMin = 0;
 export const GetAppConfigSettingsResponse = zod.object({
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
-  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`')
+  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
+  "path_mappings": zod.array(zod.object({
+  "local_prefix": zod.string().describe('本服务运行环境可访问的本地路径前缀。'),
+  "stash_prefix": zod.string().describe('Stash 返回的文件路径前缀。')
+}).describe('Stash 文件路径到本服务本地路径的前缀映射。')).optional().describe('Stash 视角文件路径到本服务本地文件路径的前缀映射。')
 }).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。'),
   "translate_config": zod.object({
   "api_key": zod.string().describe('调用模型的 API 密钥'),
@@ -584,7 +588,11 @@ export const putAppConfigSettingsBodyVadConfigPaddingMsMin = 0;
 export const PutAppConfigSettingsBody = zod.object({
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
-  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`')
+  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
+  "path_mappings": zod.array(zod.object({
+  "local_prefix": zod.string().describe('本服务运行环境可访问的本地路径前缀。'),
+  "stash_prefix": zod.string().describe('Stash 返回的文件路径前缀。')
+}).describe('Stash 文件路径到本服务本地路径的前缀映射。')).optional().describe('Stash 视角文件路径到本服务本地文件路径的前缀映射。')
 }).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。'),
   "translate_config": zod.object({
   "api_key": zod.string().describe('调用模型的 API 密钥'),
@@ -633,7 +641,11 @@ export const putAppConfigSettingsResponseVadConfigPaddingMsMin = 0;
 export const PutAppConfigSettingsResponse = zod.object({
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
-  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`')
+  "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
+  "path_mappings": zod.array(zod.object({
+  "local_prefix": zod.string().describe('本服务运行环境可访问的本地路径前缀。'),
+  "stash_prefix": zod.string().describe('Stash 返回的文件路径前缀。')
+}).describe('Stash 文件路径到本服务本地路径的前缀映射。')).optional().describe('Stash 视角文件路径到本服务本地文件路径的前缀映射。')
 }).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。'),
   "translate_config": zod.object({
   "api_key": zod.string().describe('调用模型的 API 密钥'),
@@ -953,6 +965,7 @@ export const ListScenesStashResponse = zod.object({
   "date": zod.string().nullish(),
   "files": zod.array(zod.object({
   "basename": zod.string(),
+  "local_path": zod.string().nullish().describe('根据 `stash_config.path_mappings` 映射出的本服务本地路径。'),
   "path": zod.string()
 })),
   "id": zod.string(),

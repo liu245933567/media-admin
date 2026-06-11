@@ -28,7 +28,6 @@ function PageComponent() {
   const message = useAppToast()
   const confirm = useConfirmDialog()
   const navigate = useNavigate()
-  const [selectedRows, setSelectedRows] = useState<MediaVideoRow[]>([])
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath]
     = useState<string | undefined>()
@@ -70,7 +69,6 @@ function PageComponent() {
       message.success(
         `已删除 ${res.deleted_videos} 个视频，${res.deleted_subtitles} 个字幕`,
       )
-      setSelectedRows([])
       reloadList()
     },
     onError: error => message.error(error.message ?? '删除失败'),
@@ -222,8 +220,6 @@ function PageComponent() {
   )
 
   const total = Number(filesQuery.data?.total ?? 0)
-  const totalPage = Math.max(1, Math.ceil(total / pageSize))
-
   return (
     <>
       <SubtitleTaskCreateDrawerForm
@@ -308,22 +304,6 @@ function PageComponent() {
               </ListBox>
             </Select.Popover>
           </Select>
-          <div className="flex gap-2">
-            <Button
-              variant="danger-soft"
-              isDisabled={!selectedRows.length}
-              isPending={deleteVideosMutation.isPending}
-              onPress={() => confirmDeleteVideos(selectedRows)}
-            >
-              批量删除
-            </Button>
-            <Button
-              isDisabled={!selectedRows.length}
-              onPress={() => openSubtitleCreateBulk(selectedRows)}
-            >
-              批量生成字幕
-            </Button>
-          </div>
         </div>
         <DataTable
           ariaLabel="媒体文件"
@@ -334,72 +314,37 @@ function PageComponent() {
           getRowId={row => String(row.id)}
           loading={filesQuery.isFetching}
           minWidth={1120}
-          onRowSelectionChange={setSelectedRows}
-          showPagination={false}
+          pagination={{
+            itemLabel: '个视频',
+            page,
+            pageSize,
+            pageSizeOptions: [10, 20, 50, 100],
+            total,
+            onPageChange: setPage,
+            onPageSizeChange: (nextPageSize) => {
+              setPageSize(nextPageSize)
+              setPage(1)
+            },
+          }}
+          selectionActionRender={rows => [
+            <Button
+              key="delete"
+              variant="danger-soft"
+              isDisabled={!rows.length}
+              isPending={deleteVideosMutation.isPending}
+              onPress={() => confirmDeleteVideos(rows)}
+            >
+              批量删除
+            </Button>,
+            <Button
+              key="subtitle"
+              isDisabled={!rows.length}
+              onPress={() => openSubtitleCreateBulk(rows)}
+            >
+              批量生成字幕
+            </Button>,
+          ]}
         />
-        <div className="flex flex-col gap-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            共
-            {' '}
-            {total}
-            {' '}
-            个视频
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="tertiary"
-              isDisabled={page <= 1}
-              onPress={() => setPage(prev => Math.max(1, prev - 1))}
-            >
-              上一页
-            </Button>
-            <span>
-              {page}
-              {' '}
-              /
-              {' '}
-              {totalPage}
-            </span>
-            <Button
-              size="sm"
-              variant="tertiary"
-              isDisabled={page >= totalPage}
-              onPress={() => setPage(prev => Math.min(totalPage, prev + 1))}
-            >
-              下一页
-            </Button>
-            <Select
-              aria-label="每页数量"
-              className="w-24"
-              value={String(pageSize)}
-              variant="secondary"
-              onChange={(value) => {
-                const nextPageSize = Number(value)
-                if (!Number.isFinite(nextPageSize))
-                  return
-
-                setPageSize(nextPageSize)
-                setPage(1)
-              }}
-            >
-              <Select.Trigger>
-                <Select.Value>{pageSize}</Select.Value>
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {[10, 20, 50, 100].map(size => (
-                    <ListBox.Item key={size} id={String(size)} textValue={String(size)}>
-                      {size}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-        </div>
       </div>
     </>
   )

@@ -1,6 +1,8 @@
 import type { Selection } from '@heroui/react'
 import type { ColumnDef, PaginationState, RowSelectionState, SortingState } from '@tanstack/react-table'
-import { Button, Checkbox, Spinner, Table } from '@heroui/react'
+import type { ReactNode } from 'react'
+import { ActionBar } from '@heroui-pro/react/action-bar'
+import { Button, Checkbox, Chip, ListBox, Select, Separator, Spinner, Table, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import {
   flexRender,
@@ -24,6 +26,16 @@ export interface DataTableProps<TData> {
   onRowPress?: (row: TData) => void
   minWidth?: number
   showPagination?: boolean
+  pagination?: {
+    page: number
+    pageSize: number
+    total: number
+    pageSizeOptions?: readonly number[]
+    itemLabel?: string
+    onPageChange: (page: number) => void
+    onPageSizeChange?: (pageSize: number) => void
+  }
+  selectionActionRender?: ((rows: TData[]) => ReactNode[])
 }
 
 export function DataTable<TData>({
@@ -39,6 +51,8 @@ export function DataTable<TData>({
   onRowPress,
   minWidth = 720,
   showPagination = true,
+  pagination: controlledPagination,
+  selectionActionRender,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -85,7 +99,7 @@ export function DataTable<TData>({
     getRowId,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: showPagination && !controlledPagination ? getPaginationRowModel() : undefined,
     state: {
       sorting,
       rowSelection,
@@ -107,6 +121,10 @@ export function DataTable<TData>({
     ),
     [rowSelection],
   )
+  const selectedRows = useMemo(() => {
+    const rows = table.getCoreRowModel().rows
+    return rows.filter(row => rowSelection[row.id]).map(row => row.original)
+  }, [rowSelection, table])
 
   function handleSelectionChange(keys: Selection) {
     const nextSelection: RowSelectionState = {}
@@ -125,6 +143,21 @@ export function DataTable<TData>({
         .map(row => row.original),
     )
   }
+
+  function clearSelection() {
+    setRowSelection({})
+    onRowSelectionChange?.([])
+  }
+
+  const selectedCount = selectedRows.length
+  const footerPagination = controlledPagination
+  const footerPageCount = footerPagination
+    ? Math.max(1, Math.ceil(footerPagination.total / footerPagination.pageSize))
+    : Math.max(table.getPageCount(), 1)
+  const footerPage = footerPagination?.page ?? table.getState().pagination.pageIndex + 1
+  const footerTotal = footerPagination?.total
+  const footerItemLabel = footerPagination?.itemLabel ?? '条'
+  const footerPageSizeOptions = footerPagination?.pageSizeOptions ?? [10, 20, 50, 100]
 
   return (
     <div className="flex flex-col gap-3">
@@ -213,44 +246,150 @@ export function DataTable<TData>({
             </Table.Body>
           </Table.Content>
         </Table.ScrollContainer>
-        {showPagination
+        {showPagination || footerPagination
           ? (
               <Table.Footer>
-                <div className="flex items-center justify-between gap-3 px-2 py-2 text-sm text-muted">
-                  <span>
-                    第
-                    {' '}
-                    {table.getState().pagination.pageIndex + 1}
-                    {' '}
-                    /
-                    {' '}
-                    {Math.max(table.getPageCount(), 1)}
-                    {' '}
-                    页
+                <div className="flex flex-col gap-2 px-2 py-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <span className="tabular-nums">
+                    {footerTotal == null
+                      ? (
+                          <>
+                            第
+                            {' '}
+                            {footerPage}
+                            {' '}
+                            /
+                            {' '}
+                            {footerPageCount}
+                            {' '}
+                            页
+                          </>
+                        )
+                      : (
+                          <>
+                            共
+                            {' '}
+                            {footerTotal}
+                            {' '}
+                            {footerItemLabel}
+                          </>
+                        )}
                   </span>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                     <Button
                       size="sm"
                       variant="tertiary"
-                      isDisabled={!table.getCanPreviousPage()}
-                      onPress={() => table.previousPage()}
+                      isDisabled={footerPage <= 1}
+                      onPress={() => {
+                        if (footerPagination) {
+                          footerPagination.onPageChange(Math.max(1, footerPage - 1))
+                        }
+                        else {
+                          table.previousPage()
+                        }
+                      }}
                     >
                       上一页
                     </Button>
+                    <span className="tabular-nums">
+                      {footerPage}
+                      {' '}
+                      /
+                      {' '}
+                      {footerPageCount}
+                    </span>
                     <Button
                       size="sm"
                       variant="tertiary"
-                      isDisabled={!table.getCanNextPage()}
-                      onPress={() => table.nextPage()}
+                      isDisabled={footerPage >= footerPageCount}
+                      onPress={() => {
+                        if (footerPagination) {
+                          footerPagination.onPageChange(Math.min(footerPageCount, footerPage + 1))
+                        }
+                        else {
+                          table.nextPage()
+                        }
+                      }}
                     >
                       下一页
                     </Button>
+                    {footerPagination?.onPageSizeChange
+                      ? (
+                          <Select
+                            aria-label="每页数量"
+                            className="w-28"
+                            value={String(footerPagination.pageSize)}
+                            variant="secondary"
+                            onChange={(key) => {
+                              const next = Number(key)
+                              if (!Number.isFinite(next))
+                                return
+                              footerPagination.onPageSizeChange?.(next)
+                            }}
+                          >
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {footerPageSizeOptions.map(size => (
+                                  <ListBox.Item key={size} id={String(size)} textValue={`${size} ${footerItemLabel}`}>
+                                    {size}
+                                    {' '}
+                                    {footerItemLabel}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        )
+                      : null}
                   </div>
                 </div>
               </Table.Footer>
             )
           : null}
       </Table>
+      {enableRowSelection
+        ? (
+            <ActionBar aria-label={`${ariaLabel} 批量操作`} isOpen={selectedCount > 0}>
+              <ActionBar.Prefix>
+                <Chip className="shrink-0 tabular-nums" size="sm">
+                  已选
+                  {' '}
+                  {selectedCount}
+                </Chip>
+              </ActionBar.Prefix>
+              {selectionActionRender
+                ? (
+                    <>
+                      <Separator />
+                      <ActionBar.Content>
+                        {selectionActionRender(selectedRows)}
+                      </ActionBar.Content>
+                    </>
+                  )
+                : null}
+              <Separator />
+              <ActionBar.Suffix>
+                <Tooltip delay={0}>
+                  <Button
+                    isIconOnly
+                    aria-label="清空选择"
+                    size="sm"
+                    variant="ghost"
+                    onPress={clearSelection}
+                  >
+                    <Icon className="size-4" icon="lucide:x" />
+                  </Button>
+                  <Tooltip.Content>清空选择</Tooltip.Content>
+                </Tooltip>
+              </ActionBar.Suffix>
+            </ActionBar>
+          )
+        : null}
     </div>
   )
 }

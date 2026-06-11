@@ -224,8 +224,8 @@ export function RhfSelectField<TFieldValues extends FieldValues, TName extends F
           className={className ?? 'w-full'}
           isDisabled={disabled}
           isInvalid={fieldState.invalid}
-          selectedKey={field.value ?? null}
-          onSelectionChange={key => field.onChange(key)}
+          value={field.value ?? null}
+          onChange={key => field.onChange(key)}
         >
           <Label>{label}</Label>
           <Select.Trigger>
