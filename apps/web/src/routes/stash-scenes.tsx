@@ -492,7 +492,7 @@ function StashSceneCard({
   const durationText = formatDurationSeconds(firstFile?.duration)
 
   return (
-    <Card className={`gap-0 overflow-hidden p-0 ${selected ? 'ring-2 ring-accent/60' : ''}`}>
+    <Card className={`gap-0 overflow-hidden p-0 [contain-intrinsic-size:220px] [content-visibility:auto] ${selected ? 'ring-2 ring-accent/60' : ''}`}>
       {screenshotShow
         ? (
             <StashSceneCover
@@ -501,7 +501,14 @@ function StashSceneCard({
               preview={row.paths?.preview}
             />
           )
-        : null}
+        : (
+            <div
+              aria-hidden="true"
+              className="flex h-28 w-full items-center justify-center rounded-t-lg rounded-b-none bg-surface-secondary text-muted"
+            >
+              <Icon className="size-6" icon="lucide:image-off" />
+            </div>
+          )}
       <Card.Header className="flex-row items-start justify-between gap-2 p-3 pt-2">
         <div className="min-w-0">
           <Card.Title className="truncate text-base" title={fullPath}>

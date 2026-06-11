@@ -1,7 +1,8 @@
 import { Spinner } from '@heroui/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 const HOVER_DELAY_MS = 200
+const ACTIVE_PREVIEW_EVENT = 'stash-scene-cover-active-preview'
 
 function formatTimestamp(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0)
@@ -40,8 +41,25 @@ export interface StashSceneCoverProps {
   className?: string
 }
 
+export function StashSceneCover(props: StashSceneCoverProps) {
+  const { className } = props
+  const { isNearViewport, ref } = useNearViewport<HTMLDivElement>()
+
+  if (!isNearViewport) {
+    return (
+      <div
+        ref={ref}
+        className={`relative inline-block overflow-hidden rounded bg-surface-secondary [content-visibility:auto] ${className ?? 'h-[90px] w-40'}`}
+      />
+    )
+  }
+
+  return <StashSceneCoverMedia {...props} />
+}
+
 /** 仿 Stash 场景卡片：悬停播放预览，仅在底部进度条上拖动定位进度 */
-export function StashSceneCover({ screenshot, preview, className }: StashSceneCoverProps) {
+function StashSceneCoverMedia({ screenshot, preview, className }: StashSceneCoverProps) {
+  const coverId = useId()
   const scrubberRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -51,7 +69,7 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [showVideo, setShowVideo] = useState(false)
-  const [videoSrc, setVideoSrc] = useState<string | null>(() => preview ?? null)
+  const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [scrubRatio, setScrubRatio] = useState<number | null>(null)
   const [scrubTime, setScrubTime] = useState<number | null>(null)
 
@@ -114,38 +132,43 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
     const video = videoRef.current
     if (video) {
       video.pause()
-      video.currentTime = 0
+      video.removeAttribute('src')
+      video.load()
     }
     isScrubbingRef.current = false
     setShowVideo(false)
+    setVideoSrc(null)
     setScrubRatio(null)
     setScrubTime(null)
     pendingScrubRatioRef.current = null
   }, [])
+
+  const markPreviewActive = useCallback(() => {
+    window.dispatchEvent(new CustomEvent(ACTIVE_PREVIEW_EVENT, { detail: coverId }))
+  }, [coverId])
 
   const scheduleHoverPlay = useCallback(() => {
     clearHoverTimer()
     hoverTimerRef.current = setTimeout(() => {
       if (isScrubbingRef.current)
         return
+      ensurePreviewLoaded()
+      markPreviewActive()
       setShowVideo(true)
-      const video = videoRef.current
-      if (video)
-        void video.play().catch(() => {})
     }, HOVER_DELAY_MS)
-  }, [clearHoverTimer])
+  }, [clearHoverTimer, ensurePreviewLoaded, markPreviewActive])
 
   const activatePreviewForScrub = useCallback(() => {
     clearHoverTimer()
     ensurePreviewLoaded()
+    markPreviewActive()
     isScrubbingRef.current = true
     setShowVideo(true)
-  }, [clearHoverTimer, ensurePreviewLoaded])
+  }, [clearHoverTimer, ensurePreviewLoaded, markPreviewActive])
 
   const handleContainerMouseEnter = useCallback(() => {
-    ensurePreviewLoaded()
     scheduleHoverPlay()
-  }, [ensurePreviewLoaded, scheduleHoverPlay])
+  }, [scheduleHoverPlay])
 
   const handleContainerMouseLeave = useCallback(() => {
     clearHoverTimer()
@@ -183,6 +206,17 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
   useEffect(() => () => clearHoverTimer(), [clearHoverTimer])
 
   useEffect(() => {
+    function handleActivePreview(event: Event) {
+      const activeId = (event as CustomEvent<string>).detail
+      if (activeId !== coverId)
+        resetVideo()
+    }
+
+    window.addEventListener(ACTIVE_PREVIEW_EVENT, handleActivePreview)
+    return () => window.removeEventListener(ACTIVE_PREVIEW_EVENT, handleActivePreview)
+  }, [coverId, resetVideo])
+
+  useEffect(() => {
     const video = videoRef.current
     if (!video)
       return
@@ -195,6 +229,13 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
       return
     flushPendingScrubSeek()
   }, [videoSrc, flushPendingScrubSeek])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !showVideo || !videoSrc)
+      return
+    void video.play().catch(() => {})
+  }, [showVideo, videoSrc])
 
   if (!screenshot && !preview) {
     return <CoverEmpty>无封面</CoverEmpty>
@@ -212,6 +253,9 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
         <img
           src={screenshot}
           alt=""
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
           className={`absolute inset-0 size-full rounded object-cover object-top transition-opacity duration-200 ${
             showVideo ? 'opacity-0' : 'opacity-100'
           }`}
@@ -232,13 +276,13 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
         </CoverOverlay>
       )}
 
-      {preview && (
+      {preview && videoSrc && (
         <video
           ref={videoRef}
-          src={videoSrc ?? undefined}
+          src={videoSrc}
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           disablePictureInPicture
           disableRemotePlayback
           controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
@@ -275,6 +319,35 @@ export function StashSceneCover({ screenshot, preview, className }: StashSceneCo
       )}
     </div>
   )
+}
+
+function useNearViewport<TElement extends Element>() {
+  const ref = useRef<TElement | null>(null)
+  const [isNearViewport, setIsNearViewport] = useState(() => typeof IntersectionObserver === 'undefined')
+
+  useEffect(() => {
+    if (isNearViewport)
+      return
+
+    const element = ref.current
+    if (!element)
+      return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting)
+          return
+        setIsNearViewport(true)
+        observer.disconnect()
+      },
+      { rootMargin: '720px 0px' },
+    )
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [isNearViewport])
+
+  return { isNearViewport, ref }
 }
 
 function CoverEmpty({ children }: { children: React.ReactNode }) {
