@@ -100,6 +100,7 @@ function PageComponent() {
         activeItems={activeQuery.data}
         historyItems={historyQuery.data}
         progressItems={snapshotQuery.data?.scheduler.progress}
+        snapshot={snapshotQuery.data}
         loading={execLogQuery.isLoading || execLogQuery.isFetching}
         onQueueChanged={refreshAll}
         onCreateSubtitle={() => setCreateOpen(true)}

@@ -1,15 +1,32 @@
-import type { MouseEvent } from 'react'
+import type { Key } from 'react'
 import type { Selection } from 'react-aria-components/GridList'
 import type {
   TaskmillEstimatedProgress,
   TaskmillExecLogEntry,
+  TaskmillJobSnapshot,
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
+import type { PipelineView } from '@/components/taskmill-exec-log-shared'
+import type { PipelineFilter, TaskmillGroupLane, TaskmillViewMode } from '@/components/taskmill-view-model'
 import { ActionBar } from '@heroui-pro/react/action-bar'
 import { ListView } from '@heroui-pro/react/list-view'
-import { Button, Chip, Dropdown, Input, Label, ListBox, Pagination, Select, Separator, Spinner, Tooltip } from '@heroui/react'
+import {
+  Button,
+  Chip,
+  Dropdown,
+  Input,
+  Label,
+  ListBox,
+  Pagination,
+  ProgressBar,
+  Select,
+  Separator,
+  Spinner,
+  Surface,
+  Tabs,
+  Tooltip,
+} from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
@@ -18,727 +35,40 @@ import { useAppToast } from '@/components/app-toast'
 import { useConfirmDialog } from '@/components/confirm-dialog'
 import { transJobType } from '@/components/taskmill-active-tasks-panel'
 import {
-  clampTaskPercent,
   formatPercent,
   latestLineOf,
   pipelineTitle,
   stageJobs,
   stageName,
   StatusChip,
-  statusIcon,
   TaskDurationMeta,
-  TaskProgressCircle,
-  taskStatusColor,
 } from '@/components/taskmill-exec-log-shared'
 import { TaskmillPipelineDetailDrawer } from '@/components/taskmill-pipeline-detail-drawer'
 import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
+import {
+  ACTIVE_STATUSES,
+  buildPipelineViews,
+  buildTaskLogGroups,
+  buildTaskmillGroupLanes,
+  cancellableJobOf,
+  canRerunStatus,
+  FAILED_STATUSES,
+  groupLabel,
+  historyRecordIdOf,
+  matchesFilter,
+  pagePipelines,
+  PIPELINE_PAGE_SIZE_OPTIONS,
+  pipelineLaneKey,
+  pipelineMatchesKeyword,
+} from '@/components/taskmill-view-model'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
-
-const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
-const CANCELLABLE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])
-const RERUNNABLE_STATUSES = new Set(['failed', 'dead_letter', 'dependency_failed', 'expired'])
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'superseded', 'expired', 'dependency_failed', 'dead_letter'])
-
-interface TaskEventHeaderLike {
-  task_id?: number
-  key?: string
-  label?: string
-  task_type?: string
-}
-
-type TaskmillKnownTask = TaskmillTaskRecord | TaskmillTaskHistoryRecord
-type PipelineFilter = 'all' | 'running' | 'finished' | 'failed'
-type PipelinePageItem = number | 'left-ellipsis' | 'right-ellipsis'
-
-function activeTaskKey(taskId: number): string {
-  return `task:${taskId}`
-}
-
-function historyTaskKey(historyId: number): string {
-  return `history:${historyId}`
-}
-
-function readEventHeader(event: Record<string, unknown>): TaskEventHeaderLike | undefined {
-  const data = event.data
-  if (!data || typeof data !== 'object') {
-    return undefined
-  }
-  const d = data as Record<string, unknown>
-  if ('header' in d && d.header && typeof d.header === 'object') {
-    return d.header as TaskEventHeaderLike
-  }
-  if ('task_id' in d) {
-    return d as TaskEventHeaderLike
-  }
-  if ('old' in d && d.old && typeof d.old === 'object') {
-    return d.old as TaskEventHeaderLike
-  }
-  return undefined
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object'
-    ? value as Record<string, unknown>
-    : undefined
-}
-
-function readEventTaskId(event: Record<string, unknown>): number | undefined {
-  const h = readEventHeader(event)
-  if (typeof h?.task_id === 'number') {
-    return h.task_id
-  }
-
-  const data = asRecord(event.data)
-  return typeof data?.task_id === 'number' ? data.task_id : undefined
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
-}
-
-function decodePayloadObject(payload: number[] | null | undefined): Record<string, unknown> | undefined {
-  if (!payload?.length) {
-    return undefined
-  }
-
-  try {
-    return asRecord(JSON.parse(new TextDecoder().decode(new Uint8Array(payload))))
-  }
-  catch {
-    return undefined
-  }
-}
-
-function labelAfter(label: string, prefix: string): string | undefined {
-  return label.startsWith(prefix) ? label.slice(prefix.length).trim() : undefined
-}
-
-function normalizeTaskPath(value: string | undefined): string | undefined {
-  const normalized = value?.trim().replaceAll('\\', '/').toLowerCase()
-  return normalized || undefined
-}
-
-function pathWithoutExtension(value: string | undefined): string | undefined {
-  const normalized = normalizeTaskPath(value)
-  return normalized?.replace(/\.[^/.]+$/, '')
-}
-
-function sourceSrtSubject(value: string | undefined): string | undefined {
-  return pathWithoutExtension(value)?.replace(/\.[a-z]{2,8}$/, '')
-}
-
-function historyVideoPath(task: TaskmillTaskHistoryRecord): string | undefined {
-  const payload = decodePayloadObject(task.payload)
-  return readString(payload?.video_path)
-    ?? labelAfter(task.label, '字幕生成: ')
-    ?? labelAfter(task.label, '提取字幕音频: ')
-    ?? labelAfter(task.label, '识别字幕: ')
-}
-
-function historySubjectKey(task: TaskmillTaskHistoryRecord): string | undefined {
-  if (task.task_type.endsWith('subtitle-translate')) {
-    const payload = decodePayloadObject(task.payload)
-    return sourceSrtSubject(readString(payload?.source_srt_path) ?? labelAfter(task.label, '字幕翻译: ')?.split(' -> ')[0])
-  }
-  return pathWithoutExtension(historyVideoPath(task))
-}
-
-function isHistoryTask(task: TaskmillKnownTask): task is TaskmillTaskHistoryRecord {
-  return 'completed_at' in task
-}
-
-function canRerunStatus(status: string): boolean {
-  return RERUNNABLE_STATUSES.has(status)
-}
-
-function eventTone(type: string): EventTone {
-  const map: Record<string, EventTone> = {
-    Dispatched: 'accent',
-    Progress: 'accent',
-    Waiting: 'warning',
-    Completed: 'success',
-    Failed: 'danger',
-    Cancelled: 'default',
-    DeadLettered: 'danger',
-    DependencyFailed: 'danger',
-    TaskExpired: 'warning',
-    TaskUnblocked: 'accent',
-    Preempted: 'warning',
-    Superseded: 'warning',
-  }
-  return map[type] ?? 'default'
-}
-
-function eventLabel(type: string): string {
-  const map: Record<string, string> = {
-    Dispatched: '开始',
-    Progress: '进度',
-    Waiting: '等待子任务',
-    Completed: '完成',
-    Failed: '失败',
-    Preempted: '抢占',
-    Cancelled: '取消',
-    DeadLettered: '死信',
-    Superseded: '替换',
-    TaskExpired: '过期',
-    TaskUnblocked: '解除阻塞',
-    DependencyFailed: '依赖失败',
-    BatchSubmitted: '批量提交',
-    Paused: '暂停调度',
-    Resumed: '恢复调度',
-  }
-  return map[type] ?? type
-}
-
-/** 将 taskmill `SchedulerEvent` JSON 压缩为一行可读摘要 */
-function formatTaskmillExecLogSummary(event: Record<string, unknown>): string {
-  const typeStr = typeof event.type === 'string' ? event.type : '?'
-  const h = readEventHeader(event)
-  const who = h
-    ? `[#${h.task_id ?? '?'} ${(h.label || h.task_type || '').trim()}] `
-    : ''
-
-  switch (typeStr) {
-    case 'Progress': {
-      const data = event.data as Record<string, unknown> | undefined
-      const percent = clampTaskPercent(data?.percent)
-      const pct = percent == null
-        ? ''
-        : formatPercent(percent)
-      const msg = typeof data?.message === 'string' ? data.message : ''
-      return `${who}${pct} ${msg}`.trim()
-    }
-    case 'Dispatched':
-      return `${who}已派发`.trim()
-    case 'Completed':
-      return `${who}已完成`.trim()
-    case 'Failed': {
-      const data = event.data as Record<string, unknown> | undefined
-      const err = typeof data?.error === 'string' ? data.error : ''
-      const retry = data?.will_retry === true ? '（将重试）' : ''
-      return `${who}失败${retry}: ${err}`.trim()
-    }
-    case 'Preempted':
-      return `${who}被抢占`.trim()
-    case 'Cancelled':
-      return `${who}已取消`.trim()
-    case 'Waiting': {
-      const data = event.data as Record<string, unknown> | undefined
-      return `[#${String(data?.task_id ?? '?')}] 等待 ${String(data?.children_count ?? '?')} 个子任务完成`
-    }
-    case 'TaskUnblocked': {
-      const data = event.data as Record<string, unknown> | undefined
-      return `[#${String(data?.task_id ?? '?')}] 依赖已满足，重新进入等待执行`
-    }
-    case 'DependencyFailed': {
-      const data = event.data as Record<string, unknown> | undefined
-      return `[#${String(data?.task_id ?? '?')}] 依赖任务 #${String(data?.failed_dependency ?? '?')} 失败`
-    }
-    case 'TaskExpired':
-      return `${who}已过期`.trim()
-    case 'DeadLettered': {
-      const data = event.data as Record<string, unknown> | undefined
-      const err = typeof data?.error === 'string' ? data.error : ''
-      return `${who}死信: ${err}`.trim()
-    }
-    case 'Superseded': {
-      const data = event.data as Record<string, unknown> | undefined
-      const nid = data?.new_task_id
-      return `${who}被取代 -> 新任务 #${nid ?? '?'}`.trim()
-    }
-    case 'BatchSubmitted': {
-      const data = event.data as Record<string, unknown> | undefined
-      const c = data?.count
-      return `批量提交: ${String(c ?? '?')} 条`.trim()
-    }
-    case 'Paused':
-      return '调度器：全局暂停'
-    case 'Resumed':
-      return '调度器：恢复运行'
-    default:
-      return typeStr
-  }
-}
-
-function formatProcessEventSummary(event: Record<string, unknown>): { summary: string, percent?: number } {
-  const typeStr = typeof event.type === 'string' ? event.type : '?'
-  const data = asRecord(event.data)
-
-  switch (typeStr) {
-    case 'Progress': {
-      const percent = clampTaskPercent(data?.percent)
-      const message = readString(data?.message)
-      return {
-        percent: percent ?? undefined,
-        summary: [percent == null ? undefined : formatPercent(percent), message]
-          .filter(Boolean)
-          .join(' '),
-      }
-    }
-    case 'Dispatched':
-      return { summary: '开始执行' }
-    case 'Completed':
-      return { summary: '执行完成', percent: 1 }
-    case 'Failed': {
-      const retry = data?.will_retry === true ? '，稍后自动重试' : ''
-      return { summary: `执行失败${retry}: ${readString(data?.error) ?? '未知错误'}` }
-    }
-    case 'Waiting':
-      return { summary: `等待 ${String(data?.children_count ?? '?')} 个子任务完成` }
-    case 'TaskUnblocked':
-      return { summary: '依赖已满足，重新进入等待执行' }
-    case 'DependencyFailed':
-      return { summary: `依赖任务 #${String(data?.failed_dependency ?? '?')} 失败` }
-    case 'Cancelled':
-      return { summary: '任务已取消' }
-    case 'DeadLettered':
-      return { summary: `重试耗尽，进入死信: ${readString(data?.error) ?? '未知错误'}` }
-    case 'TaskExpired':
-      return { summary: '任务已过期' }
-    case 'Preempted':
-      return { summary: '被更高优先级任务抢占' }
-    case 'Superseded':
-      return { summary: `被新任务 #${String(data?.new_task_id ?? '?')} 替换` }
-    default:
-      return { summary: formatTaskmillExecLogSummary(event) }
-  }
-}
-
-function deriveStatusFromEvent(type: string, event: Record<string, unknown>, current: string): string {
-  if (TERMINAL_STATUSES.has(current) && ['Dispatched', 'Progress', 'Waiting', 'Preempted'].includes(type)) {
-    return current
-  }
-
-  switch (type) {
-    case 'Dispatched':
-    case 'Progress':
-      return 'running'
-    case 'Waiting':
-      return 'waiting'
-    case 'Completed':
-      return 'completed'
-    case 'Failed': {
-      const data = asRecord(event.data)
-      if (TERMINAL_STATUSES.has(current) && data?.will_retry === true) {
-        return current
-      }
-      return data?.will_retry === true ? 'pending' : 'failed'
-    }
-    case 'Cancelled':
-      return 'cancelled'
-    case 'DeadLettered':
-      return 'dead_letter'
-    case 'TaskExpired':
-      return 'expired'
-    case 'DependencyFailed':
-      return 'dependency_failed'
-    case 'Preempted':
-      return 'paused'
-    default:
-      return current
-  }
-}
-
-function mergeTask(
-  task: TaskmillKnownTask,
-  existing?: TaskLogGroup,
-  runtimeTaskId = task.id,
-): TaskLogGroup {
-  const isHistory = isHistoryTask(task)
-  const completedAt = isHistoryTask(task) ? task.completed_at : null
-  const identityKey = isHistory ? historyTaskKey(task.id) : activeTaskKey(task.id)
-  const parentIdentityKey = task.parent_id != null ? activeTaskKey(task.parent_id) : null
-  const existingPercent = clampTaskPercent(existing?.percent)
-  return {
-    identityKey,
-    taskId: runtimeTaskId,
-    historyRecordId: isHistory ? task.id : null,
-    taskType: task.task_type,
-    label: task.label,
-    parentIdentityKey,
-    isHistory: isHistory || existing?.isHistory === true,
-    canRerun: isHistory && canRerunStatus(task.status),
-    status: task.status,
-    createdAt: task.created_at,
-    startedAt: task.started_at,
-    completedAt,
-    durationMs: isHistoryTask(task) ? task.duration_ms : null,
-    latestAt: completedAt ?? task.started_at ?? task.created_at,
-    percent: task.status === 'completed' ? 1 : existingPercent,
-    lines: existing?.lines ?? [],
-  }
-}
-
-function mergeEstimatedProgress(
-  group: TaskLogGroup,
-  progress: TaskmillEstimatedProgress,
-): TaskLogGroup {
-  const percent = clampTaskPercent(progress.percent)
-
-  return {
-    ...group,
-    taskType: group.taskType || progress.header.task_type,
-    label: group.label || progress.header.label,
-    percent: percent ?? group.percent,
-  }
-}
-
-function buildTaskLogGroups(
-  items: TaskmillExecLogEntry[] | undefined,
-  activeItems: TaskmillTaskRecord[] | undefined,
-  historyItems: TaskmillTaskHistoryRecord[] | undefined,
-  progressItems: TaskmillEstimatedProgress[] | undefined,
-): TaskLogGroup[] {
-  const groups = new Map<string, TaskLogGroup>()
-  const historyKeys = new Map<string, string>()
-  const activeKeys = new Set<string>()
-  const eventTaskIdsByKey = new Map<string, number>()
-  const runtimeHistoryKeys = new Map<number, string>()
-  const parentHistoryKeysBySubject = new Map<string, string>()
-
-  for (const row of items ?? []) {
-    const taskId = readEventTaskId(row.event)
-    const header = readEventHeader(row.event)
-    if (taskId != null && header?.key != null) {
-      eventTaskIdsByKey.set(header.key, taskId)
-    }
-  }
-
-  for (const task of historyItems ?? []) {
-    const key = historyTaskKey(task.id)
-    const runtimeTaskId = eventTaskIdsByKey.get(task.key) ?? task.id
-    historyKeys.set(task.key, key)
-    runtimeHistoryKeys.set(runtimeTaskId, key)
-    if (task.parent_id == null && task.task_type.endsWith('video-subtitle-generate')) {
-      const subjectKey = historySubjectKey(task)
-      if (subjectKey) {
-        parentHistoryKeysBySubject.set(subjectKey, key)
-      }
-    }
-    groups.set(key, mergeTask(task, groups.get(key), runtimeTaskId))
-  }
-
-  for (const task of historyItems ?? []) {
-    if (task.parent_id == null) {
-      continue
-    }
-    const key = historyTaskKey(task.id)
-    const subjectKey = historySubjectKey(task)
-    const parentKey = runtimeHistoryKeys.get(task.parent_id)
-      ?? (subjectKey != null ? parentHistoryKeysBySubject.get(subjectKey) : undefined)
-    if (!parentKey) {
-      continue
-    }
-    const group = groups.get(key)
-    if (group) {
-      groups.set(key, { ...group, parentIdentityKey: parentKey })
-    }
-  }
-
-  for (const task of activeItems ?? []) {
-    const key = activeTaskKey(task.id)
-    activeKeys.add(key)
-    groups.set(key, mergeTask(task, groups.get(key)))
-  }
-
-  for (const [index, row] of (items ?? []).entries()) {
-    const taskId = readEventTaskId(row.event)
-    if (taskId == null) {
-      continue
-    }
-
-    const type = typeof row.event.type === 'string' ? row.event.type : '?'
-    const header = readEventHeader(row.event)
-    const activeKey = activeTaskKey(taskId)
-    const historyKey = header?.key != null ? historyKeys.get(header.key) : undefined
-    const groupKey = activeKeys.has(activeKey) ? activeKey : historyKey ?? activeKey
-    if (groupKey !== activeKey && groups.has(activeKey)) {
-      const activeGroup = groups.get(activeKey)!
-      const targetGroup = groups.get(groupKey)
-      groups.set(groupKey, {
-        ...(targetGroup ?? activeGroup),
-        latestAt: [targetGroup?.latestAt, activeGroup.latestAt].filter(Boolean).sort().at(-1) ?? activeGroup.latestAt,
-        lines: [...(targetGroup?.lines ?? []), ...activeGroup.lines],
-        percent: targetGroup?.percent ?? activeGroup.percent,
-      })
-      groups.delete(activeKey)
-    }
-    const existing = groups.get(groupKey)
-    const formatted = formatProcessEventSummary(row.event)
-    const status = deriveStatusFromEvent(type, row.event, existing?.status ?? 'pending')
-    const percent = formatted.percent ?? clampTaskPercent(existing?.percent)
-
-    const line: TaskEventLine = {
-      key: `${row.received_at}-${type}-${index}`,
-      type,
-      receivedAt: row.received_at,
-      summary: formatted.summary || eventLabel(type),
-      percent: formatted.percent,
-      tone: eventTone(type),
-    }
-
-    groups.set(groupKey, {
-      identityKey: groupKey,
-      taskId,
-      historyRecordId: existing?.historyRecordId ?? null,
-      taskType: existing?.taskType ?? header?.task_type ?? '',
-      label: existing?.label ?? header?.label ?? '',
-      parentIdentityKey: existing?.parentIdentityKey ?? null,
-      isHistory: existing?.isHistory ?? false,
-      canRerun: existing?.canRerun ?? false,
-      status,
-      createdAt: existing?.createdAt ?? null,
-      startedAt: existing?.startedAt ?? null,
-      completedAt: existing?.completedAt ?? (type === 'Completed' ? row.received_at : null),
-      durationMs: existing?.durationMs ?? null,
-      latestAt: row.received_at,
-      percent,
-      lines: [...(existing?.lines ?? []), line],
-    })
-  }
-
-  for (const progress of progressItems ?? []) {
-    const taskId = progress.header.task_id
-    const existing = groups.get(activeTaskKey(taskId))
-    if (existing) {
-      groups.set(existing.identityKey, mergeEstimatedProgress(existing, progress))
-    }
-  }
-
-  return Array.from(groups.values())
-}
-
-function terminalProgressValue(job: TaskLogGroup): number {
-  if (job.status === 'completed') {
-    return 1
-  }
-  return clampTaskPercent(job.percent) ?? 0
-}
-
-function derivePipelinePercent(root: TaskLogGroup, jobs: TaskLogGroup[], status: string): number | null {
-  if (status === 'completed') {
-    return 1
-  }
-
-  const progressJobs = jobs.length > 1
-    ? jobs.filter(job => job.identityKey !== root.identityKey)
-    : jobs
-  if (progressJobs.length === 0) {
-    return clampTaskPercent(root.percent)
-  }
-
-  const hasProgressSignal = progressJobs.some(job =>
-    job.percent != null || job.status === 'completed' || ['running', 'waiting', 'pending', 'paused', 'blocked'].includes(job.status),
-  )
-  if (!hasProgressSignal) {
-    return clampTaskPercent(root.percent)
-  }
-
-  const total = progressJobs.reduce((sum, job) => sum + terminalProgressValue(job), 0)
-  return clampTaskPercent(total / progressJobs.length)
-}
-
-function buildPipelineViews(groups: TaskLogGroup[]): PipelineView[] {
-  const byKey = new Map(groups.map(group => [group.identityKey, group]))
-  const childrenByParent = new Map<string, TaskLogGroup[]>()
-
-  const createsParentCycle = (group: TaskLogGroup): boolean => {
-    const seen = new Set<string>([group.identityKey])
-    let parentIdentityKey = group.parentIdentityKey
-    while (parentIdentityKey != null) {
-      if (seen.has(parentIdentityKey)) {
-        return true
-      }
-      seen.add(parentIdentityKey)
-      parentIdentityKey = byKey.get(parentIdentityKey)?.parentIdentityKey ?? null
-    }
-    return false
-  }
-
-  for (const group of groups) {
-    if (group.parentIdentityKey != null && byKey.has(group.parentIdentityKey) && !createsParentCycle(group)) {
-      const children = childrenByParent.get(group.parentIdentityKey) ?? []
-      children.push(group)
-      childrenByParent.set(group.parentIdentityKey, children)
-    }
-  }
-
-  const readRoot = (group: TaskLogGroup): TaskLogGroup => {
-    let current = group
-    const seen = new Set<string>()
-    while (
-      current.parentIdentityKey != null
-      && byKey.has(current.parentIdentityKey)
-      && !seen.has(current.parentIdentityKey)
-    ) {
-      seen.add(current.identityKey)
-      current = byKey.get(current.parentIdentityKey)!
-    }
-    return current
-  }
-
-  const roots = new Map<string, TaskLogGroup>()
-  for (const group of groups) {
-    const root = readRoot(group)
-    roots.set(root.identityKey, root)
-  }
-
-  const collectJobs = (root: TaskLogGroup): TaskLogGroup[] => {
-    const jobs: TaskLogGroup[] = []
-    const visited = new Set<string>()
-    const visit = (task: TaskLogGroup) => {
-      if (visited.has(task.identityKey)) {
-        return
-      }
-      visited.add(task.identityKey)
-      jobs.push(task)
-      const children = [...(childrenByParent.get(task.identityKey) ?? [])].sort(
-        (a, b) => (a.startedAt ?? a.createdAt ?? a.latestAt).localeCompare(b.startedAt ?? b.createdAt ?? b.latestAt),
-      )
-      for (const child of children) {
-        visit(child)
-      }
-    }
-    visit(root)
-    return jobs
-  }
-
-  return Array.from(roots.values())
-    .map((root) => {
-      const jobs = collectJobs(root)
-      const latestAt = jobs.reduce(
-        (latest, job) => job.latestAt > latest ? job.latestAt : latest,
-        root.latestAt,
-      )
-      const terminal = jobs.find(job =>
-        ['failed', 'dead_letter', 'dependency_failed', 'expired'].includes(job.status),
-      )
-      const status = terminal?.status
-        ?? (jobs.every(job => job.status === 'completed') ? 'completed' : root.status)
-      const percent = derivePipelinePercent(root, jobs, status)
-      const historyRecordId = jobs.find(job => job.historyRecordId != null)?.historyRecordId ?? null
-      return { root, jobs, historyRecordId, latestAt, status, percent }
-    })
-    .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
-}
-
-function matchesFilter(pipeline: PipelineView, filter: PipelineFilter): boolean {
-  switch (filter) {
-    case 'finished':
-      return pipeline.status === 'completed'
-    case 'running':
-      return ['running', 'waiting', 'pending', 'paused', 'blocked'].includes(pipeline.status)
-    case 'failed':
-      return ['failed', 'dead_letter', 'dependency_failed', 'expired'].includes(pipeline.status)
-    default:
-      return true
-  }
-}
-
-function cancellableJobOf(pipeline: PipelineView): TaskLogGroup | undefined {
-  return pipeline.jobs.find(job => CANCELLABLE_STATUSES.has(job.status))
-}
-
-function historyRecordIdOf(pipeline: PipelineView): number | null {
-  if (pipeline.historyRecordId != null) {
-    return pipeline.historyRecordId
-  }
-  if (pipeline.root.historyRecordId != null) {
-    return pipeline.root.historyRecordId
-  }
-  return null
-}
-
-function paginationItems(page: number, totalPages: number): PipelinePageItem[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const pages: PipelinePageItem[] = [1]
-  if (page > 3) {
-    pages.push('left-ellipsis')
-  }
-
-  const start = Math.max(2, page - 1)
-  const end = Math.min(totalPages - 1, page + 1)
-  for (let current = start; current <= end; current += 1) {
-    pages.push(current)
-  }
-
-  if (page < totalPages - 2) {
-    pages.push('right-ellipsis')
-  }
-  pages.push(totalPages)
-
-  return pages
-}
-
-function stageDot(task: TaskLogGroup, selected: boolean) {
-  return (
-    <span
-      className={[
-        'flex size-7 items-center justify-center rounded-full border-2',
-        selected ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface' : '',
-        taskStatusColor(task.status) === 'success'
-          ? 'border-success bg-success/15 text-success'
-          : taskStatusColor(task.status) === 'danger'
-            ? 'border-danger bg-danger/15 text-danger'
-            : taskStatusColor(task.status) === 'warning'
-              ? 'border-warning bg-warning/15 text-warning'
-              : 'border-border bg-surface-secondary text-muted',
-      ].filter(Boolean).join(' ')}
-    >
-      <Icon className={task.status === 'running' ? 'size-3.5 animate-spin' : 'size-3.5'} icon={statusIcon(task.status)} />
-    </span>
-  )
-}
-
-function PipelineStages({
-  jobs,
-  selectedJobKey,
-  onSelect,
-  compact,
-}: {
-  jobs: TaskLogGroup[]
-  selectedJobKey: string | null
-  onSelect: (key: string) => void
-  compact?: boolean
-}) {
-  if (jobs.length === 0) {
-    return <span className="text-sm text-muted">暂无子任务</span>
-  }
-
-  return (
-    <div className="flex min-w-0 items-center overflow-x-auto py-0.5">
-      {jobs.map((job, index) => (
-        <div key={job.identityKey} className="flex items-center">
-          {index > 0 && <span className={compact ? 'h-px w-4 shrink-0 bg-divider' : 'h-px w-8 shrink-0 bg-divider'} />}
-          <button
-            className="group flex shrink-0 flex-col items-center gap-1.5 text-left"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onSelect(job.identityKey)
-            }}
-          >
-            {stageDot(job, selectedJobKey === job.identityKey)}
-            {!compact && (
-              <span className="max-w-32 truncate text-xs text-muted group-hover:text-foreground" title={stageName(job)}>
-                {stageName(job)}
-              </span>
-            )}
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 interface TaskmillExecLogPanelProps {
   items: TaskmillExecLogEntry[] | undefined
   activeItems?: TaskmillTaskRecord[]
   historyItems?: TaskmillTaskHistoryRecord[]
   progressItems?: TaskmillEstimatedProgress[]
+  snapshot?: TaskmillJobSnapshot
   loading?: boolean
   onQueueChanged: () => void
   onCreateSubtitle: () => void
@@ -746,11 +76,647 @@ interface TaskmillExecLogPanelProps {
   onTranslate: () => void
 }
 
+interface PipelineListProps {
+  actionPending: boolean
+  emptyText: string
+  items: PipelineView[]
+  loading?: boolean
+  selectedKeys?: Selection
+  selectionMode?: 'multiple' | 'none'
+  onCancel: (pipeline: PipelineView) => void
+  onDelete: (pipeline: PipelineView) => void
+  onOpen: (pipeline: PipelineView) => void
+  onRerun: (pipeline: PipelineView) => void
+  onSelectionChange?: (keys: Selection) => void
+}
+
+function percentValue(percent: number | null | undefined): number {
+  return percent == null ? 0 : Math.round(percent * 1000) / 10
+}
+
+function metricValue(value: number | undefined): string {
+  return String(value ?? 0)
+}
+
+function pressureColor(value: number | undefined): 'accent' | 'warning' | 'danger' {
+  const pressure = value ?? 0
+  if (pressure >= 0.85) {
+    return 'danger'
+  }
+  if (pressure >= 0.6) {
+    return 'warning'
+  }
+  return 'accent'
+}
+
+function SchedulerMetric({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: string
+  label: string
+  value: string
+  detail: string
+}) {
+  return (
+    <Surface className="flex min-w-0 items-center gap-2 rounded-lg px-3 py-2.5" variant="secondary">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+        <Icon className="size-3.5" icon={icon} />
+      </span>
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-2">
+          <div className="truncate text-xs text-muted">{label}</div>
+          <div className="shrink-0 truncate text-base font-semibold leading-none tabular-nums text-foreground">{value}</div>
+        </div>
+        <div className="mt-0.5 truncate text-[11px] leading-4 text-muted">{detail}</div>
+      </div>
+    </Surface>
+  )
+}
+
+function SchedulerOverview({
+  snapshot,
+  activeCount,
+  failedCount,
+  onQueueChanged,
+}: {
+  snapshot?: TaskmillJobSnapshot
+  activeCount: number
+  failedCount: number
+  onQueueChanged: () => void
+}) {
+  const scheduler = snapshot?.scheduler
+  const metrics = snapshot?.metrics
+  const pressure = scheduler?.pressure ?? metrics?.pressure ?? 0
+  const running = metrics?.running ?? scheduler?.running.length ?? 0
+  const maxConcurrency = scheduler?.max_concurrency ?? metrics?.max_concurrency ?? 0
+
+  return (
+    <Surface className="grid gap-2 rounded-lg p-3 xl:grid-cols-[minmax(12rem,0.85fr)_minmax(0,2fr)_minmax(14rem,0.9fr)]" variant="default">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Chip color={scheduler?.is_paused ? 'warning' : 'success'} size="sm" variant="soft">
+            <Icon className="size-3.5" icon={scheduler?.is_paused ? 'lucide:pause' : 'lucide:activity'} />
+            {scheduler?.is_paused ? '调度已暂停' : '调度运行中'}
+          </Chip>
+        </div>
+        <div className="mt-1">
+          <TaskmillQueueControls onChanged={onQueueChanged} />
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <SchedulerMetric
+          detail={`最大并发 ${maxConcurrency}`}
+          icon="lucide:cpu"
+          label="运行槽位"
+          value={`${running}/${maxConcurrency}`}
+        />
+        <SchedulerMetric
+          detail={`活跃 Pipeline ${activeCount}`}
+          icon="lucide:list-checks"
+          label="队列积压"
+          value={metricValue(metrics?.pending ?? scheduler?.pending_count)}
+        />
+        <SchedulerMetric
+          detail={`等待 ${metricValue(metrics?.waiting ?? scheduler?.waiting_count)} / 暂停 ${metricValue(metrics?.paused ?? scheduler?.paused_count)}`}
+          icon="lucide:git-branch"
+          label="阻塞任务"
+          value={metricValue(metrics?.blocked ?? scheduler?.blocked_count)}
+        />
+        <SchedulerMetric
+          detail={`失败 Pipeline ${failedCount}`}
+          icon="lucide:history"
+          label="历史完成"
+          value={metricValue(metrics?.completed)}
+        />
+      </div>
+
+      <Surface className="flex min-w-0 flex-col gap-2 rounded-lg p-3" variant="secondary">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+              <Icon className="size-3.5" icon="lucide:gauge" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs text-muted">背压</div>
+              <div className="text-base font-semibold leading-none tabular-nums text-foreground">{formatPercent(pressure)}</div>
+            </div>
+          </div>
+          <Chip color={pressureColor(pressure)} size="sm" variant="soft">
+            {pressure >= 0.85 ? '偏高' : pressure >= 0.6 ? '升高' : '正常'}
+          </Chip>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(scheduler?.pressure_breakdown ?? []).slice(0, 3).map(([name, value]) => (
+            <Chip key={name} size="sm" variant="soft">
+              {name}
+              {' '}
+              <span className="tabular-nums">{formatPercent(value)}</span>
+            </Chip>
+          ))}
+        </div>
+      </Surface>
+    </Surface>
+  )
+}
+
+function NewTaskMenu({
+  onCreateSubtitle,
+  onScanGenerate,
+  onTranslate,
+}: {
+  onCreateSubtitle: () => void
+  onScanGenerate: () => void
+  onTranslate: () => void
+}) {
+  return (
+    <Dropdown>
+      <Button aria-label="新建任务" size="sm" variant="secondary">
+        <Icon className="size-4" icon="lucide:plus" />
+        新建
+        <Icon className="size-4" icon="lucide:chevron-down" />
+      </Button>
+      <Dropdown.Popover>
+        <Dropdown.Menu
+          onAction={(key) => {
+            if (key === 'subtitle') {
+              onCreateSubtitle()
+            }
+            else if (key === 'scan') {
+              onScanGenerate()
+            }
+            else if (key === 'translate') {
+              onTranslate()
+            }
+          }}
+        >
+          <Dropdown.Item id="subtitle" textValue="字幕生成">
+            <Icon className="size-4 text-muted" icon="lucide:captions" />
+            <Label>字幕生成</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="scan" textValue="扫描并生成">
+            <Icon className="size-4 text-muted" icon="lucide:folder-search" />
+            <Label>扫描并生成</Label>
+          </Dropdown.Item>
+          <Dropdown.Item id="translate" textValue="字幕翻译">
+            <Icon className="size-4 text-muted" icon="lucide:languages" />
+            <Label>字幕翻译</Label>
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  )
+}
+
+function PipelineProgress({
+  percent,
+  status,
+}: {
+  percent: number | null
+  status: string
+}) {
+  if (percent == null) {
+    return (
+      <div className="min-w-32">
+        <div className="mb-1 text-right text-xs tabular-nums text-muted">-</div>
+        <ProgressBar aria-label="任务进度" color="default" size="sm" value={0}>
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-w-32">
+      <div className="mb-1 text-right text-xs tabular-nums text-muted">{formatPercent(percent)}</div>
+      <ProgressBar
+        aria-label="任务进度"
+        color={status === 'completed' ? 'success' : FAILED_STATUSES.has(status) ? 'danger' : 'accent'}
+        size="sm"
+        value={percentValue(percent)}
+      >
+        <ProgressBar.Track>
+          <ProgressBar.Fill />
+        </ProgressBar.Track>
+      </ProgressBar>
+    </div>
+  )
+}
+
+function PipelineRow({
+  actionPending,
+  pipeline,
+  onCancel,
+  onDelete,
+  onOpen,
+  onRerun,
+}: {
+  actionPending: boolean
+  pipeline: PipelineView
+  onCancel: (pipeline: PipelineView) => void
+  onDelete: (pipeline: PipelineView) => void
+  onOpen: (pipeline: PipelineView) => void
+  onRerun: (pipeline: PipelineView) => void
+}) {
+  const stages = stageJobs(pipeline)
+  const currentStage = stages.find(job => ACTIVE_STATUSES.has(job.status)) ?? stages.at(-1) ?? pipeline.root
+  const title = pipelineTitle(pipeline)
+  const latestSummary = latestLineOf(currentStage)?.summary ?? latestLineOf(pipeline.root)?.summary
+  const cancellableJob = cancellableJobOf(pipeline)
+  const historyRecordId = historyRecordIdOf(pipeline)
+  const canDelete = historyRecordId != null
+  const canRerun = historyRecordId != null && (
+    pipeline.jobs.some(job => job.isHistory && job.canRerun)
+    || canRerunStatus(pipeline.status)
+  )
+
+  return (
+    <ListView.Item
+      id={pipeline.root.identityKey}
+      key={pipeline.root.identityKey}
+      textValue={title}
+      className="py-2"
+    >
+      <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
+        <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(16rem,1fr)_minmax(9rem,14rem)_minmax(8rem,10rem)_minmax(10rem,14rem)] xl:items-center">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+              <button
+                className="min-w-0 flex-1 truncate text-left text-sm font-medium text-accent"
+                title={title}
+                type="button"
+                onClick={() => onOpen(pipeline)}
+              >
+                {title}
+              </button>
+              <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
+                #
+                {pipeline.root.taskId}
+              </span>
+            </div>
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+              <span className="max-w-48 truncate">{transJobType(pipeline.root.taskType)}</span>
+              <span className="tabular-nums">
+                {pipeline.jobs.length}
+                {' '}
+                jobs
+              </span>
+              <TaskDurationMeta task={pipeline.root} />
+            </div>
+          </div>
+
+          <div className="min-w-0 text-xs text-muted">
+            <div className="flex items-center gap-1.5">
+              <Icon className="size-3.5" icon="lucide:workflow" />
+              <span className="truncate text-foreground">{stageName(currentStage)}</span>
+            </div>
+            <div className="mt-1 truncate" title={latestSummary}>
+              {latestSummary ?? groupLabel(pipelineLaneKey(pipeline))}
+            </div>
+          </div>
+
+          <PipelineProgress percent={pipeline.percent} status={pipeline.status} />
+
+          <div className="min-w-0 text-xs text-muted xl:text-right">
+            <div className="tabular-nums">{formatTaskmillTime(pipeline.latestAt)}</div>
+            <div className="mt-1 truncate">
+              {groupLabel(pipelineLaneKey(pipeline))}
+            </div>
+          </div>
+        </div>
+      </ListView.ItemContent>
+      <ListView.ItemAction aria-label="任务操作栏">
+        <Dropdown>
+          <Tooltip delay={0}>
+            <Button
+              isIconOnly
+              aria-label="任务操作"
+              isDisabled={actionPending}
+              isPending={actionPending}
+              size="sm"
+              variant="tertiary"
+              onClick={event => event.stopPropagation()}
+            >
+              <Icon className="size-4" icon="lucide:ellipsis" />
+            </Button>
+            <Tooltip.Content>任务操作</Tooltip.Content>
+          </Tooltip>
+          <Dropdown.Popover>
+            <Dropdown.Menu
+              disabledKeys={[
+                !cancellableJob ? 'cancel' : null,
+                !canRerun ? 'rerun' : null,
+                !canDelete ? 'delete' : null,
+              ].filter((key): key is string => key != null)}
+              onAction={(key) => {
+                if (key === 'cancel') {
+                  onCancel(pipeline)
+                }
+                else if (key === 'rerun') {
+                  onRerun(pipeline)
+                }
+                else if (key === 'delete') {
+                  onDelete(pipeline)
+                }
+              }}
+            >
+              <Dropdown.Item id="cancel" textValue="取消任务">
+                <Icon className="size-4 text-muted" icon="lucide:ban" />
+                <Label>取消任务</Label>
+              </Dropdown.Item>
+              <Dropdown.Item id="rerun" textValue="重新执行">
+                <Icon className="size-4 text-muted" icon="lucide:rotate-cw" />
+                <Label>重新执行</Label>
+              </Dropdown.Item>
+              <Dropdown.Item id="delete" textValue="删除任务记录" variant="danger">
+                <Icon className="size-4 text-danger" icon="lucide:trash-2" />
+                <Label>删除记录</Label>
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      </ListView.ItemAction>
+    </ListView.Item>
+  )
+}
+
+function PipelineList({
+  actionPending,
+  emptyText,
+  items,
+  loading,
+  selectedKeys,
+  selectionMode = 'none',
+  onCancel,
+  onDelete,
+  onOpen,
+  onRerun,
+  onSelectionChange,
+}: PipelineListProps) {
+  return (
+    <ListView
+      aria-label="Taskmill Pipeline 列表"
+      className="min-h-full"
+      items={items}
+      selectedKeys={selectedKeys}
+      selectionMode={selectionMode}
+      variant="secondary"
+      renderEmptyState={() => (
+        <div className="flex items-center justify-center py-8 text-sm text-muted">
+          {loading
+            ? (
+                <div className="flex items-center gap-2">
+                  <Spinner size="sm" />
+                  加载中
+                </div>
+              )
+            : emptyText}
+        </div>
+      )}
+      onAction={(key) => {
+        const pipeline = items.find(item => item.root.identityKey === String(key))
+        if (pipeline) {
+          onOpen(pipeline)
+        }
+      }}
+      onSelectionChange={onSelectionChange}
+    >
+      {pipeline => (
+        <PipelineRow
+          actionPending={actionPending}
+          pipeline={pipeline}
+          onCancel={onCancel}
+          onDelete={onDelete}
+          onOpen={onOpen}
+          onRerun={onRerun}
+        />
+      )}
+    </ListView>
+  )
+}
+
+function PipelinePager({
+  pageSize,
+  pageState,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  pageSize: number
+  pageState: ReturnType<typeof pagePipelines>
+  onPageChange: (page: number) => void
+  onPageSizeChange: (pageSize: number) => void
+}) {
+  return (
+    <div className="flex shrink-0 flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="tabular-nums">
+          显示
+          {' '}
+          {pageState.pageStart}
+          -
+          {pageState.pageEnd}
+          {' '}
+          / 共
+          {' '}
+          {pageState.total}
+          {' '}
+          个 Pipeline
+        </span>
+        <Select
+          className="w-24"
+          value={String(pageSize)}
+          variant="secondary"
+          onChange={(value) => {
+            const nextPageSize = Number(value)
+            if (Number.isFinite(nextPageSize)) {
+              onPageSizeChange(nextPageSize)
+            }
+          }}
+        >
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              {PIPELINE_PAGE_SIZE_OPTIONS.map(size => (
+                <ListBox.Item key={size} id={String(size)} textValue={`${size} / 页`}>
+                  {size}
+                  {' '}
+                  / 页
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </Select.Popover>
+        </Select>
+      </div>
+      <Pagination className="w-full justify-end md:w-auto" size="sm">
+        <Pagination.Content>
+          <Pagination.Item>
+            <Pagination.Previous isDisabled={pageState.currentPage <= 1} onPress={() => onPageChange(Math.max(1, pageState.currentPage - 1))}>
+              <Pagination.PreviousIcon />
+              <span>上一页</span>
+            </Pagination.Previous>
+          </Pagination.Item>
+          {pageState.pageItems.map(item => typeof item === 'string'
+            ? (
+                <Pagination.Item key={item}>
+                  <Pagination.Ellipsis />
+                </Pagination.Item>
+              )
+            : (
+                <Pagination.Item key={item}>
+                  <Pagination.Link isActive={item === pageState.currentPage} onPress={() => onPageChange(item)}>
+                    {item}
+                  </Pagination.Link>
+                </Pagination.Item>
+              ))}
+          <Pagination.Item>
+            <Pagination.Next isDisabled={pageState.currentPage >= pageState.totalPages} onPress={() => onPageChange(Math.min(pageState.totalPages, pageState.currentPage + 1))}>
+              <span>下一页</span>
+              <Pagination.NextIcon />
+            </Pagination.Next>
+          </Pagination.Item>
+        </Pagination.Content>
+      </Pagination>
+    </div>
+  )
+}
+
+function GroupLaneCard({
+  lane,
+  onOpen,
+}: {
+  lane: TaskmillGroupLane
+  onOpen: (pipeline: PipelineView) => void
+}) {
+  const slots = lane.allocatedSlots ?? lane.cap ?? Math.max(lane.running + lane.pending, 1)
+  const slotPercent = slots > 0 ? Math.min(100, (lane.running / slots) * 100) : 0
+
+  return (
+    <Surface className="flex min-w-0 flex-col gap-4 rounded-lg p-4" variant="secondary">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
+              <Icon className="size-4" icon={lane.icon} />
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-foreground">{lane.label}</div>
+              <div className="truncate text-xs text-muted">{lane.key}</div>
+            </div>
+          </div>
+        </div>
+        {lane.pausedTaskCount > 0
+          ? (
+              <Chip color="warning" size="sm" variant="soft">
+                暂停
+                {' '}
+                {lane.pausedTaskCount}
+              </Chip>
+            )
+          : null}
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between text-xs text-muted">
+          <span>槽位</span>
+          <span className="tabular-nums">
+            {lane.running}
+            /
+            {slots}
+          </span>
+        </div>
+        <ProgressBar aria-label={`${lane.label} 槽位占用`} color={slotPercent >= 90 ? 'warning' : 'accent'} size="sm" value={slotPercent}>
+          <ProgressBar.Track>
+            <ProgressBar.Fill />
+          </ProgressBar.Track>
+        </ProgressBar>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-lg bg-surface px-3 py-2">
+          <div className="text-muted">运行</div>
+          <div className="mt-1 text-base font-semibold tabular-nums text-foreground">{lane.running}</div>
+        </div>
+        <div className="rounded-lg bg-surface px-3 py-2">
+          <div className="text-muted">等待</div>
+          <div className="mt-1 text-base font-semibold tabular-nums text-foreground">{lane.pending}</div>
+        </div>
+        <div className="rounded-lg bg-surface px-3 py-2">
+          <div className="text-muted">Pipeline</div>
+          <div className="mt-1 text-base font-semibold tabular-nums text-foreground">{lane.pipelines.length}</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {lane.cap != null && (
+          <Chip size="sm" variant="soft">
+            cap
+            {lane.cap}
+          </Chip>
+        )}
+        {lane.minSlots != null && (
+          <Chip size="sm" variant="soft">
+            min
+            {lane.minSlots}
+          </Chip>
+        )}
+        {lane.weight != null && (
+          <Chip size="sm" variant="soft">
+            weight
+            {lane.weight}
+          </Chip>
+        )}
+        {lane.rateLimit && (
+          <Chip size="sm" variant="soft">
+            tokens
+            {' '}
+            <span className="tabular-nums">{Math.round(lane.rateLimit.availableTokens)}</span>
+          </Chip>
+        )}
+      </div>
+
+      <div className="min-h-16">
+        {lane.pipelines.length === 0
+          ? <div className="py-3 text-sm text-muted">当前无活跃 Pipeline</div>
+          : (
+              <div className="flex flex-col gap-2">
+                {lane.pipelines.slice(0, 3).map((pipeline) => {
+                  const title = pipelineTitle(pipeline)
+                  return (
+                    <button
+                      key={pipeline.root.identityKey}
+                      className="flex min-w-0 items-center gap-2 rounded-lg bg-surface px-3 py-2 text-left"
+                      type="button"
+                      onClick={() => onOpen(pipeline)}
+                    >
+                      <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{title}</span>
+                      <span className="text-xs tabular-nums text-muted">{pipeline.percent == null ? '-' : formatPercent(pipeline.percent)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+      </div>
+    </Surface>
+  )
+}
+
 export function TaskmillExecLogPanel({
   items,
   activeItems,
   historyItems,
   progressItems,
+  snapshot,
   loading,
   onQueueChanged,
   onCreateSubtitle,
@@ -759,9 +725,11 @@ export function TaskmillExecLogPanel({
 }: TaskmillExecLogPanelProps) {
   const message = useAppToast()
   const confirm = useConfirmDialog()
-  const [filter, setFilter] = useState<PipelineFilter>('all')
+  const [viewMode, setViewMode] = useState<TaskmillViewMode>('queue')
+  const [filter, setFilter] = useState<PipelineFilter>('active')
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
+  const [queuePage, setQueuePage] = useState(1)
+  const [historyPage, setHistoryPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(PIPELINE_PAGE_SIZE_OPTIONS[0])
   const [detailPipelineKey, setDetailPipelineKey] = useState<string | null>(null)
   const [selectedJobKey, setSelectedJobKey] = useState<string | null>(null)
@@ -838,40 +806,32 @@ export function TaskmillExecLogPanel({
     [activeItems, historyItems, items, progressItems],
   )
   const pipelines = useMemo(() => buildPipelineViews(groups), [groups])
-  const filteredPipelines = useMemo(() => {
-    const keyword = q.trim().toLowerCase()
-    return pipelines.filter((pipeline) => {
-      if (!matchesFilter(pipeline, filter)) {
-        return false
-      }
-      if (!keyword) {
-        return true
-      }
-      const haystack = [
-        pipeline.root.taskId,
-        pipeline.root.label,
-        pipeline.root.taskType,
-        ...pipeline.jobs.flatMap(job => [job.taskId, job.label, job.taskType]),
-      ].join(' ').toLowerCase()
-      return haystack.includes(keyword)
-    })
-  }, [filter, pipelines, q])
-  const totalPipelines = filteredPipelines.length
-  const totalPages = Math.max(1, Math.ceil(totalPipelines / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const pageItems = useMemo(
-    () => paginationItems(currentPage, totalPages),
-    [currentPage, totalPages],
+  const keyword = q.trim().toLowerCase()
+  const activePipelines = useMemo(
+    () => pipelines.filter(pipeline => ACTIVE_STATUSES.has(pipeline.status) && pipelineMatchesKeyword(pipeline, keyword)),
+    [keyword, pipelines],
   )
-  const pagedPipelines = useMemo(
-    () => filteredPipelines.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [currentPage, filteredPipelines, pageSize],
+  const historyPipelines = useMemo(
+    () => pipelines.filter(pipeline => !ACTIVE_STATUSES.has(pipeline.status) && matchesFilter(pipeline, filter) && pipelineMatchesKeyword(pipeline, keyword)),
+    [filter, keyword, pipelines],
+  )
+  const groupLanes = useMemo(
+    () => buildTaskmillGroupLanes(snapshot, activeItems, pipelines),
+    [activeItems, pipelines, snapshot],
+  )
+  const queuePageState = useMemo(
+    () => pagePipelines(activePipelines, queuePage, pageSize),
+    [activePipelines, pageSize, queuePage],
+  )
+  const historyPageState = useMemo(
+    () => pagePipelines(historyPipelines, historyPage, pageSize),
+    [historyPage, historyPipelines, pageSize],
   )
   const selectedPipelines = useMemo(() => {
     return selectedPipelineKeys === 'all'
-      ? pagedPipelines
-      : filteredPipelines.filter(pipeline => selectedPipelineKeys.has(pipeline.root.identityKey))
-  }, [filteredPipelines, pagedPipelines, selectedPipelineKeys])
+      ? historyPageState.rows
+      : historyPipelines.filter(pipeline => selectedPipelineKeys.has(pipeline.root.identityKey))
+  }, [historyPageState.rows, historyPipelines, selectedPipelineKeys])
   const selectedPipelineCount = selectedPipelines.length
   const selectedHistoryIds = useMemo(() => {
     return selectedPipelines
@@ -879,8 +839,6 @@ export function TaskmillExecLogPanel({
       .filter((id): id is number => id != null)
   }, [selectedPipelines])
   const selectedHistoryCount = selectedHistoryIds.length
-  const pageStart = totalPipelines === 0 ? 0 : (currentPage - 1) * pageSize + 1
-  const pageEnd = Math.min(currentPage * pageSize, totalPipelines)
 
   const detailPipeline = useMemo(
     () => pipelines.find(pipeline => pipeline.root.identityKey === detailPipelineKey),
@@ -890,42 +848,11 @@ export function TaskmillExecLogPanel({
   const selectedJob = detailStages.find(job => job.identityKey === selectedJobKey)
     ?? detailStages[0]
     ?? detailPipeline?.root
+
   function openPipelineDetail(pipeline: PipelineView, jobKey?: string) {
     const stages = stageJobs(pipeline)
     setDetailPipelineKey(pipeline.root.identityKey)
     setSelectedJobKey(jobKey ?? (stages[0] ?? pipeline.root).identityKey)
-  }
-
-  function handleListSelectionClickCapture(event: MouseEvent<HTMLElement>) {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-
-    const selectionCell = target.closest('[data-slot="list-view-selection-cell"]')
-    if (!selectionCell) {
-      return
-    }
-
-    const item = selectionCell.closest('[data-slot="list-view-item"]')
-    const key = item?.getAttribute('data-key')
-    if (!key) {
-      return
-    }
-
-    window.setTimeout(() => {
-      const input = selectionCell.querySelector<HTMLInputElement>('input[type="checkbox"]')
-      setSelectedPipelineKeys((current) => {
-        const next = current === 'all' ? new Set<string>() : new Set(current)
-        if (input?.checked) {
-          next.add(key)
-        }
-        else {
-          next.delete(key)
-        }
-        return next
-      })
-    })
   }
 
   function confirmCancelPipeline(pipeline: PipelineView) {
@@ -988,256 +915,185 @@ export function TaskmillExecLogPanel({
   }
 
   const filterCounts: Record<PipelineFilter, number> = {
-    all: pipelines.length,
-    running: pipelines.filter(pipeline => matchesFilter(pipeline, 'running')).length,
-    finished: pipelines.filter(pipeline => matchesFilter(pipeline, 'finished')).length,
-    failed: pipelines.filter(pipeline => matchesFilter(pipeline, 'failed')).length,
+    all: pipelines.filter(pipeline => !ACTIVE_STATUSES.has(pipeline.status)).length,
+    active: activePipelines.length,
+    finished: pipelines.filter(pipeline => pipeline.status === 'completed').length,
+    failed: pipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length,
   }
   const filterTabs: { key: PipelineFilter, label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'running', label: '运行中' },
+    { key: 'all', label: '全部历史' },
     { key: 'finished', label: '已完成' },
     { key: 'failed', label: '失败' },
   ]
 
+  const activeCount = pipelines.filter(pipeline => ACTIVE_STATUSES.has(pipeline.status)).length
+  const failedCount = pipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length
+
   return (
     <>
-      <div className="grid min-h-0 w-full flex-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-            <Select
-              aria-label="任务状态筛选"
-              className="w-full sm:w-40 sm:shrink-0"
-              value={filter}
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4">
+        <SchedulerOverview
+          activeCount={activeCount}
+          failedCount={failedCount}
+          snapshot={snapshot}
+          onQueueChanged={onQueueChanged}
+        />
+
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <Tabs
+              selectedKey={viewMode}
               variant="secondary"
-              onChange={(value) => {
-                if (typeof value !== 'string') {
-                  return
-                }
-                setFilter(value as PipelineFilter)
-                setPage(1)
-              }}
+              onSelectionChange={(key: Key) => setViewMode(String(key) as TaskmillViewMode)}
             >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {filterTabs.map(tab => (
-                    <ListBox.Item key={tab.key} id={tab.key} textValue={`${tab.label} ${filterCounts[tab.key]}`}>
-                      <span>{tab.label}</span>
-                      <span className="ml-auto text-xs tabular-nums text-muted">{filterCounts[tab.key]}</span>
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-            <div className="relative min-w-0 flex-1">
-              <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
-              <Input
-                className="w-full pl-9"
-                value={q}
-                placeholder="搜索任务"
-                variant="secondary"
-                onChange={(event) => {
-                  setQ(event.target.value)
-                  setPage(1)
-                }}
+              <Tabs.ListContainer>
+                <Tabs.List aria-label="任务管理视图">
+                  <Tabs.Tab id="queue">
+                    队列
+                    <Chip className="ml-2" size="sm" variant="soft">{activePipelines.length}</Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab id="groups" className="w-64">
+                    资源组
+                    <Chip className="ml-2" size="sm" variant="soft">{groupLanes.length}</Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                  <Tabs.Tab id="history">
+                    历史
+                    <Chip className="ml-2" size="sm" variant="soft">{filterCounts.all}</Chip>
+                    <Tabs.Indicator />
+                  </Tabs.Tab>
+                </Tabs.List>
+              </Tabs.ListContainer>
+            </Tabs>
+
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row lg:max-w-2xl">
+              {viewMode === 'history' && (
+                <Select
+                  aria-label="历史状态筛选"
+                  className="w-full sm:w-40 sm:shrink-0"
+                  value={filter}
+                  variant="secondary"
+                  onChange={(value) => {
+                    if (typeof value !== 'string') {
+                      return
+                    }
+                    setFilter(value as PipelineFilter)
+                    setHistoryPage(1)
+                  }}
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {filterTabs.map(tab => (
+                        <ListBox.Item key={tab.key} id={tab.key} textValue={`${tab.label} ${filterCounts[tab.key]}`}>
+                          <span>{tab.label}</span>
+                          <span className="ml-auto text-xs tabular-nums text-muted">{filterCounts[tab.key]}</span>
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              )}
+              <div className="relative min-w-0 flex-1">
+                <Icon className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted" icon="lucide:search" />
+                <Input
+                  className="w-full pl-9"
+                  value={q}
+                  placeholder="搜索任务"
+                  variant="secondary"
+                  onChange={(event) => {
+                    setQ(event.target.value)
+                    setQueuePage(1)
+                    setHistoryPage(1)
+                  }}
+                />
+              </div>
+              <NewTaskMenu
+                onCreateSubtitle={onCreateSubtitle}
+                onScanGenerate={onScanGenerate}
+                onTranslate={onTranslate}
               />
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-            <TaskmillQueueControls onChanged={onQueueChanged} />
-            <Dropdown>
-              <Button aria-label="新建" size="sm" variant="secondary">
-                <Icon className="size-4" icon="lucide:plus" />
-                新建
-                <Icon className="size-4" icon="lucide:chevron-down" />
-              </Button>
-              <Dropdown.Popover>
-                <Dropdown.Menu
-                  onAction={(key) => {
-                    if (key === 'subtitle') {
-                      onCreateSubtitle()
-                    }
-                    else if (key === 'scan') {
-                      onScanGenerate()
-                    }
-                    else if (key === 'translate') {
-                      onTranslate()
-                    }
-                  }}
-                >
-                  <Dropdown.Item id="subtitle" textValue="字幕生成">
-                    <Icon className="size-4 text-muted" icon="lucide:captions" />
-                    <Label>字幕生成</Label>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="scan" textValue="扫描并生成">
-                    <Icon className="size-4 text-muted" icon="lucide:folder-search" />
-                    <Label>扫描并生成</Label>
-                  </Dropdown.Item>
-                  <Dropdown.Item id="translate" textValue="字幕翻译">
-                    <Icon className="size-4 text-muted" icon="lucide:languages" />
-                    <Label>字幕翻译</Label>
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-          </div>
-        </div>
 
-        <div className="min-h-0 overflow-y-auto" onClickCapture={handleListSelectionClickCapture}>
-          <ListView
-            aria-label="任务执行过程 Pipeline 列表"
-            className="min-h-full"
-            items={pagedPipelines}
-            selectedKeys={selectedPipelineKeys}
-            selectionMode="multiple"
-            variant="secondary"
-            renderEmptyState={() => (
-              <div className="flex items-center justify-center py-8 text-sm text-muted">
-                {loading
-                  ? (
-                      <div className="flex items-center gap-2">
-                        <Spinner size="sm" />
-                        加载中
-                      </div>
-                    )
-                  : '暂无 pipeline；提交任务并恢复调度后会显示执行过程。'}
+          {viewMode === 'queue' && (
+            <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3">
+              <div className="min-h-0 overflow-y-auto">
+                <PipelineList
+                  actionPending={actionPending}
+                  emptyText="暂无活跃 Pipeline；提交任务并恢复调度后会显示执行过程。"
+                  items={queuePageState.rows}
+                  loading={loading}
+                  onCancel={confirmCancelPipeline}
+                  onDelete={confirmDeletePipeline}
+                  onOpen={openPipelineDetail}
+                  onRerun={confirmRerunPipeline}
+                />
               </div>
-            )}
-            onAction={(key) => {
-              const pipeline = pagedPipelines.find(item => item.root.identityKey === String(key))
-              if (pipeline) {
-                openPipelineDetail(pipeline)
-              }
-            }}
-            onSelectionChange={setSelectedPipelineKeys}
-          >
-            {(pipeline) => {
-              const stages = stageJobs(pipeline)
-              const title = pipelineTitle(pipeline)
-              const latestSummary = latestLineOf(pipeline.root)?.summary
-              const cancellableJob = cancellableJobOf(pipeline)
-              const historyRecordId = historyRecordIdOf(pipeline)
-              const canDelete = historyRecordId != null
-              const canRerun = historyRecordId != null && (
-                pipeline.jobs.some(job => job.isHistory && job.canRerun)
-                || canRerunStatus(pipeline.status)
-              )
+              <PipelinePager
+                pageSize={pageSize}
+                pageState={queuePageState}
+                onPageChange={setQueuePage}
+                onPageSizeChange={(next) => {
+                  setPageSize(next)
+                  setQueuePage(1)
+                  setHistoryPage(1)
+                }}
+              />
+            </div>
+          )}
 
-              return (
-                <ListView.Item
-                  id={pipeline.root.identityKey}
-                  key={pipeline.root.identityKey}
-                  textValue={title}
-                  className="flex-nowrap items-center py-1.5"
-                >
-                  <ListView.ItemContent className="min-w-0 flex-1 basis-0 items-center">
-                    <div className="grid min-w-0 flex-1 gap-3 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,11rem)_minmax(10rem,14rem)_minmax(12rem,16rem)] lg:items-center">
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <StatusChip task={{ ...pipeline.root, status: pipeline.status, percent: pipeline.percent }} />
-                          <button
-                            className="min-w-0 flex-1 truncate text-left text-sm font-medium text-accent hover:underline"
-                            title={title}
-                            type="button"
-                            onClick={() => openPipelineDetail(pipeline)}
-                          >
-                            {title}
-                          </button>
-                          <span className="shrink-0 font-mono text-xs tabular-nums text-muted">
-                            #
-                            {pipeline.root.taskId}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                          <span className="max-w-56 truncate">{transJobType(pipeline.root.taskType)}</span>
-                          <span className="tabular-nums">
-                            {pipeline.jobs.length}
-                            {' '}
-                            jobs
-                          </span>
-                          <TaskDurationMeta task={pipeline.root} />
-                        </div>
-                      </div>
-                      <TaskProgressCircle className="lg:justify-self-start" percent={pipeline.percent} />
-                      <div className="min-w-0 lg:justify-self-center">
-                        <PipelineStages
-                          compact
-                          jobs={stages}
-                          selectedJobKey={null}
-                          onSelect={key => openPipelineDetail(pipeline, key)}
-                        />
-                      </div>
-                      <div className="min-w-0 text-xs text-muted lg:text-right">
-                        <div className="tabular-nums">{formatTaskmillTime(pipeline.latestAt)}</div>
-                        <div className="mt-0.5 truncate text-xs" title={latestSummary}>
-                          {latestSummary ?? '暂无事件'}
-                        </div>
-                      </div>
-                    </div>
-                  </ListView.ItemContent>
-                  <ListView.ItemAction aria-label="任务操作栏">
-                    <Dropdown>
-                      <Tooltip delay={0}>
-                        <Button
-                          isIconOnly
-                          aria-label="任务操作"
-                          isDisabled={actionPending}
-                          isPending={actionPending}
-                          size="sm"
-                          variant="tertiary"
-                          onClick={event => event.stopPropagation()}
-                        >
-                          <Icon className="size-4" icon="lucide:ellipsis" />
-                        </Button>
-                        <Tooltip.Content>任务操作</Tooltip.Content>
-                      </Tooltip>
-                      <Dropdown.Popover>
-                        <Dropdown.Menu
-                          disabledKeys={[
-                            !cancellableJob ? 'cancel' : null,
-                            !canRerun ? 'rerun' : null,
-                            !canDelete ? 'delete' : null,
-                          ].filter((key): key is string => key != null)}
-                          onAction={(key) => {
-                            if (key === 'cancel') {
-                              confirmCancelPipeline(pipeline)
-                            }
-                            else if (key === 'rerun') {
-                              confirmRerunPipeline(pipeline)
-                            }
-                            else if (key === 'delete') {
-                              confirmDeletePipeline(pipeline)
-                            }
-                          }}
-                        >
-                          <Dropdown.Item id="cancel" textValue="取消任务">
-                            <Icon className="size-4 text-muted" icon="lucide:ban" />
-                            <Label>取消任务</Label>
-                          </Dropdown.Item>
-                          <Dropdown.Item id="rerun" textValue="重新执行">
-                            <Icon className="size-4 text-muted" icon="lucide:rotate-cw" />
-                            <Label>重新执行</Label>
-                          </Dropdown.Item>
-                          <Dropdown.Item id="delete" textValue="删除任务记录" variant="danger">
-                            <Icon className="size-4 text-danger" icon="lucide:trash-2" />
-                            <Label>删除记录</Label>
-                          </Dropdown.Item>
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                  </ListView.ItemAction>
-                </ListView.Item>
-              )
-            }}
-          </ListView>
+          {viewMode === 'groups' && (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                {groupLanes.map(lane => (
+                  <GroupLaneCard
+                    key={lane.key}
+                    lane={lane}
+                    onOpen={openPipelineDetail}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'history' && (
+            <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto] gap-3">
+              <div className="min-h-0 overflow-y-auto">
+                <PipelineList
+                  actionPending={actionPending}
+                  emptyText="暂无历史任务记录"
+                  items={historyPageState.rows}
+                  loading={loading}
+                  selectedKeys={selectedPipelineKeys}
+                  selectionMode="multiple"
+                  onCancel={confirmCancelPipeline}
+                  onDelete={confirmDeletePipeline}
+                  onOpen={openPipelineDetail}
+                  onRerun={confirmRerunPipeline}
+                  onSelectionChange={setSelectedPipelineKeys}
+                />
+              </div>
+              <PipelinePager
+                pageSize={pageSize}
+                pageState={historyPageState}
+                onPageChange={setHistoryPage}
+                onPageSizeChange={(next) => {
+                  setPageSize(next)
+                  setQueuePage(1)
+                  setHistoryPage(1)
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        <ActionBar aria-label="批量任务操作" isOpen={selectedPipelineCount > 0}>
+        <ActionBar aria-label="批量任务操作" isOpen={viewMode === 'history' && selectedPipelineCount > 0}>
           <ActionBar.Prefix>
             <Chip className="shrink-0 tabular-nums" size="sm">
               已选
@@ -1277,82 +1133,6 @@ export function TaskmillExecLogPanel({
             </Tooltip>
           </ActionBar.Suffix>
         </ActionBar>
-
-        <div className="flex shrink-0 flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="tabular-nums">
-              显示
-              {' '}
-              {pageStart}
-              -
-              {pageEnd}
-              {' '}
-              / 共
-              {' '}
-              {totalPipelines}
-              {' '}
-              个 Pipeline
-            </span>
-            <Select
-              className="w-24"
-              value={String(pageSize)}
-              variant="secondary"
-              onChange={(value) => {
-                const nextPageSize = Number(value)
-                if (Number.isFinite(nextPageSize)) {
-                  setPageSize(nextPageSize)
-                  setPage(1)
-                }
-              }}
-            >
-              <Select.Trigger>
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  {PIPELINE_PAGE_SIZE_OPTIONS.map(size => (
-                    <ListBox.Item key={size} id={String(size)} textValue={`${size} / 页`}>
-                      {size}
-                      {' '}
-                      / 页
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          </div>
-          <Pagination className="w-full justify-end md:w-auto" size="sm">
-            <Pagination.Content>
-              <Pagination.Item>
-                <Pagination.Previous isDisabled={currentPage <= 1} onPress={() => setPage(prev => Math.max(1, prev - 1))}>
-                  <Pagination.PreviousIcon />
-                  <span>上一页</span>
-                </Pagination.Previous>
-              </Pagination.Item>
-              {pageItems.map(item => typeof item === 'string'
-                ? (
-                    <Pagination.Item key={item}>
-                      <Pagination.Ellipsis />
-                    </Pagination.Item>
-                  )
-                : (
-                    <Pagination.Item key={item}>
-                      <Pagination.Link isActive={item === currentPage} onPress={() => setPage(item)}>
-                        {item}
-                      </Pagination.Link>
-                    </Pagination.Item>
-                  ))}
-              <Pagination.Item>
-                <Pagination.Next isDisabled={currentPage >= totalPages} onPress={() => setPage(prev => Math.min(totalPages, prev + 1))}>
-                  <span>下一页</span>
-                  <Pagination.NextIcon />
-                </Pagination.Next>
-              </Pagination.Item>
-            </Pagination.Content>
-          </Pagination>
-        </div>
       </div>
 
       <TaskmillPipelineDetailDrawer

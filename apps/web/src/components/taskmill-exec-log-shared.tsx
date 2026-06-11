@@ -20,8 +20,14 @@ export interface TaskLogGroup {
   taskId: number
   historyRecordId: number | null
   taskType: string
+  taskKey: string
   label: string
   parentIdentityKey: string | null
+  groupKey: string | null
+  priority: number | null
+  retryCount: number | null
+  lastError: string | null
+  dependencies: number[]
   isHistory: boolean
   canRerun: boolean
   status: string
