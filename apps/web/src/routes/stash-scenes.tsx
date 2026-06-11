@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
-import { listScenesStash, readTextFs, searchEntitiesStash } from '@/api'
+import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash, readTextFs, searchEntitiesStash } from '@/api'
 import { StashSceneCover } from '@/components/stash-scene-cover'
 import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { SubtitleWebModal } from '@/components/subtitle-web-modal'
@@ -183,6 +183,31 @@ function isStashSort(value: unknown): value is StashSort {
   return typeof value === 'string' && STASH_SORT_OPTIONS.some(option => option.value === value)
 }
 
+function buildStashSceneUrl(
+  baseUrl: string | undefined,
+  row: StashSceneRow,
+  rows: StashSceneRow[],
+  viewState: StashScenesViewState,
+): string | undefined {
+  const base = baseUrl?.trim().replace(/\/+$/, '')
+  if (!base)
+    return undefined
+
+  const params = new URLSearchParams()
+  for (const item of rows) {
+    params.append('qs', String(item.id))
+  }
+  params.set('qsort', viewState.sort)
+  params.set('qsortd', viewState.direction)
+  params.set('qfp', String(viewState.page))
+  if (viewState.q.trim()) {
+    params.set('qfq', viewState.q.trim())
+  }
+
+  const query = params.toString()
+  return `${base}/scenes/${encodeURIComponent(String(row.id))}${query ? `?${query}` : ''}`
+}
+
 function PageComponent() {
   const navigate = useNavigate()
   const [viewState, setViewState] = useState(loadStashScenesViewState)
@@ -197,6 +222,10 @@ function PageComponent() {
 
   const sceneFilter = useMemo(() => buildStashSceneFilter(stashFilterValues), [stashFilterValues])
   const activeFilterCount = useMemo(() => countActiveStashFilters(stashFilterValues), [stashFilterValues])
+  const appConfigQuery = useQuery({
+    queryKey: getGetAppConfigSettingsQueryKey(),
+    queryFn: getAppConfigSettings,
+  })
 
   useEffect(() => {
     saveStashScenesViewState(viewState)
@@ -218,6 +247,7 @@ function PageComponent() {
 
   const total = Number(scenesQuery.data?.total ?? 0)
   const scenes = useMemo(() => scenesQuery.data?.data ?? [], [scenesQuery.data?.data])
+  const stashBaseUrl = appConfigQuery.data?.stash_config?.base_url
   const selectedRows = useMemo(
     () => scenes.filter(row => selectedSceneKeys.has(String(row.id))),
     [scenes, selectedSceneKeys],
@@ -396,6 +426,8 @@ function PageComponent() {
           loading={scenesQuery.isFetching}
           screenshotShow={screenshotShow}
           selectedKeys={selectedSceneKeys}
+          stashBaseUrl={stashBaseUrl}
+          viewState={viewState}
           onSelectedChange={setSceneSelected}
           onPlay={(videoPath) => {
             void navigate({
@@ -499,6 +531,8 @@ interface StashSceneCardGridProps {
   loading?: boolean
   screenshotShow: boolean
   selectedKeys: Set<string>
+  stashBaseUrl?: string
+  viewState: StashScenesViewState
   onSelectedChange: (row: StashSceneRow, selected: boolean) => void
   onPlay: (videoPath: string) => void
   onCreateSubtitle: (videoPath: string) => void
@@ -510,6 +544,8 @@ function StashSceneCardGrid({
   loading,
   screenshotShow,
   selectedKeys,
+  stashBaseUrl,
+  viewState,
   onSelectedChange,
   onPlay,
   onCreateSubtitle,
@@ -537,13 +573,16 @@ function StashSceneCardGrid({
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
       {rows.map(row => (
         <StashSceneCard
           key={row.id}
           row={row}
+          rows={rows}
           screenshotShow={screenshotShow}
           selected={selectedKeys.has(String(row.id))}
+          stashBaseUrl={stashBaseUrl}
+          viewState={viewState}
           onSelectedChange={selected => onSelectedChange(row, selected)}
           onPlay={onPlay}
           onCreateSubtitle={onCreateSubtitle}
@@ -556,8 +595,11 @@ function StashSceneCardGrid({
 
 interface StashSceneCardProps {
   row: StashSceneRow
+  rows: StashSceneRow[]
   screenshotShow: boolean
   selected: boolean
+  stashBaseUrl?: string
+  viewState: StashScenesViewState
   onSelectedChange: (selected: boolean) => void
   onPlay: (videoPath: string) => void
   onCreateSubtitle: (videoPath: string) => void
@@ -566,8 +608,11 @@ interface StashSceneCardProps {
 
 function StashSceneCard({
   row,
+  rows,
   screenshotShow,
   selected,
+  stashBaseUrl,
+  viewState,
   onSelectedChange,
   onPlay,
   onCreateSubtitle,
@@ -586,6 +631,7 @@ function StashSceneCard({
   const durationText = formatDurationSeconds(firstFile?.duration)
   const subtitles = row.captions ?? []
   const subtitleCount = subtitles.length
+  const stashSceneUrl = buildStashSceneUrl(stashBaseUrl, row, rows, viewState)
 
   return (
     <Card className={`gap-0 overflow-hidden p-0 [contain-intrinsic-size:220px] [content-visibility:auto] ${selected ? 'ring-2 ring-accent/60' : ''}`}>
@@ -607,9 +653,27 @@ function StashSceneCard({
           )}
       <Card.Header className="flex-row items-start justify-between gap-2 p-3 pt-2">
         <div className="min-w-0">
-          <Card.Title className="truncate text-base" title={fullPath}>
-            {displayTitle}
-          </Card.Title>
+          {stashSceneUrl
+            ? (
+                <Card.Title
+                  className="truncate text-base"
+                  title={fullPath}
+                >
+                  <a
+                    className="truncate text-accent hover:underline"
+                    href={stashSceneUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {displayTitle}
+                  </a>
+                </Card.Title>
+              )
+            : (
+                <Card.Title className="truncate text-base" title={fullPath}>
+                  {displayTitle}
+                </Card.Title>
+              )}
           <Card.Description className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
             <Chip className="shrink-0" size="sm" variant="soft">
               {localPath ? '已映射' : '未映射'}
@@ -909,7 +973,7 @@ function StashFilterDrawer({
         onOpenChange(nextOpen)
       }}
     >
-      <Drawer.Content placement="right" className="sm:max-w-[440px]">
+      <Drawer.Content placement="right" className="sm:max-w-110">
         <Drawer.Dialog className="flex h-dvh w-full flex-col bg-background">
           <Drawer.CloseTrigger />
           <Drawer.Header className="shrink-0 border-b border-separator">
