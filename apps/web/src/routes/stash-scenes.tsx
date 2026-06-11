@@ -27,8 +27,9 @@ const STASH_SORT_OPTIONS = [
   { label: '时长', value: 'duration', defaultDirection: 'DESC' },
 ] as const
 
-const STASH_PAGE_SIZE_OPTIONS = [20, 40, 80, 120] as const
+const STASH_PAGE_SIZE_OPTIONS = [40, 80, 160, 320] as const
 const STASH_SCENES_VIEW_STORAGE_KEY = 'media-admin:stash-scenes:view'
+const STASH_SCENES_FILTER_STORAGE_KEY = 'media-admin:stash-scenes:filter'
 
 type StashSort = typeof STASH_SORT_OPTIONS[number]['value']
 type StashSortDirection = 'ASC' | 'DESC'
@@ -170,6 +171,22 @@ function loadStashScenesViewState(): StashScenesViewState {
   }
 }
 
+function loadStashScenesFilterValues(): StashSceneFilterValues {
+  if (typeof window === 'undefined')
+    return DEFAULT_STASH_FILTER_VALUES
+
+  try {
+    const raw = window.localStorage.getItem(STASH_SCENES_FILTER_STORAGE_KEY)
+    if (!raw)
+      return DEFAULT_STASH_FILTER_VALUES
+
+    return normalizeStashFilterValues(JSON.parse(raw))
+  }
+  catch {
+    return DEFAULT_STASH_FILTER_VALUES
+  }
+}
+
 function saveStashScenesViewState(value: StashScenesViewState) {
   try {
     window.localStorage.setItem(STASH_SCENES_VIEW_STORAGE_KEY, JSON.stringify(value))
@@ -177,6 +194,87 @@ function saveStashScenesViewState(value: StashScenesViewState) {
   catch {
     // 忽略隐私模式或存储配额导致的失败。
   }
+}
+
+function saveStashScenesFilterValues(value: StashSceneFilterValues) {
+  try {
+    window.localStorage.setItem(STASH_SCENES_FILTER_STORAGE_KEY, JSON.stringify(value))
+  }
+  catch {
+    // 忽略隐私模式或存储配额导致的失败。
+  }
+}
+
+function normalizeStashFilterValues(value: unknown): StashSceneFilterValues {
+  if (!isPlainRecord(value))
+    return DEFAULT_STASH_FILTER_VALUES
+
+  return {
+    studios: normalizeEntityFilterValue(value.studios),
+    performers: normalizeEntityFilterValue(value.performers),
+    tags: normalizeEntityFilterValue(value.tags),
+    rating: normalizeRangeFilterValue(value.rating),
+    durationMinutes: normalizeRangeFilterValue(value.durationMinutes),
+    folderPath: typeof value.folderPath === 'string' ? value.folderPath : DEFAULT_STASH_FILTER_VALUES.folderPath,
+    hasMarkers: normalizeTriState(value.hasMarkers),
+    organized: normalizeTriState(value.organized),
+    duplicatedTitle: typeof value.duplicatedTitle === 'boolean' ? value.duplicatedTitle : DEFAULT_STASH_FILTER_VALUES.duplicatedTitle,
+    duplicatedPhash: typeof value.duplicatedPhash === 'boolean' ? value.duplicatedPhash : DEFAULT_STASH_FILTER_VALUES.duplicatedPhash,
+    duplicatedOshash: typeof value.duplicatedOshash === 'boolean' ? value.duplicatedOshash : DEFAULT_STASH_FILTER_VALUES.duplicatedOshash,
+    performerAge: normalizeRangeFilterValue(value.performerAge),
+  }
+}
+
+function normalizeEntityFilterValue(value: unknown): EntityFilterValue {
+  if (!isPlainRecord(value))
+    return { ...DEFAULT_ENTITY_FILTER_VALUE }
+
+  return {
+    includes: normalizeEntitySearchItems(value.includes),
+    excludes: normalizeEntitySearchItems(value.excludes),
+    none: typeof value.none === 'boolean' ? value.none : DEFAULT_ENTITY_FILTER_VALUE.none,
+  }
+}
+
+function normalizeEntitySearchItems(value: unknown): StashEntitySearchItem[] {
+  if (!Array.isArray(value))
+    return []
+
+  return value.flatMap((item) => {
+    if (!isPlainRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string')
+      return []
+
+    return [{
+      id: item.id,
+      name: item.name,
+      disambiguation: typeof item.disambiguation === 'string' ? item.disambiguation : null,
+    }]
+  })
+}
+
+function normalizeRangeFilterValue(value: unknown): RangeFilterValue {
+  if (!isPlainRecord(value))
+    return { ...DEFAULT_RANGE_FILTER }
+
+  const modifier = isIntModifier(value.modifier) ? value.modifier : DEFAULT_RANGE_FILTER.modifier
+  const normalized: RangeFilterValue = { modifier }
+  if (typeof value.value === 'number' && Number.isFinite(value.value))
+    normalized.value = value.value
+  if (typeof value.value2 === 'number' && Number.isFinite(value.value2))
+    normalized.value2 = value.value2
+  return normalized
+}
+
+function normalizeTriState(value: unknown): TriState {
+  return value === 'yes' || value === 'no' || value === 'any' ? value : 'any'
+}
+
+function isIntModifier(value: unknown): value is IntModifier {
+  return value === 'EQUALS' || value === 'GREATER_THAN' || value === 'LESS_THAN' || value === 'BETWEEN'
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isStashSort(value: unknown): value is StashSort {
@@ -213,7 +311,7 @@ function PageComponent() {
   const [viewState, setViewState] = useState(loadStashScenesViewState)
   const { direction, page, pageSize, q, screenshotShow, sort } = viewState
   const [filterOpen, setFilterOpen] = useState(false)
-  const [stashFilterValues, setStashFilterValues] = useState<StashSceneFilterValues>(DEFAULT_STASH_FILTER_VALUES)
+  const [stashFilterValues, setStashFilterValues] = useState(loadStashScenesFilterValues)
   const [subtitleTaskCreateOpen, setSubtitleTaskCreateOpen] = useState(false)
   const [subtitleTaskCreateInitialPath, setSubtitleTaskCreateInitialPath] = useState<string | undefined>()
   const [subtitleTaskBulkRows, setSubtitleTaskBulkRows] = useState<StashSceneRow[] | undefined>()
@@ -230,6 +328,10 @@ function PageComponent() {
   useEffect(() => {
     saveStashScenesViewState(viewState)
   }, [viewState])
+
+  useEffect(() => {
+    saveStashScenesFilterValues(stashFilterValues)
+  }, [stashFilterValues])
 
   const scenesQuery = useQuery({
     queryKey: ['stash-scenes', { direction, page, pageSize, q, sceneFilter, sort }],
@@ -251,6 +353,10 @@ function PageComponent() {
   const selectedRows = useMemo(
     () => scenes.filter(row => selectedSceneKeys.has(String(row.id))),
     [scenes, selectedSceneKeys],
+  )
+  const mappedRowsWithoutSubtitles = useMemo(
+    () => scenes.filter(isMappedStashSceneWithoutSubtitles),
+    [scenes],
   )
   const selectedCount = selectedSceneKeys.size
   const currentPageKeys = useMemo(() => scenes.map(row => String(row.id)), [scenes])
@@ -285,6 +391,10 @@ function PageComponent() {
       }
       return next
     })
+  }
+
+  function selectMappedRowsWithoutSubtitles() {
+    setSelectedSceneKeys(new Set(mappedRowsWithoutSubtitles.map(row => String(row.id))))
   }
 
   function clearSelection() {
@@ -482,6 +592,22 @@ function PageComponent() {
         </ActionBar.Prefix>
         <Separator />
         <ActionBar.Content>
+          <Button
+            isDisabled={!mappedRowsWithoutSubtitles.length || scenesQuery.isFetching}
+            size="sm"
+            variant="tertiary"
+            onPress={selectMappedRowsWithoutSubtitles}
+          >
+            <Icon className="size-4" icon="lucide:badge-alert" />
+            选中无字幕影片
+            {mappedRowsWithoutSubtitles.length
+              ? (
+                  <Chip className="ml-1 tabular-nums" size="sm" variant="soft">
+                    {mappedRowsWithoutSubtitles.length}
+                  </Chip>
+                )
+              : null}
+          </Button>
           {selectedCount > 0
             ? (
                 <Button
@@ -973,8 +1099,8 @@ function StashFilterDrawer({
         onOpenChange(nextOpen)
       }}
     >
-      <Drawer.Content placement="right" className="sm:max-w-110">
-        <Drawer.Dialog className="flex h-dvh w-full flex-col bg-background">
+      <Drawer.Content placement="right" className="inset-y-0 right-0 left-auto w-[min(440px,calc(100vw-2rem))] sm:max-w-110">
+        <Drawer.Dialog className="ml-auto flex h-dvh w-full flex-col bg-background">
           <Drawer.CloseTrigger />
           <Drawer.Header className="shrink-0 border-b border-separator">
             <Drawer.Heading>过滤器</Drawer.Heading>
@@ -1668,6 +1794,10 @@ function stashSceneToBulkSourceRow(row: StashSceneRow) {
     video_path: file?.local_path?.trim() ?? '',
     subtitle_names: [],
   }
+}
+
+function isMappedStashSceneWithoutSubtitles(row: StashSceneRow): boolean {
+  return Boolean(row.files?.[0]?.local_path?.trim()) && (row.captions?.length ?? 0) === 0
 }
 
 function buildStashSceneFilter(values: StashSceneFilterValues): StashSceneFilterType | undefined {

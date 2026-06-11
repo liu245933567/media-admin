@@ -82,15 +82,21 @@ impl TypedExecutor<VideoSubtitleExtractWavTask> for VideoSubtitleExtractWavExecu
 
         ctx.progress()
             .report(0.9, Some(format!("WAV 缓存完成: {}", wav_path.display())));
-        ctx.check_cancelled()?;
+        if let Err(e) = ctx.check_cancelled() {
+            remove_wav_cache_best_effort(wav_path.to_string_lossy().as_ref()).await;
+            return Err(e);
+        }
 
-        ctx.spawn_sibling_with(VideoSubtitleRecognizeTask {
+        if let Err(e) = ctx.spawn_sibling_with(VideoSubtitleRecognizeTask {
             video_path: video_path.to_string(),
-            wav_path: wav_path.display().to_string(),
+            wav_path: wav_path.to_string_lossy().into_owned(),
             config: job.config,
         })
         .await
-        .map_err(|e| TaskError::retryable(format!("入队识别子任务失败: {e:#}")))?;
+        {
+            remove_wav_cache_best_effort(wav_path.to_string_lossy().as_ref()).await;
+            return Err(TaskError::retryable(format!("入队识别子任务失败: {e:#}")));
+        }
 
         ctx.progress().report(1.0, Some("已入队识别子任务".into()));
         Ok(())

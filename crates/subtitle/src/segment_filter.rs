@@ -55,6 +55,10 @@ pub fn is_meaningless_segment(text: &str, dur_cs: i64) -> bool {
         return true;
     }
 
+    if is_whisper_boilerplate_noise(&key) {
+        return true;
+    }
+
     let chars = t.chars().count();
     if dur_cs < MIN_MEANINGFUL_DUR_CS && chars <= 3 {
         return true;
@@ -75,7 +79,7 @@ pub fn is_translatable_segment(item: &WhisperTranscribeItem) -> bool {
         return false;
     }
     let key = normalize_dedupe_key(t);
-    !key.is_empty() && !is_filler_only(&key)
+    !key.is_empty() && !is_filler_only(&key) && !is_whisper_boilerplate_noise(&key)
 }
 
 fn is_filler_only(key: &str) -> bool {
@@ -85,6 +89,10 @@ fn is_filler_only(key: &str) -> bool {
         "哈", "唔嗯", "嗯嗯",
     ];
     FILLERS.contains(&key)
+}
+
+fn is_whisper_boilerplate_noise(key: &str) -> bool {
+    matches!(key, "thank you" | "mom")
 }
 
 /// 将单条识别结果并入已清洗列表；返回 `true` 表示已丢弃或与上条合并。
@@ -166,27 +174,32 @@ mod tests {
         assert!(is_meaningless_segment("-", 100));
         assert!(is_meaningless_segment("Oh", 50));
         assert!(is_meaningless_segment("*coughs*", 200));
+        assert!(is_meaningless_segment("Thank you.", 200));
+        assert!(is_meaningless_segment("Mom.", 200));
+        assert!(is_meaningless_segment("Mmm.", 200));
         assert!(!is_meaningless_segment("Hello world", 200));
+        assert!(!is_meaningless_segment("Thank you for coming", 200));
+        assert!(!is_meaningless_segment("Mom is calling", 200));
     }
 
     #[test]
-    fn incremental_merge_dedupes_across_intervals() {
-        let mut out = vec![seg(0, 10, "Thank you")];
+    fn incremental_merge_drops_boilerplate_noise() {
+        let mut out = vec![seg(0, 10, "Real line")];
         merge_interval_into_sanitized(&mut out, vec![seg(11, 20, "thank you.")]);
         assert_eq!(out.len(), 1);
-        assert_eq!(out[0].end_cs, 20);
+        assert_eq!(out[0].text, "Real line");
     }
 
     #[test]
     fn merges_consecutive_duplicates() {
         let raw = vec![
-            seg(0, 10, "Thank you"),
-            seg(11, 20, "thank you."),
+            seg(0, 10, "Hello"),
+            seg(11, 20, "hello."),
             seg(100, 110, "Real line here"),
         ];
         let out = sanitize_whisper_segments(raw);
         assert_eq!(out.len(), 2);
-        assert_eq!(out[0].text, "Thank you");
+        assert_eq!(out[0].text, "Hello");
         assert_eq!(out[0].end_cs, 20);
     }
 
