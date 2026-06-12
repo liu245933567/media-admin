@@ -72,9 +72,10 @@ interface TaskmillExecLogPanelProps {
   snapshot?: TaskmillJobSnapshot
   loading?: boolean
   historyHasMore?: boolean
+  historyLoadingMore?: boolean
   onQueueChanged: () => void
   onCreateSubtitle: () => void
-  onHistoryLimitChange?: (limit: number) => void
+  onHistoryLoadMore?: () => Promise<unknown>
   onScanGenerate: () => void
   onTranslate: () => void
 }
@@ -521,12 +522,14 @@ function PipelinePager({
   hasMore,
   pageSize,
   pageState,
+  loadingMore,
   onPageChange,
   onPageSizeChange,
 }: {
   hasMore?: boolean
   pageSize: number
   pageState: ReturnType<typeof pagePipelines>
+  loadingMore?: boolean
   onPageChange: (page: number) => void
   onPageSizeChange: (pageSize: number) => void
 }) {
@@ -598,7 +601,7 @@ function PipelinePager({
                 </Pagination.Item>
               ))}
           <Pagination.Item>
-            <Pagination.Next isDisabled={pageState.currentPage >= pageState.totalPages} onPress={() => onPageChange(Math.min(pageState.totalPages, pageState.currentPage + 1))}>
+            <Pagination.Next isDisabled={loadingMore || pageState.currentPage >= pageState.totalPages} onPress={() => onPageChange(Math.min(pageState.totalPages, pageState.currentPage + 1))}>
               <span>下一页</span>
               <Pagination.NextIcon />
             </Pagination.Next>
@@ -735,12 +738,13 @@ export function TaskmillExecLogPanel({
   activeItems,
   historyItems,
   historyHasMore = false,
+  historyLoadingMore = false,
   progressItems,
   snapshot,
   loading,
   onQueueChanged,
   onCreateSubtitle,
-  onHistoryLimitChange,
+  onHistoryLoadMore,
   onScanGenerate,
   onTranslate,
 }: TaskmillExecLogPanelProps) {
@@ -973,8 +977,11 @@ export function TaskmillExecLogPanel({
   const completedTaskCount = Number(snapshot?.metrics?.completed ?? 0)
 
   useEffect(() => {
-    onHistoryLimitChange?.(Math.max(100, historyPage * pageSize))
-  }, [historyPage, onHistoryLimitChange, pageSize])
+    if (viewMode !== 'history' || !historyHasMore || historyLoadingMore || historyPage <= historyPageState.loadedPages) {
+      return
+    }
+    void onHistoryLoadMore?.()
+  }, [historyHasMore, historyLoadingMore, historyPage, historyPageState.loadedPages, onHistoryLoadMore, viewMode])
 
   return (
     <>
@@ -1118,7 +1125,7 @@ export function TaskmillExecLogPanel({
                   actionPending={actionPending}
                   emptyText="暂无历史任务记录"
                   items={historyPageState.rows}
-                  loading={loading}
+                  loading={loading || historyLoadingMore}
                   selectedKeys={selectedPipelineKeys}
                   selectionMode="multiple"
                   onCancel={confirmCancelPipeline}
@@ -1131,6 +1138,7 @@ export function TaskmillExecLogPanel({
               </div>
               <PipelinePager
                 hasMore={historyHasMore}
+                loadingMore={historyLoadingMore}
                 pageSize={pageSize}
                 pageState={historyPageState}
                 onPageChange={setHistoryPage}

@@ -9,9 +9,6 @@ use typeshare::typeshare;
 use utoipa::ToSchema;
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt as _;
-
-#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[typeshare]
@@ -30,7 +27,6 @@ pub struct VideoPlaybackProbeRes {
 #[derive(Debug, Deserialize)]
 struct FfprobeFormat {
     format_name: Option<String>,
-    duration: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

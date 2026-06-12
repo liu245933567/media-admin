@@ -4,7 +4,7 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import {
@@ -23,8 +23,9 @@ import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
 import { TaskmillExecLogPanel } from '@/components/taskmill-exec-log-panel'
 
-const execLogQueryParams = { limit: 250 } as const
 const activeQueryParams = { limit: 200 } as const
+const execLogQueryParams = { limit: 250 } as const
+const historyPageSize = 100
 
 export const Route = createFileRoute('/tasks')({
   component: PageComponent,
@@ -35,7 +36,6 @@ function PageComponent() {
   const [createOpen, setCreateOpen] = useState(false)
   const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
-  const [historyLimit, setHistoryLimit] = useState(100)
 
   const snapshotQuery = useQuery({
     queryKey: getSnapshotJobsQueryKey(),
@@ -49,13 +49,21 @@ function PageComponent() {
     refetchInterval: 3000,
   })
 
-  const historyQueryParams = { limit: historyLimit, offset: 0 } as const
-
-  const historyQuery = useQuery({
-    queryKey: getHistoryJobsQueryKey(historyQueryParams),
-    queryFn: () => historyJobs(historyQueryParams) as Promise<TaskmillTaskHistoryRecord[]>,
+  const historyQuery = useInfiniteQuery({
+    queryKey: getHistoryJobsQueryKey({ limit: historyPageSize }),
+    queryFn: ({ pageParam }) => historyJobs({
+      limit: historyPageSize,
+      offset: pageParam,
+    }) as Promise<TaskmillTaskHistoryRecord[]>,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length >= historyPageSize
+        ? allPages.length * historyPageSize
+        : undefined
+    },
     refetchInterval: 5000,
   })
+  const historyItems = historyQuery.data?.pages.flat() ?? []
 
   const execLogQuery = useQuery({
     queryKey: getExecLogJobsQueryKey(execLogQueryParams),
@@ -100,14 +108,15 @@ function PageComponent() {
       <TaskmillExecLogPanel
         items={execLogQuery.data}
         activeItems={activeQuery.data}
-        historyItems={historyQuery.data}
-        historyHasMore={(historyQuery.data?.length ?? 0) >= historyLimit}
+        historyItems={historyItems}
+        historyHasMore={historyQuery.hasNextPage}
+        historyLoadingMore={historyQuery.isFetchingNextPage}
         progressItems={snapshotQuery.data?.scheduler.progress}
         snapshot={snapshotQuery.data}
         loading={execLogQuery.isLoading || execLogQuery.isFetching}
         onQueueChanged={refreshAll}
         onCreateSubtitle={() => setCreateOpen(true)}
-        onHistoryLimitChange={setHistoryLimit}
+        onHistoryLoadMore={() => historyQuery.fetchNextPage()}
         onScanGenerate={() => setScanGenerateOpen(true)}
         onTranslate={() => setTranslateOpen(true)}
       />

@@ -739,16 +739,18 @@ export function pagePipelines(pipelines: PipelineView[], page: number, pageSize:
   const loadedPages = Math.max(1, Math.ceil(total / pageSize))
   const totalPages = loadedPages + (hasMore ? 1 : 0)
   const currentPage = Math.min(page, totalPages)
-  const pageStart = total === 0 ? 0 : (currentPage - 1) * pageSize + 1
-  const pageEnd = Math.min(currentPage * pageSize, total)
+  const slicePage = Math.min(currentPage, loadedPages)
+  const pageStart = total === 0 ? 0 : (slicePage - 1) * pageSize + 1
+  const pageEnd = Math.min(slicePage * pageSize, total)
 
   return {
     currentPage,
     hasMore,
+    loadedPages,
     pageEnd,
     pageItems: paginationItems(currentPage, totalPages),
     pageStart,
-    rows: pipelines.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    rows: pipelines.slice((slicePage - 1) * pageSize, slicePage * pageSize),
     total,
     totalPages,
   }
