@@ -1,6 +1,7 @@
 //! 应用级默认配置（VAD / Whisper / 翻译 / Stash），与 [`ma_subtitle::types::SubtitleGenerateConfig`] 对应但各块为必填，便于持久化与表单「全局默认值」。
 use crate::stash::StashConnectConfig;
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
+use ma_whisper::engine_cache::{clear_engine_cache, engine_pool_size, set_engine_pool_size};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
@@ -13,6 +14,9 @@ use utoipa::ToSchema;
 pub struct AppConfig {
     pub vad_config: VadConfig,
     pub whisper_engine_config: WhisperEngineConfig,
+    /// 同一 Whisper 模型配置可同时保留的引擎实例数。
+    #[serde(default = "default_whisper_engine_pool_size")]
+    pub whisper_engine_pool_size: usize,
     pub whisper_transcribe_config: WhisperTranscribeConfig,
     pub translate_config: SubtitleTranslateConfig,
     /// 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。
@@ -34,10 +38,24 @@ impl AppConfig {
         Self {
             vad_config: g.vad_config.unwrap_or_default(),
             whisper_engine_config: g.whisper_engine_config.unwrap_or_default(),
+            whisper_engine_pool_size: default_whisper_engine_pool_size(),
             whisper_transcribe_config: g.whisper_transcribe_config.unwrap_or_default(),
             translate_config: g.translate_config.unwrap_or_default(),
             stash_config: StashConnectConfig::default(),
         }
+    }
+}
+
+fn default_whisper_engine_pool_size() -> usize {
+    engine_pool_size()
+}
+
+/// 应用全局配置生效到 Whisper 运行时；池大小变化时清空旧池以便新任务使用新配置。
+pub fn apply_whisper_runtime_config(previous: Option<&AppConfig>, current: &AppConfig) {
+    let pool_size = current.whisper_engine_pool_size.max(1);
+    set_engine_pool_size(pool_size);
+    if previous.is_some_and(|old| old.whisper_engine_pool_size.max(1) != pool_size) {
+        clear_engine_cache();
     }
 }
 

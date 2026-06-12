@@ -516,6 +516,8 @@ export const getAppConfigSettingsResponseVadConfigModeMin = 0;
 
 export const getAppConfigSettingsResponseVadConfigPaddingMsMin = 0;
 
+export const getAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
+
 
 
 export const GetAppConfigSettingsResponse = zod.object({
@@ -548,6 +550,7 @@ export const GetAppConfigSettingsResponse = zod.object({
   "model_filename": zod.string().describe('模型文件名'),
   "use_gpu": zod.boolean().describe('是否使用 GPU')
 }).describe('whisper 引擎运行时配置（影响模型加载，启动期决定）'),
+  "whisper_engine_pool_size": zod.number().min(getAppConfigSettingsResponseWhisperEnginePoolSizeMin).optional().describe('同一 Whisper 模型配置可同时保留的引擎实例数。'),
   "whisper_transcribe_config": zod.object({
   "anti_hallucination": zod.boolean().describe('启用抗幻觉\/重复参数组合\n（`temperature_inc` \/ `entropy_thold` \/ `logprob_thold` \/ `no_speech_thold` \/ ...）。\n\n\*\*默认 `false`\*\*。这些参数虽然多数与 whisper.cpp 默认值相同，但\*\*显式调用\nset_xxx\*\* 在某些 CUDA build 上会让 forward pass 异常瞬退、整段返回 0。\n本机确认能正常出字幕后再开启可获得更稳定的\"不识别 → 跳过\"行为。'),
   "auto_gain": zod.boolean().describe('是否在低音量片段做自动增益（peak<0.02 时拉到 0.8，封顶 20x）'),
@@ -572,6 +575,8 @@ export const putAppConfigSettingsBodyVadConfigMinSpeechMsMin = 0;
 export const putAppConfigSettingsBodyVadConfigModeMin = 0;
 
 export const putAppConfigSettingsBodyVadConfigPaddingMsMin = 0;
+
+export const putAppConfigSettingsBodyWhisperEnginePoolSizeMin = 0;
 
 
 
@@ -605,6 +610,7 @@ export const PutAppConfigSettingsBody = zod.object({
   "model_filename": zod.string().describe('模型文件名'),
   "use_gpu": zod.boolean().describe('是否使用 GPU')
 }).describe('whisper 引擎运行时配置（影响模型加载，启动期决定）'),
+  "whisper_engine_pool_size": zod.number().min(putAppConfigSettingsBodyWhisperEnginePoolSizeMin).optional().describe('同一 Whisper 模型配置可同时保留的引擎实例数。'),
   "whisper_transcribe_config": zod.object({
   "anti_hallucination": zod.boolean().describe('启用抗幻觉\/重复参数组合\n（`temperature_inc` \/ `entropy_thold` \/ `logprob_thold` \/ `no_speech_thold` \/ ...）。\n\n\*\*默认 `false`\*\*。这些参数虽然多数与 whisper.cpp 默认值相同，但\*\*显式调用\nset_xxx\*\* 在某些 CUDA build 上会让 forward pass 异常瞬退、整段返回 0。\n本机确认能正常出字幕后再开启可获得更稳定的\"不识别 → 跳过\"行为。'),
   "auto_gain": zod.boolean().describe('是否在低音量片段做自动增益（peak<0.02 时拉到 0.8，封顶 20x）'),
@@ -625,6 +631,8 @@ export const putAppConfigSettingsResponseVadConfigMinSpeechMsMin = 0;
 export const putAppConfigSettingsResponseVadConfigModeMin = 0;
 
 export const putAppConfigSettingsResponseVadConfigPaddingMsMin = 0;
+
+export const putAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
 
 
 
@@ -658,6 +666,7 @@ export const PutAppConfigSettingsResponse = zod.object({
   "model_filename": zod.string().describe('模型文件名'),
   "use_gpu": zod.boolean().describe('是否使用 GPU')
 }).describe('whisper 引擎运行时配置（影响模型加载，启动期决定）'),
+  "whisper_engine_pool_size": zod.number().min(putAppConfigSettingsResponseWhisperEnginePoolSizeMin).optional().describe('同一 Whisper 模型配置可同时保留的引擎实例数。'),
   "whisper_transcribe_config": zod.object({
   "anti_hallucination": zod.boolean().describe('启用抗幻觉\/重复参数组合\n（`temperature_inc` \/ `entropy_thold` \/ `logprob_thold` \/ `no_speech_thold` \/ ...）。\n\n\*\*默认 `false`\*\*。这些参数虽然多数与 whisper.cpp 默认值相同，但\*\*显式调用\nset_xxx\*\* 在某些 CUDA build 上会让 forward pass 异常瞬退、整段返回 0。\n本机确认能正常出字幕后再开启可获得更稳定的\"不识别 → 跳过\"行为。'),
   "auto_gain": zod.boolean().describe('是否在低音量片段做自动增益（peak<0.02 时拉到 0.8，封顶 20x）'),

@@ -9,8 +9,9 @@ pub mod subtitles_web;
 pub mod xunlei;
 
 pub use app_config::{
-    AppConfig, app_config_to_generate_defaults, merge_app_config_on_put_translate_api_key,
-    merge_subtitle_generate_config, merge_subtitle_translate_fields,
+    AppConfig, app_config_to_generate_defaults, apply_whisper_runtime_config,
+    merge_app_config_on_put_translate_api_key, merge_subtitle_generate_config,
+    merge_subtitle_translate_fields,
     merge_subtitle_translate_job_config,
 };
 pub use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};

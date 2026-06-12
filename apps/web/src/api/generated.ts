@@ -168,6 +168,11 @@ export interface AppConfig {
   translate_config: SubtitleTranslateConfig;
   vad_config: VadConfig;
   whisper_engine_config: WhisperEngineConfig;
+  /**
+     * 同一 Whisper 模型配置可同时保留的引擎实例数。
+     * @minimum 0
+     */
+  whisper_engine_pool_size?: number;
   whisper_transcribe_config: WhisperTranscribeConfig;
 }
 

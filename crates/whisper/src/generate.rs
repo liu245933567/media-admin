@@ -5,7 +5,7 @@ use anyhow::{Context, Result, ensure};
 use tokio::task::spawn_blocking;
 
 use crate::{
-    engine_cache::acquire_shared_engine,
+    engine_cache::acquire_pooled_engine,
     types::{
         VadConfig, WhisperEngineConfig, WhisperTranscribeConfig, WhisperTranscribeItem,
         WhisperTranscribeOutput,
@@ -292,10 +292,7 @@ where
         "[whisper] 开始 PCM 识别"
     );
 
-    let engine = acquire_shared_engine(whisper_engine_config)?;
-    let engine = engine
-        .lock()
-        .map_err(|e| anyhow::anyhow!("whisper 引擎 lock: {e}"))?;
+    let engine = acquire_pooled_engine(whisper_engine_config)?;
     let options = whisper_transcribe_config.unwrap_or_default();
     let vad_config = vad_config.unwrap_or_default();
 
@@ -357,10 +354,7 @@ where
 {
     tracing::info!("[whisper] 开始流式 PCM 识别");
 
-    let engine = acquire_shared_engine(whisper_engine_config)?;
-    let engine = engine
-        .lock()
-        .map_err(|e| anyhow::anyhow!("whisper 引擎 lock: {e}"))?;
+    let engine = acquire_pooled_engine(whisper_engine_config)?;
     let options = whisper_transcribe_config.unwrap_or_default();
     let vad_config = vad_config.unwrap_or_default();
     let mut vad = StreamingVadState::new(vad_config);

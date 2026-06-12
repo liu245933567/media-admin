@@ -1,7 +1,9 @@
-//! 进程内 Whisper 引擎缓存：相同 [`WhisperEngineConfig`] 只加载一次；空闲超时后释放。
+//! 进程内 Whisper 引擎池：相同 [`WhisperEngineConfig`] 复用一组模型实例；空闲超时后释放。
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::ops::Deref;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -10,15 +12,177 @@ use tokio_util::sync::CancellationToken;
 use crate::types::WhisperEngineConfig;
 use crate::whisper::WhisperEngine;
 
-/// 缓存条目：引擎实例 + 最近一次被 `acquire` 的时间。
+/// 缓存条目：同配置引擎池 + 最近一次被 acquire 的时间。
 struct CacheEntry {
-    engine: Arc<Mutex<WhisperEngine>>,
+    pool: Arc<WhisperEnginePool>,
     last_used: Instant,
+}
+
+/// 一组相同配置的 Whisper 引擎实例。
+struct WhisperEnginePool {
+    cfg: WhisperEngineConfig,
+    max_size: usize,
+    state: Mutex<PoolState>,
+    available: Condvar,
+}
+
+/// Whisper 引擎池内部状态。
+struct PoolState {
+    idle: Vec<WhisperEngine>,
+    total: usize,
+}
+
+/// 从池里借出的 Whisper 引擎，drop 时自动归还。
+pub struct PooledWhisperEngine {
+    pool: Arc<WhisperEnginePool>,
+    engine: Option<WhisperEngine>,
+}
+
+impl WhisperEnginePool {
+    /// 创建指定配置的 Whisper 引擎池。
+    fn new(cfg: WhisperEngineConfig, max_size: usize) -> Self {
+        Self {
+            cfg,
+            max_size: max_size.max(1),
+            state: Mutex::new(PoolState {
+                idle: Vec::new(),
+                total: 0,
+            }),
+            available: Condvar::new(),
+        }
+    }
+
+    /// 借出一个引擎；池满时等待其它识别任务归还。
+    fn acquire(self: &Arc<Self>) -> Result<PooledWhisperEngine> {
+        loop {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|e| anyhow::anyhow!("whisper 引擎池 lock: {e}"))?;
+
+            if let Some(engine) = state.idle.pop() {
+                tracing::debug!(
+                    model = %self.cfg.model_filename,
+                    idle = state.idle.len(),
+                    total = state.total,
+                    max_size = self.max_size,
+                    "[whisper] 复用池中空闲模型"
+                );
+                return Ok(PooledWhisperEngine {
+                    pool: Arc::clone(self),
+                    engine: Some(engine),
+                });
+            }
+
+            if state.total < self.max_size {
+                state.total += 1;
+                let total = state.total;
+                drop(state);
+
+                tracing::info!(
+                    model = %self.cfg.model_filename,
+                    total,
+                    max_size = self.max_size,
+                    "[whisper] 创建池化模型实例"
+                );
+
+                match WhisperEngine::with_config(self.cfg.clone()) {
+                    Ok(engine) => {
+                        return Ok(PooledWhisperEngine {
+                            pool: Arc::clone(self),
+                            engine: Some(engine),
+                        });
+                    }
+                    Err(e) => {
+                        let mut state = self
+                            .state
+                            .lock()
+                            .map_err(|e| anyhow::anyhow!("whisper 引擎池 lock: {e}"))?;
+                        state.total = state.total.saturating_sub(1);
+                        self.available.notify_one();
+                        return Err(e);
+                    }
+                }
+            }
+
+            tracing::debug!(
+                model = %self.cfg.model_filename,
+                total = state.total,
+                max_size = self.max_size,
+                "[whisper] 引擎池已满，等待空闲模型"
+            );
+            drop(
+                self.available
+                    .wait(state)
+                    .map_err(|e| anyhow::anyhow!("whisper 引擎池 wait: {e}"))?,
+            );
+        }
+    }
+
+    /// 判断池内所有已创建实例是否都处于空闲状态。
+    fn is_fully_idle(&self) -> bool {
+        let Ok(state) = self.state.lock() else {
+            return false;
+        };
+        state.total == state.idle.len()
+    }
+}
+
+impl Drop for PooledWhisperEngine {
+    fn drop(&mut self) {
+        let Some(engine) = self.engine.take() else {
+            return;
+        };
+        let Ok(mut state) = self.pool.state.lock() else {
+            tracing::warn!("[whisper] 引擎池 lock 失败，无法归还模型实例");
+            return;
+        };
+        state.idle.push(engine);
+        self.pool.available.notify_one();
+    }
+}
+
+impl Deref for PooledWhisperEngine {
+    type Target = WhisperEngine;
+
+    fn deref(&self) -> &Self::Target {
+        self.engine
+            .as_ref()
+            .expect("PooledWhisperEngine must contain an engine before drop")
+    }
 }
 
 fn engine_cache() -> &'static Mutex<HashMap<WhisperEngineConfig, CacheEntry>> {
     static CACHE: OnceLock<Mutex<HashMap<WhisperEngineConfig, CacheEntry>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 同一模型配置最多保留多少个 Whisper 引擎实例。
+///
+/// 环境变量：`WHISPER_ENGINE_POOL_SIZE`，默认 1。显存充足时可设置为 2 或 3。
+pub fn engine_pool_size() -> usize {
+    static POOL_SIZE: OnceLock<AtomicUsize> = OnceLock::new();
+    POOL_SIZE
+        .get_or_init(|| AtomicUsize::new(read_engine_pool_size_from_env()))
+        .load(Ordering::Relaxed)
+        .max(1)
+}
+
+/// 更新同配置模型池大小；新建模型池会使用该值，已存在模型池需清空缓存后生效。
+pub fn set_engine_pool_size(size: usize) {
+    static POOL_SIZE: OnceLock<AtomicUsize> = OnceLock::new();
+    let size = size.max(1);
+    POOL_SIZE
+        .get_or_init(|| AtomicUsize::new(read_engine_pool_size_from_env()))
+        .store(size, Ordering::Relaxed);
+    tracing::info!(pool_size = size, "[whisper] 引擎池大小已更新");
+}
+
+fn read_engine_pool_size_from_env() -> usize {
+    match std::env::var("WHISPER_ENGINE_POOL_SIZE") {
+        Ok(s) => s.trim().parse::<usize>().unwrap_or(1).max(1),
+        Err(_) => 1,
+    }
 }
 
 /// 空闲多久后卸载模型；`0` 表示不自动释放（仅进程退出时释放）。
@@ -101,7 +265,8 @@ pub fn spawn_idle_eviction_loop(cancel: CancellationToken) {
     tracing::info!(
         idle_secs = ttl.as_secs(),
         tick_secs = tick.as_secs(),
-        "[whisper] 引擎缓存空闲回收已启动"
+        pool_size = engine_pool_size(),
+        "[whisper] 引擎池空闲回收已启动"
     );
 
     tokio::spawn(async move {
@@ -110,13 +275,13 @@ pub fn spawn_idle_eviction_loop(cancel: CancellationToken) {
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    tracing::debug!("[whisper] 引擎缓存空闲回收已停止");
+                    tracing::debug!("[whisper] 引擎池空闲回收已停止");
                     break;
                 }
                 _ = interval.tick() => {
                     let n = evict_idle_engines();
                     if n > 0 {
-                        tracing::debug!(removed = n, "[whisper] 后台回收缓存模型");
+                        tracing::debug!(removed = n, "[whisper] 后台回收缓存模型池");
                     }
                 }
             }
@@ -134,11 +299,20 @@ fn evict_idle_locked(cache: &mut HashMap<WhisperEngineConfig, CacheEntry>) -> us
     cache.retain(|cfg, entry| {
         let idle = now.duration_since(entry.last_used);
         if idle >= ttl {
+            if !entry.pool.is_fully_idle() {
+                tracing::debug!(
+                    model = %cfg.model_filename,
+                    idle_secs = idle.as_secs(),
+                    ttl_secs = ttl.as_secs(),
+                    "[whisper] 模型池仍有借出实例，跳过空闲回收"
+                );
+                return true;
+            }
             tracing::info!(
                 model = %cfg.model_filename,
                 idle_secs = idle.as_secs(),
                 ttl_secs = ttl.as_secs(),
-                "[whisper] 空闲超时，释放缓存模型"
+                "[whisper] 空闲超时，释放缓存模型池"
             );
             false
         } else {
@@ -151,33 +325,35 @@ fn evict_idle_locked(cache: &mut HashMap<WhisperEngineConfig, CacheEntry>) -> us
 fn touch_or_insert(
     cache: &mut HashMap<WhisperEngineConfig, CacheEntry>,
     cfg: WhisperEngineConfig,
-) -> Result<Arc<Mutex<WhisperEngine>>> {
+) -> Arc<WhisperEnginePool> {
     if let Some(entry) = cache.get_mut(&cfg) {
         entry.last_used = Instant::now();
         tracing::debug!(
             model = %cfg.model_filename,
             use_gpu = cfg.use_gpu,
             flash_attn = cfg.flash_attn,
-            "[whisper] 复用缓存模型"
+            pool_size = entry.pool.max_size,
+            "[whisper] 复用缓存模型池"
         );
-        return Ok(Arc::clone(&entry.engine));
+        return Arc::clone(&entry.pool);
     }
 
-    let engine = Arc::new(Mutex::new(WhisperEngine::with_config(cfg.clone())?));
+    let pool = Arc::new(WhisperEnginePool::new(cfg.clone(), engine_pool_size()));
     cache.insert(
         cfg.clone(),
         CacheEntry {
-            engine: Arc::clone(&engine),
+            pool: Arc::clone(&pool),
             last_used: Instant::now(),
         },
     );
     tracing::info!(
         model = %cfg.model_filename,
         cached = cache.len(),
+        pool_size = pool.max_size,
         idle_secs = engine_cache_idle_ttl().as_secs(),
-        "[whisper] 模型已加载并写入进程缓存"
+        "[whisper] 模型池已写入进程缓存"
     );
-    Ok(engine)
+    pool
 }
 
 /// 将任务可选配置解析为实际引擎配置。
@@ -187,17 +363,21 @@ pub fn resolve_engine_config(
     whisper_engine_config.unwrap_or_default()
 }
 
-/// 获取共享引擎（同配置复用已加载的 `WhisperContext`）。
+/// 获取池化引擎（同配置最多保留 `WHISPER_ENGINE_POOL_SIZE` 个模型实例）。
 ///
-/// 返回的 `Arc<Mutex<WhisperEngine>>` 应在单次识别流程内持有锁，避免并发转写。
-pub fn acquire_shared_engine(
+/// 返回的句柄在 drop 时自动归还模型实例；调用方无需额外加锁。
+pub fn acquire_pooled_engine(
     whisper_engine_config: Option<WhisperEngineConfig>,
-) -> Result<Arc<Mutex<WhisperEngine>>> {
+) -> Result<PooledWhisperEngine> {
     let cfg = resolve_engine_config(whisper_engine_config);
-    let mut cache = engine_cache()
-        .lock()
-        .map_err(|e| anyhow::anyhow!("whisper 引擎缓存 lock: {e}"))?;
+    let pool = {
+        let mut cache = engine_cache()
+            .lock()
+            .map_err(|e| anyhow::anyhow!("whisper 引擎缓存 lock: {e}"))?;
 
-    evict_idle_locked(&mut cache);
-    touch_or_insert(&mut cache, cfg)
+        evict_idle_locked(&mut cache);
+        touch_or_insert(&mut cache, cfg)
+    };
+
+    pool.acquire()
 }

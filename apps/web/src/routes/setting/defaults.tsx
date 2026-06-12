@@ -13,6 +13,7 @@ import {
   PutAppConfigSettingsBody,
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
+import { RhfNumberField } from '@/components/rhf-heroui-fields'
 import { useWhisperModelFilenameOptions } from '@/features/settings/whisper-models-setup-card'
 import { SubtitlePipelineFormGroups } from '@/features/subtitles/subtitle-pipeline-form-groups'
 
@@ -54,6 +55,20 @@ function AppConfigForm({
 
   return (
     <form className="flex flex-col gap-6" onSubmit={form.handleSubmit(handleSubmit)}>
+      <section className="flex flex-col gap-4">
+        <h3 className="m-0 text-base font-semibold">Whisper 运行时</h3>
+        <div className="grid gap-4 md:grid-cols-3">
+          <RhfNumberField
+            control={form.control}
+            name="whisper_engine_pool_size"
+            label="引擎池大小"
+            minValue={1}
+            maxValue={8}
+            variant="secondary"
+            description="同一模型配置最多同时加载的 Whisper 引擎实例数。显存不足时请保持 1。"
+          />
+        </div>
+      </section>
       <SubtitlePipelineFormGroups
         control={form.control}
         whisperModelFilenameOptions={whisperModelFilenameOptions}

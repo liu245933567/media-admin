@@ -17,6 +17,11 @@
           "whisper_engine_config": {
             "$ref": "#/components/schemas/WhisperEngineConfig"
           },
+          "whisper_engine_pool_size": {
+            "description": "同一 Whisper 模型配置可同时保留的引擎实例数。",
+            "minimum": 0,
+            "type": "integer"
+          },
           "whisper_transcribe_config": {
             "$ref": "#/components/schemas/WhisperTranscribeConfig"
           }
