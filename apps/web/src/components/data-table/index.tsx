@@ -2,7 +2,7 @@ import type { Selection } from '@heroui/react'
 import type { ColumnDef, PaginationState, RowSelectionState, SortingState } from '@tanstack/react-table'
 import type { ReactNode } from 'react'
 import { ActionBar } from '@heroui-pro/react/action-bar'
-import { Button, Checkbox, Chip, ListBox, Select, Separator, Spinner, Table, Tooltip } from '@heroui/react'
+import { Button, Checkbox, Chip, Separator, Spinner, Table, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import {
   flexRender,
@@ -12,6 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useMemo, useState } from 'react'
+import { BasePagination } from '@/components/base-pagination'
 
 /** 表格分页配置（同 antd TablePaginationConfig 子集） */
 interface DataTablePaginationConfig {
@@ -206,6 +207,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
   const footerTotal = footerPagination?.total
   const footerShowTotalLabel = footerPagination?.showTotalLabel ?? '条'
   const footerPageSizeOptions = footerPagination?.pageSizeOptions ?? [10, 20, 50, 100]
+  const localTotal = table.getPrePaginationRowModel().rows.length
 
   const scrollX = scroll?.x ?? SCROLL_X_DEFAULT
 
@@ -299,105 +301,49 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
         {footerPagination !== undefined
           ? (
               <Table.Footer>
-                <div className="flex flex-col gap-2 px-2 py-2 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-                  <span className="tabular-nums">
-                    {footerTotal == null
-                      ? (
-                          <>
-                            第
-                            {' '}
-                            {footerPage}
-                            {' '}
-                            /
-                            {' '}
-                            {footerPageCount}
-                            {' '}
-                            页
-                          </>
-                        )
-                      : (
-                          <>
-                            共
-                            {' '}
-                            {footerTotal}
-                            {' '}
-                            {footerShowTotalLabel}
-                          </>
-                        )}
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    <Button
-                      size="sm"
-                      variant="tertiary"
-                      isDisabled={footerPage <= 1}
-                      onPress={() => {
-                        if (footerPagination) {
-                          footerPagination.onChange(Math.max(1, footerPage - 1), footerPagination.pageSize)
-                        }
-                        else {
-                          table.previousPage()
-                        }
-                      }}
-                    >
-                      上一页
-                    </Button>
-                    <span className="tabular-nums">
-                      {footerPage}
-                      {' '}
-                      /
-                      {' '}
-                      {footerPageCount}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="tertiary"
-                      isDisabled={footerPage >= footerPageCount}
-                      onPress={() => {
-                        if (footerPagination) {
-                          footerPagination.onChange(Math.min(footerPageCount, footerPage + 1), footerPagination.pageSize)
-                        }
-                        else {
-                          table.nextPage()
-                        }
-                      }}
-                    >
-                      下一页
-                    </Button>
-                    {footerPagination
-                      ? (
-                          <Select
-                            aria-label="每页数量"
-                            className="w-28"
-                            value={String(footerPagination.pageSize)}
-                            variant="secondary"
-                            onChange={(key) => {
-                              const next = Number(key)
-                              if (!Number.isFinite(next))
-                                return
-                              footerPagination.onChange(1, next)
-                            }}
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {footerPageSizeOptions.map(size => (
-                                  <ListBox.Item key={size} id={String(size)} textValue={`${size} ${footerShowTotalLabel}`}>
-                                    {size}
-                                    {' '}
-                                    {footerShowTotalLabel}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
-                        )
-                      : null}
-                  </div>
-                </div>
+                <BasePagination
+                  showSizeChanger={!!footerPagination}
+                  className="px-2 py-2"
+                  current={footerPage}
+                  pageSize={footerPagination?.pageSize ?? table.getState().pagination.pageSize}
+                  pageSizeOptions={footerPageSizeOptions}
+                  size="small"
+                  total={footerTotal ?? localTotal}
+                  showTotal={(total, range) => footerTotal == null
+                    ? (
+                        <>
+                          第
+                          {' '}
+                          {footerPage}
+                          {' '}
+                          /
+                          {' '}
+                          {footerPageCount}
+                          {' '}
+                          页
+                        </>
+                      )
+                    : (
+                        <>
+                          {range[0]}
+                          -
+                          {range[1]}
+                          <span className="mx-1 text-muted/70">/</span>
+                          共
+                          {' '}
+                          {total}
+                          {' '}
+                          {footerShowTotalLabel}
+                        </>
+                      )}
+                  onChange={(nextPage, nextPageSize) => {
+                    if (footerPagination) {
+                      footerPagination.onChange(nextPage, nextPageSize)
+                      return
+                    }
+                    table.setPageIndex(nextPage - 1)
+                  }}
+                />
               </Table.Footer>
             )
           : null}

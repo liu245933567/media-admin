@@ -18,7 +18,6 @@ import {
   Input,
   Label,
   ListBox,
-  Pagination,
   ProgressBar,
   Select,
   Separator,
@@ -32,6 +31,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { cancelTaskJobs, deleteHistoryJobs, pauseTaskJobs, resumeTaskJobs } from '@/api'
 import { useAppToast } from '@/components/app-toast'
+import { BasePagination } from '@/components/base-pagination'
 import { useConfirmDialog } from '@/components/confirm-dialog'
 import { transJobType } from '@/features/taskmill/taskmill-active-tasks-panel'
 import {
@@ -518,100 +518,6 @@ function PipelineList({
   )
 }
 
-function PipelinePager({
-  hasMore,
-  pageSize,
-  pageState,
-  loadingMore,
-  onPageChange,
-  onPageSizeChange,
-}: {
-  hasMore?: boolean
-  pageSize: number
-  pageState: ReturnType<typeof pagePipelines>
-  loadingMore?: boolean
-  onPageChange: (page: number) => void
-  onPageSizeChange: (pageSize: number) => void
-}) {
-  return (
-    <div className="flex shrink-0 flex-col gap-2 text-sm text-muted md:flex-row md:items-center md:justify-between">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="tabular-nums">
-          显示
-          {' '}
-          {pageState.pageStart}
-          -
-          {pageState.pageEnd}
-          {' '}
-          / 共
-          {' '}
-          {pageState.total}
-          {hasMore ? '+' : ''}
-          {' '}
-          个 Pipeline
-        </span>
-        <Select
-          className="w-24"
-          value={String(pageSize)}
-          variant="secondary"
-          onChange={(value) => {
-            const nextPageSize = Number(value)
-            if (Number.isFinite(nextPageSize)) {
-              onPageSizeChange(nextPageSize)
-            }
-          }}
-        >
-          <Select.Trigger>
-            <Select.Value />
-            <Select.Indicator />
-          </Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              {PIPELINE_PAGE_SIZE_OPTIONS.map(size => (
-                <ListBox.Item key={size} id={String(size)} textValue={`${size} / 页`}>
-                  {size}
-                  {' '}
-                  / 页
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
-      </div>
-      <Pagination className="w-full justify-end md:w-auto" size="sm">
-        <Pagination.Content>
-          <Pagination.Item>
-            <Pagination.Previous isDisabled={pageState.currentPage <= 1} onPress={() => onPageChange(Math.max(1, pageState.currentPage - 1))}>
-              <Pagination.PreviousIcon />
-              <span>上一页</span>
-            </Pagination.Previous>
-          </Pagination.Item>
-          {pageState.pageItems.map(item => typeof item === 'string'
-            ? (
-                <Pagination.Item key={item}>
-                  <Pagination.Ellipsis />
-                </Pagination.Item>
-              )
-            : (
-                <Pagination.Item key={item}>
-                  <Pagination.Link isActive={item === pageState.currentPage} onPress={() => onPageChange(item)}>
-                    {item}
-                  </Pagination.Link>
-                </Pagination.Item>
-              ))}
-          <Pagination.Item>
-            <Pagination.Next isDisabled={loadingMore || pageState.currentPage >= pageState.totalPages} onPress={() => onPageChange(Math.min(pageState.totalPages, pageState.currentPage + 1))}>
-              <span>下一页</span>
-              <Pagination.NextIcon />
-            </Pagination.Next>
-          </Pagination.Item>
-        </Pagination.Content>
-      </Pagination>
-    </div>
-  )
-}
-
 function GroupLaneCard({
   lane,
   onOpen,
@@ -1091,14 +997,37 @@ export function TaskmillExecLogPanel({
                   onResume={resumePipeline}
                 />
               </div>
-              <PipelinePager
+              <BasePagination
+                showSizeChanger
+                className="w-full shrink-0 text-sm text-muted"
+                current={queuePageState.currentPage}
                 pageSize={pageSize}
-                pageState={queuePageState}
-                onPageChange={setQueuePage}
-                onPageSizeChange={(next) => {
-                  setPageSize(next)
-                  setQueuePage(1)
-                  setHistoryPage(1)
+                pageSizeOptions={PIPELINE_PAGE_SIZE_OPTIONS}
+                size="small"
+                total={queuePageState.totalPages * pageSize}
+                showTotal={() => (
+                  <>
+                    显示
+                    {' '}
+                    {queuePageState.pageStart}
+                    -
+                    {queuePageState.pageEnd}
+                    {' '}
+                    / 共
+                    {' '}
+                    {queuePageState.total}
+                    {' '}
+                    个 Pipeline
+                  </>
+                )}
+                onChange={(nextPage, nextPageSize) => {
+                  if (nextPageSize !== pageSize) {
+                    setPageSize(nextPageSize)
+                    setQueuePage(1)
+                    setHistoryPage(1)
+                    return
+                  }
+                  setQueuePage(nextPage)
                 }}
               />
             </div>
@@ -1136,16 +1065,39 @@ export function TaskmillExecLogPanel({
                   onSelectionChange={setSelectedPipelineKeys}
                 />
               </div>
-              <PipelinePager
-                hasMore={historyHasMore}
-                loadingMore={historyLoadingMore}
+              <BasePagination
+                showSizeChanger
+                className="w-full shrink-0 text-sm text-muted"
+                current={historyPageState.currentPage}
+                disabled={historyLoadingMore}
                 pageSize={pageSize}
-                pageState={historyPageState}
-                onPageChange={setHistoryPage}
-                onPageSizeChange={(next) => {
-                  setPageSize(next)
-                  setQueuePage(1)
-                  setHistoryPage(1)
+                pageSizeOptions={PIPELINE_PAGE_SIZE_OPTIONS}
+                size="small"
+                total={historyPageState.totalPages * pageSize}
+                showTotal={() => (
+                  <>
+                    显示
+                    {' '}
+                    {historyPageState.pageStart}
+                    -
+                    {historyPageState.pageEnd}
+                    {' '}
+                    / 共
+                    {' '}
+                    {historyPageState.total}
+                    {historyHasMore ? '+' : ''}
+                    {' '}
+                    个 Pipeline
+                  </>
+                )}
+                onChange={(nextPage, nextPageSize) => {
+                  if (nextPageSize !== pageSize) {
+                    setPageSize(nextPageSize)
+                    setQueuePage(1)
+                    setHistoryPage(1)
+                    return
+                  }
+                  setHistoryPage(nextPage)
                 }}
               />
             </div>

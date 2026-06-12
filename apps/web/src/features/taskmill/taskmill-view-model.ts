@@ -61,8 +61,6 @@ interface TaskEventHeaderLike {
 type TaskmillKnownTask = TaskmillTaskRecord | TaskmillTaskHistoryRecord
 export type PipelineFilter = 'all' | 'active' | 'finished' | 'failed'
 export type TaskmillViewMode = 'queue' | 'groups' | 'history'
-export type PipelinePageItem = number | 'left-ellipsis' | 'right-ellipsis'
-
 export interface TaskmillGroupLane {
   key: string
   label: string
@@ -710,30 +708,6 @@ export function historyRecordIdOf(pipeline: PipelineView): number | null {
   return null
 }
 
-export function paginationItems(page: number, totalPages: number): PipelinePageItem[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const pages: PipelinePageItem[] = [1]
-  if (page > 3) {
-    pages.push('left-ellipsis')
-  }
-
-  const start = Math.max(2, page - 1)
-  const end = Math.min(totalPages - 1, page + 1)
-  for (let current = start; current <= end; current += 1) {
-    pages.push(current)
-  }
-
-  if (page < totalPages - 2) {
-    pages.push('right-ellipsis')
-  }
-  pages.push(totalPages)
-
-  return pages
-}
-
 export function pagePipelines(pipelines: PipelineView[], page: number, pageSize: number, hasMore = false) {
   const total = pipelines.length
   const loadedPages = Math.max(1, Math.ceil(total / pageSize))
@@ -748,7 +722,6 @@ export function pagePipelines(pipelines: PipelineView[], page: number, pageSize:
     hasMore,
     loadedPages,
     pageEnd,
-    pageItems: paginationItems(currentPage, totalPages),
     pageStart,
     rows: pipelines.slice((slicePage - 1) * pageSize, slicePage * pageSize),
     total,
