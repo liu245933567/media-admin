@@ -2,9 +2,9 @@ import { Alert, Button, Drawer, Spinner } from '@heroui/react'
 import { useMutation } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { deleteSubtitleFs, readTextFs } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
 import { deserializeSubtitleText } from '@/utils/subtitle'
-import { useAppToast } from './app-toast'
-import { useConfirmDialog } from './confirm-dialog'
 
 export interface SubtitleDetailModalProps {
   /** 渲染触发器，将 open 绑定到点击等交互上以打开弹窗 */

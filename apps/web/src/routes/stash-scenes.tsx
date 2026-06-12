@@ -8,11 +8,11 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
 import { BasePagination } from '@/components/base-pagination'
-import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
 import { StashFilterDrawer } from '@/features/stash-scenes/stash-filter-drawer'
 import { StashSceneCardGrid } from '@/features/stash-scenes/stash-scene-card-grid'
 import { buildStashSceneFilter, countActiveStashFilters, DEFAULT_STASH_FILTER_VALUES, isMappedStashSceneWithoutSubtitles, loadStashScenesFilterValues, loadStashScenesViewState, saveStashScenesFilterValues, saveStashScenesViewState, STASH_PAGE_SIZE_OPTIONS, STASH_SORT_OPTIONS, stashSceneToBulkSourceRow } from '@/features/stash-scenes/stash-scenes-state'
 import { StashSubtitleDetailDrawer } from '@/features/stash-scenes/stash-subtitle-detail-drawer'
+import { SubtitleTaskCreateDrawerForm } from '@/features/subtitles/subtitle-task-create-drawer-form'
 
 export const Route = createFileRoute('/stash-scenes')({
   component: PageComponent,

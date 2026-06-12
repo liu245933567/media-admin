@@ -2,7 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { SubtitleWebRow } from '@/api'
 import { Button, Drawer } from '@heroui/react'
 import { useMemo, useState } from 'react'
-import { DataTable } from './data-table'
+import { DataTable } from '@/components/data-table'
 
 interface XunleiSubtitleSearchDrawerProps {
   trigger: React.ReactNode

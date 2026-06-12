@@ -1,4 +1,4 @@
-import type { PipelineView, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
+import type { PipelineView, TaskLogGroup } from '@/features/taskmill/taskmill-exec-log-shared'
 import { Stepper } from '@heroui-pro/react/stepper'
 import { Drawer } from '@heroui/react'
 import { Icon } from '@iconify/react'
@@ -13,7 +13,7 @@ import {
   TaskMetaItem,
   TaskProgressCircle,
   taskStatusColor,
-} from '@/components/taskmill-exec-log-shared'
+} from '@/features/taskmill/taskmill-exec-log-shared'
 
 function activeStepIndex(jobs: TaskLogGroup[], selectedJob: TaskLogGroup | undefined): number {
   if (jobs.length === 0) {

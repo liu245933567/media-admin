@@ -7,7 +7,7 @@ import {
   RhfSwitchField,
   RhfTextAreaField,
   RhfTextField,
-} from './rhf-heroui-fields'
+} from '@/components/rhf-heroui-fields'
 
 export interface WhisperModelOption {
   label: string

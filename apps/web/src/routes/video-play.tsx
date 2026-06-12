@@ -12,7 +12,7 @@ import {
   listRootsMediaLibrary,
 } from '@/api'
 import { LocalVideoPlayer } from '@/components/local-video-player'
-import { VideoPlaylistDrawer } from '@/components/video-playlist-drawer'
+import { VideoPlaylistDrawer } from '@/features/video-play/video-playlist-drawer'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
 import {
   getFileName,

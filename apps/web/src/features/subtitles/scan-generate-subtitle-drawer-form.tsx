@@ -22,7 +22,7 @@ import {
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
 import { RhfTextField } from '@/components/rhf-heroui-fields'
-import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
+import { SubtitlePipelineFormGroups } from '@/features/subtitles/subtitle-pipeline-form-groups'
 
 type ScanGenerateSubtitleFormValues = SubtitleGenerateConfig & {
   folder_path?: string

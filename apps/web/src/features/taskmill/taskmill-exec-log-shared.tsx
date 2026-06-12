@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Chip, ProgressCircle } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { transJobType, transStatus } from '@/components/taskmill-active-tasks-panel'
+import { transJobType, transStatus } from '@/features/taskmill/taskmill-active-tasks-panel'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
 export type EventTone = 'default' | 'accent' | 'success' | 'warning' | 'danger'

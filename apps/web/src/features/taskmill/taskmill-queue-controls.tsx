@@ -9,7 +9,7 @@ import {
   resumeSchedulerJobs,
   snapshotJobs,
 } from '@/api'
-import { useAppToast } from './app-toast'
+import { useAppToast } from '@/components/app-toast'
 
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
 

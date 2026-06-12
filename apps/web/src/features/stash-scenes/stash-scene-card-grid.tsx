@@ -4,7 +4,7 @@ import { Button, Card, Checkbox, Chip, Spinner } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import dayjs from 'dayjs'
 import { memo, useCallback, useMemo } from 'react'
-import { StashSceneCover } from '@/components/stash-scene-cover'
+import { StashSceneCover } from '@/features/stash-scenes/stash-scene-cover'
 import { StashSceneActions } from './stash-scene-actions'
 import { buildStashSceneQueueSearch, buildStashSceneUrl, formatDurationSeconds } from './stash-scenes-state'
 

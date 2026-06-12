@@ -13,8 +13,8 @@ import {
   PutAppConfigSettingsBody,
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
-import { SubtitlePipelineFormGroups } from '@/components/subtitle-pipeline-form-groups'
-import { useWhisperModelFilenameOptions } from '@/components/whisper-models-setup-card'
+import { useWhisperModelFilenameOptions } from '@/features/settings/whisper-models-setup-card'
+import { SubtitlePipelineFormGroups } from '@/features/subtitles/subtitle-pipeline-form-groups'
 
 export const Route = createFileRoute('/setting/defaults')({
   component: DefaultsSettingPage,

@@ -12,7 +12,7 @@ import {
   PutAppConfigSettingsBody,
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
-import { StashConfigFormGroup } from '@/components/stash-config-form-group'
+import { StashConfigFormGroup } from '@/features/settings/stash-config-form-group'
 
 export const Route = createFileRoute('/setting/stash')({
   component: StashSettingPage,

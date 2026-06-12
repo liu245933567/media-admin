@@ -4,9 +4,9 @@ import { Navbar } from '@heroui-pro/react/navbar'
 import { Sidebar } from '@heroui-pro/react/sidebar'
 import { Icon } from '@iconify/react'
 import { useRouter, useRouterState } from '@tanstack/react-router'
+import { DesktopWindowControls } from '@/components/desktop-window-controls'
 import { menu } from '@/config'
 import { isTauri } from '@/utils/is-tauri'
-import { DesktopWindowControls } from './desktop-window-controls'
 
 export interface AppShellProps {
   children: ReactNode

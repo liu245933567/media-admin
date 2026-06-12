@@ -15,8 +15,8 @@ import {
 import { useAppToast } from '@/components/app-toast'
 import { useConfirmDialog } from '@/components/confirm-dialog'
 import { DataTable } from '@/components/data-table'
-import { SubtitleDetailModal } from '@/components/subtitle-detail'
-import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
+import { SubtitleDetailModal } from '@/features/subtitles/subtitle-detail'
+import { SubtitleTaskCreateDrawerForm } from '@/features/subtitles/subtitle-task-create-drawer-form'
 import { buildVideoPlaySearch } from '@/lib/video-play-search'
 import { formatBytes } from '@/utils'
 

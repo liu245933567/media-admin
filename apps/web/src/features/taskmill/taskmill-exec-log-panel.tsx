@@ -7,8 +7,8 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import type { PipelineView } from '@/components/taskmill-exec-log-shared'
-import type { PipelineFilter, TaskmillGroupLane, TaskmillViewMode } from '@/components/taskmill-view-model'
+import type { PipelineView } from '@/features/taskmill/taskmill-exec-log-shared'
+import type { PipelineFilter, TaskmillGroupLane, TaskmillViewMode } from '@/features/taskmill/taskmill-view-model'
 import { ActionBar } from '@heroui-pro/react/action-bar'
 import { ListView } from '@heroui-pro/react/list-view'
 import {
@@ -33,7 +33,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { cancelTaskJobs, deleteHistoryJobs, pauseTaskJobs, resumeTaskJobs } from '@/api'
 import { useAppToast } from '@/components/app-toast'
 import { useConfirmDialog } from '@/components/confirm-dialog'
-import { transJobType } from '@/components/taskmill-active-tasks-panel'
+import { transJobType } from '@/features/taskmill/taskmill-active-tasks-panel'
 import {
   formatPercent,
   latestLineOf,
@@ -42,9 +42,9 @@ import {
   stageName,
   StatusChip,
   TaskDurationMeta,
-} from '@/components/taskmill-exec-log-shared'
-import { TaskmillPipelineDetailDrawer } from '@/components/taskmill-pipeline-detail-drawer'
-import { TaskmillQueueControls } from '@/components/taskmill-queue-controls'
+} from '@/features/taskmill/taskmill-exec-log-shared'
+import { TaskmillPipelineDetailDrawer } from '@/features/taskmill/taskmill-pipeline-detail-drawer'
+import { TaskmillQueueControls } from '@/features/taskmill/taskmill-queue-controls'
 import {
   ACTIVE_STATUSES,
   buildPipelineViews,
@@ -61,7 +61,7 @@ import {
   pipelineLaneKey,
   pipelineMatchesKeyword,
   resumableJobOf,
-} from '@/components/taskmill-view-model'
+} from '@/features/taskmill/taskmill-view-model'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
 interface TaskmillExecLogPanelProps {

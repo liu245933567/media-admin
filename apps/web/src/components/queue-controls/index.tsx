@@ -1,7 +1,7 @@
 import { Button } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { useAppToast } from './app-toast'
+import { useAppToast } from '@/components/app-toast'
 
 export interface QueueControlsProps {
   onChanged?: () => void

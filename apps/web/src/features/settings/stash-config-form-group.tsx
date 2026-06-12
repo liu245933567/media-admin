@@ -2,7 +2,7 @@ import type { Control, FieldValues } from 'react-hook-form'
 import { Button, Surface } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useFieldArray } from 'react-hook-form'
-import { RhfTextField } from './rhf-heroui-fields'
+import { RhfTextField } from '@/components/rhf-heroui-fields'
 
 export interface StashConfigFormGroupProps<TFieldValues extends FieldValues = FieldValues> {
   control: Control<TFieldValues>

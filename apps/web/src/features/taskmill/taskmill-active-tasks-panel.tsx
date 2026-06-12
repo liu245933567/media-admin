@@ -8,9 +8,9 @@ import {
   pauseTaskJobs,
   resumeTaskJobs,
 } from '@/api'
-import { useAppToast } from './app-toast'
-import { useConfirmDialog } from './confirm-dialog'
-import { DataTable } from './data-table'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
+import { DataTable } from '@/components/data-table'
 
 function statusColor(status: TaskmillTaskStatus): 'default' | 'accent' | 'success' | 'warning' | 'danger' {
   const map: Record<TaskmillTaskStatus, 'default' | 'accent' | 'success' | 'warning' | 'danger'> = {

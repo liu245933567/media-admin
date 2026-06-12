@@ -5,8 +5,8 @@ import { Icon } from '@iconify/react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { downloadSubtitleWeb, searchSubtitleWeb } from '@/api'
-import { useAppToast } from './app-toast'
-import { DataTable } from './data-table'
+import { useAppToast } from '@/components/app-toast'
+import { DataTable } from '@/components/data-table'
 
 function DownloadButton({ videoPath, subtitle, onDownloaded }: { videoPath: string, subtitle: SubtitleWebRow, onDownloaded?: () => void }) {
   const message = useAppToast()

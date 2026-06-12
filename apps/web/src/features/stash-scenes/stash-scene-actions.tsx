@@ -1,7 +1,7 @@
 import { Button, Dropdown } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useState } from 'react'
-import { SubtitleWebModal } from '@/components/subtitle-web-modal'
+import { SubtitleWebModal } from '@/features/subtitles/subtitle-web-modal'
 
 interface StashSceneActionsProps {
   localPath?: string

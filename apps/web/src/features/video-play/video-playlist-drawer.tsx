@@ -3,9 +3,9 @@ import type { MediaVideoRow } from '@/api'
 import { Chip, Drawer, Spinner } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMemo, useState } from 'react'
+import { DataTable } from '@/components/data-table'
 import { formatBytes } from '@/utils'
 import { getParentPath } from '@/utils/video-path'
-import { DataTable } from './data-table'
 
 const DEFAULT_PAGE_SIZE = 20
 

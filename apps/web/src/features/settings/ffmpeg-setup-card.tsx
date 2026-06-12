@@ -14,14 +14,14 @@ import {
   historyJobs,
   snapshotJobs,
 } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
 import {
   mapSetupDownloadFromActiveRecord,
   mapSetupDownloadFromHistory,
   mapSetupDownloadFromSnapshot,
   uiProgressPercent,
 } from '@/lib/setup-download-taskmill'
-import { useAppToast } from './app-toast'
-import { useConfirmDialog } from './confirm-dialog'
 
 const ffmpegSetupStatusQueryKey = getFfmpegStatusSetupQueryKey()
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()

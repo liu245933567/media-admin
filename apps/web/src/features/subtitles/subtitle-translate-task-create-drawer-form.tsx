@@ -9,12 +9,12 @@ import {
   getGetAppConfigSettingsQueryKey,
   translateJobs,
 } from '@/api'
-import { useAppToast } from './app-toast'
+import { useAppToast } from '@/components/app-toast'
 import {
   RhfNumberField,
   RhfSwitchField,
   RhfTextField,
-} from './rhf-heroui-fields'
+} from '@/components/rhf-heroui-fields'
 
 export interface SubtitleTranslateTaskCreateDrawerFormProps {
   open: boolean

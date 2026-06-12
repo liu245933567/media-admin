@@ -14,9 +14,9 @@ import {
   listRootsMediaLibrary,
   scanRootMediaLibrary,
 } from '@/api'
-import { useAppToast } from './app-toast'
-import { useConfirmDialog } from './confirm-dialog'
-import { RhfTextField } from './rhf-heroui-fields'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
+import { RhfTextField } from '@/components/rhf-heroui-fields'
 
 export interface MediaRootListCardProps {
   onChanged?: () => void

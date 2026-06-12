@@ -5,8 +5,8 @@ import type {
   TaskmillTaskHistoryRecord,
   TaskmillTaskRecord,
 } from '@/api'
-import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/components/taskmill-exec-log-shared'
-import { clampTaskPercent, formatPercent } from '@/components/taskmill-exec-log-shared'
+import type { EventTone, PipelineView, TaskEventLine, TaskLogGroup } from '@/features/taskmill/taskmill-exec-log-shared'
+import { clampTaskPercent, formatPercent } from '@/features/taskmill/taskmill-exec-log-shared'
 
 export const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 export const CANCELLABLE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])

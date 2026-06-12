@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, WhisperModelItem } from '@/api'
-import type { WhisperModelOption } from '@/components/subtitle-pipeline-form-groups'
+import type { WhisperModelOption } from '@/features/subtitles/subtitle-pipeline-form-groups'
 import type { SetupDownloadUiProgress, WhisperModelDownloadProgress } from '@/lib/setup-download-taskmill'
 import { Button, Card, Chip, ProgressBar } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,10 +14,10 @@ import {
   listWhisperModelsSetup,
   snapshotJobs,
 } from '@/api'
+import { useAppToast } from '@/components/app-toast'
+import { useConfirmDialog } from '@/components/confirm-dialog'
+import { DataTable } from '@/components/data-table'
 import { buildWhisperDownloadProgressByModelId, hasActiveWhisperDownloads, listActiveWhisperDownloadTasks, mapSetupDownloadFromHistory, mapSetupDownloadFromSnapshot, uiProgressPercent } from '@/lib/setup-download-taskmill'
-import { useAppToast } from './app-toast'
-import { useConfirmDialog } from './confirm-dialog'
-import { DataTable } from './data-table'
 
 const whisperModelsQueryKey = getListWhisperModelsSetupQueryKey()
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()

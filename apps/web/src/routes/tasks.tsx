@@ -18,10 +18,10 @@ import {
   snapshotJobs,
 } from '@/api'
 import { useAppToast } from '@/components/app-toast'
-import { ScanGenerateSubtitleDrawerForm } from '@/components/scan-generate-subtitle-drawer-form'
-import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-drawer-form'
-import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
-import { TaskmillExecLogPanel } from '@/components/taskmill-exec-log-panel'
+import { ScanGenerateSubtitleDrawerForm } from '@/features/subtitles/scan-generate-subtitle-drawer-form'
+import { SubtitleTaskCreateDrawerForm } from '@/features/subtitles/subtitle-task-create-drawer-form'
+import { SubtitleTranslateTaskCreateDrawerForm } from '@/features/subtitles/subtitle-translate-task-create-drawer-form'
+import { TaskmillExecLogPanel } from '@/features/taskmill/taskmill-exec-log-panel'
 
 const activeQueryParams = { limit: 200 } as const
 const execLogQueryParams = { limit: 250 } as const
