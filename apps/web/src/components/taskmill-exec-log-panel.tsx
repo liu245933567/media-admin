@@ -29,8 +29,8 @@ import {
 } from '@heroui/react'
 import { Icon } from '@iconify/react'
 import { useMutation } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
-import { cancelTaskJobs, deleteHistoryJobs, rerunHistoryJobs } from '@/api'
+import { useEffect, useMemo, useState } from 'react'
+import { cancelTaskJobs, deleteHistoryJobs, pauseTaskJobs, resumeTaskJobs } from '@/api'
 import { useAppToast } from '@/components/app-toast'
 import { useConfirmDialog } from '@/components/confirm-dialog'
 import { transJobType } from '@/components/taskmill-active-tasks-panel'
@@ -51,15 +51,16 @@ import {
   buildTaskLogGroups,
   buildTaskmillGroupLanes,
   cancellableJobOf,
-  canRerunStatus,
   FAILED_STATUSES,
   groupLabel,
   historyRecordIdOf,
   matchesFilter,
   pagePipelines,
+  pausableJobOf,
   PIPELINE_PAGE_SIZE_OPTIONS,
   pipelineLaneKey,
   pipelineMatchesKeyword,
+  resumableJobOf,
 } from '@/components/taskmill-view-model'
 import { formatTaskmillTime } from '@/lib/taskmill-time'
 
@@ -70,8 +71,10 @@ interface TaskmillExecLogPanelProps {
   progressItems?: TaskmillEstimatedProgress[]
   snapshot?: TaskmillJobSnapshot
   loading?: boolean
+  historyHasMore?: boolean
   onQueueChanged: () => void
   onCreateSubtitle: () => void
+  onHistoryLimitChange?: (limit: number) => void
   onScanGenerate: () => void
   onTranslate: () => void
 }
@@ -86,7 +89,8 @@ interface PipelineListProps {
   onCancel: (pipeline: PipelineView) => void
   onDelete: (pipeline: PipelineView) => void
   onOpen: (pipeline: PipelineView) => void
-  onRerun: (pipeline: PipelineView) => void
+  onPause: (pipeline: PipelineView) => void
+  onResume: (pipeline: PipelineView) => void
   onSelectionChange?: (keys: Selection) => void
 }
 
@@ -165,7 +169,7 @@ function SchedulerOverview({
           </Chip>
         </div>
         <div className="mt-1">
-          <TaskmillQueueControls onChanged={onQueueChanged} />
+          <TaskmillQueueControls isPaused={scheduler?.is_paused} onChanged={onQueueChanged} />
         </div>
       </div>
 
@@ -316,26 +320,26 @@ function PipelineRow({
   onCancel,
   onDelete,
   onOpen,
-  onRerun,
+  onPause,
+  onResume,
 }: {
   actionPending: boolean
   pipeline: PipelineView
   onCancel: (pipeline: PipelineView) => void
   onDelete: (pipeline: PipelineView) => void
   onOpen: (pipeline: PipelineView) => void
-  onRerun: (pipeline: PipelineView) => void
+  onPause: (pipeline: PipelineView) => void
+  onResume: (pipeline: PipelineView) => void
 }) {
   const stages = stageJobs(pipeline)
   const currentStage = stages.find(job => ACTIVE_STATUSES.has(job.status)) ?? stages.at(-1) ?? pipeline.root
   const title = pipelineTitle(pipeline)
   const latestSummary = latestLineOf(currentStage)?.summary ?? latestLineOf(pipeline.root)?.summary
   const cancellableJob = cancellableJobOf(pipeline)
+  const pausableJob = pausableJobOf(pipeline)
+  const resumableJob = resumableJobOf(pipeline)
   const historyRecordId = historyRecordIdOf(pipeline)
   const canDelete = historyRecordId != null
-  const canRerun = historyRecordId != null && (
-    pipeline.jobs.some(job => job.isHistory && job.canRerun)
-    || canRerunStatus(pipeline.status)
-  )
 
   return (
     <ListView.Item
@@ -413,15 +417,19 @@ function PipelineRow({
             <Dropdown.Menu
               disabledKeys={[
                 !cancellableJob ? 'cancel' : null,
-                !canRerun ? 'rerun' : null,
+                !pausableJob ? 'pause' : null,
+                !resumableJob ? 'resume' : null,
                 !canDelete ? 'delete' : null,
               ].filter((key): key is string => key != null)}
               onAction={(key) => {
                 if (key === 'cancel') {
                   onCancel(pipeline)
                 }
-                else if (key === 'rerun') {
-                  onRerun(pipeline)
+                else if (key === 'pause') {
+                  onPause(pipeline)
+                }
+                else if (key === 'resume') {
+                  onResume(pipeline)
                 }
                 else if (key === 'delete') {
                   onDelete(pipeline)
@@ -432,9 +440,13 @@ function PipelineRow({
                 <Icon className="size-4 text-muted" icon="lucide:ban" />
                 <Label>取消任务</Label>
               </Dropdown.Item>
-              <Dropdown.Item id="rerun" textValue="重新执行">
-                <Icon className="size-4 text-muted" icon="lucide:rotate-cw" />
-                <Label>重新执行</Label>
+              <Dropdown.Item id="pause" textValue="暂停任务">
+                <Icon className="size-4 text-muted" icon="lucide:pause" />
+                <Label>暂停任务</Label>
+              </Dropdown.Item>
+              <Dropdown.Item id="resume" textValue="恢复任务">
+                <Icon className="size-4 text-muted" icon="lucide:play" />
+                <Label>恢复任务</Label>
               </Dropdown.Item>
               <Dropdown.Item id="delete" textValue="删除任务记录" variant="danger">
                 <Icon className="size-4 text-danger" icon="lucide:trash-2" />
@@ -458,7 +470,8 @@ function PipelineList({
   onCancel,
   onDelete,
   onOpen,
-  onRerun,
+  onPause,
+  onResume,
   onSelectionChange,
 }: PipelineListProps) {
   return (
@@ -496,7 +509,8 @@ function PipelineList({
           onCancel={onCancel}
           onDelete={onDelete}
           onOpen={onOpen}
-          onRerun={onRerun}
+          onPause={onPause}
+          onResume={onResume}
         />
       )}
     </ListView>
@@ -504,11 +518,13 @@ function PipelineList({
 }
 
 function PipelinePager({
+  hasMore,
   pageSize,
   pageState,
   onPageChange,
   onPageSizeChange,
 }: {
+  hasMore?: boolean
   pageSize: number
   pageState: ReturnType<typeof pagePipelines>
   onPageChange: (page: number) => void
@@ -527,6 +543,7 @@ function PipelinePager({
           / 共
           {' '}
           {pageState.total}
+          {hasMore ? '+' : ''}
           {' '}
           个 Pipeline
         </span>
@@ -717,11 +734,13 @@ export function TaskmillExecLogPanel({
   items,
   activeItems,
   historyItems,
+  historyHasMore = false,
   progressItems,
   snapshot,
   loading,
   onQueueChanged,
   onCreateSubtitle,
+  onHistoryLimitChange,
   onScanGenerate,
   onTranslate,
 }: TaskmillExecLogPanelProps) {
@@ -786,22 +805,31 @@ export function TaskmillExecLogPanel({
       message.error((e as Error).message || '批量删除失败')
     },
   })
-  const rerunMutation = useMutation({
-    mutationFn: (id: number) => rerunHistoryJobs(id),
-    onSuccess: (res) => {
-      if (res.submitted) {
-        message.success(res.task_id != null ? `已重新提交任务 #${res.task_id}` : '已重新提交任务')
-      }
-      else {
-        message.warning('任务已存在于队列中')
-      }
+  const pauseMutation = useMutation({
+    mutationFn: (id: number) => pauseTaskJobs(id),
+    onSuccess: () => {
+      message.success('已暂停任务')
       onQueueChanged()
     },
     onError: (e) => {
-      message.error((e as Error).message || '重新执行失败')
+      message.error((e as Error).message || '暂停失败')
     },
   })
-  const actionPending = cancelMutation.isPending || deleteMutation.isPending || rerunMutation.isPending || bulkDeleteMutation.isPending
+  const resumeMutation = useMutation({
+    mutationFn: (id: number) => resumeTaskJobs(id),
+    onSuccess: () => {
+      message.success('已恢复任务')
+      onQueueChanged()
+    },
+    onError: (e) => {
+      message.error((e as Error).message || '恢复失败')
+    },
+  })
+  const actionPending = cancelMutation.isPending
+    || deleteMutation.isPending
+    || bulkDeleteMutation.isPending
+    || pauseMutation.isPending
+    || resumeMutation.isPending
 
   const groups = useMemo(
     () => buildTaskLogGroups(items, activeItems, historyItems, progressItems),
@@ -826,8 +854,8 @@ export function TaskmillExecLogPanel({
     [activePipelines, pageSize, queuePage],
   )
   const historyPageState = useMemo(
-    () => pagePipelines(historyPipelines, historyPage, pageSize),
-    [historyPage, historyPipelines, pageSize],
+    () => pagePipelines(historyPipelines, historyPage, pageSize, historyHasMore),
+    [historyHasMore, historyPage, historyPipelines, pageSize],
   )
   const selectedPipelines = useMemo(() => {
     return selectedPipelineKeys === 'all'
@@ -872,6 +900,28 @@ export function TaskmillExecLogPanel({
     })
   }
 
+  function confirmPausePipeline(pipeline: PipelineView) {
+    const job = pausableJobOf(pipeline)
+    if (!job) {
+      return
+    }
+
+    confirm({
+      title: '暂停此任务？',
+      description: `将暂停任务 #${job.taskId}，它会留在队列中，稍后可手动恢复。`,
+      confirmText: '暂停任务',
+      onConfirm: () => pauseMutation.mutateAsync(job.taskId),
+    })
+  }
+
+  function resumePipeline(pipeline: PipelineView) {
+    const job = resumableJobOf(pipeline)
+    if (!job) {
+      return
+    }
+    resumeMutation.mutate(job.taskId)
+  }
+
   function confirmDeletePipeline(pipeline: PipelineView) {
     const historyRecordId = historyRecordIdOf(pipeline)
     if (historyRecordId == null) {
@@ -884,20 +934,6 @@ export function TaskmillExecLogPanel({
       confirmText: '删除',
       danger: true,
       onConfirm: () => deleteMutation.mutateAsync(historyRecordId),
-    })
-  }
-
-  function confirmRerunPipeline(pipeline: PipelineView) {
-    const historyRecordId = historyRecordIdOf(pipeline)
-    if (historyRecordId == null) {
-      return
-    }
-
-    confirm({
-      title: '重新执行此任务？',
-      description: `将根据历史记录 #${historyRecordId} 重新提交任务。`,
-      confirmText: '重新执行',
-      onConfirm: () => rerunMutation.mutateAsync(historyRecordId),
     })
   }
 
@@ -935,6 +971,10 @@ export function TaskmillExecLogPanel({
   const activeCount = pipelines.filter(pipeline => ACTIVE_STATUSES.has(pipeline.status)).length
   const failedCount = pipelines.filter(pipeline => FAILED_STATUSES.has(pipeline.status)).length
   const completedTaskCount = Number(snapshot?.metrics?.completed ?? 0)
+
+  useEffect(() => {
+    onHistoryLimitChange?.(Math.max(100, historyPage * pageSize))
+  }, [historyPage, onHistoryLimitChange, pageSize])
 
   return (
     <>
@@ -1040,7 +1080,8 @@ export function TaskmillExecLogPanel({
                   onCancel={confirmCancelPipeline}
                   onDelete={confirmDeletePipeline}
                   onOpen={openPipelineDetail}
-                  onRerun={confirmRerunPipeline}
+                  onPause={confirmPausePipeline}
+                  onResume={resumePipeline}
                 />
               </div>
               <PipelinePager
@@ -1083,11 +1124,13 @@ export function TaskmillExecLogPanel({
                   onCancel={confirmCancelPipeline}
                   onDelete={confirmDeletePipeline}
                   onOpen={openPipelineDetail}
-                  onRerun={confirmRerunPipeline}
+                  onPause={confirmPausePipeline}
+                  onResume={resumePipeline}
                   onSelectionChange={setSelectedPipelineKeys}
                 />
               </div>
               <PipelinePager
+                hasMore={historyHasMore}
                 pageSize={pageSize}
                 pageState={historyPageState}
                 onPageChange={setHistoryPage}

@@ -93,7 +93,7 @@ export interface VadConfig {
      */
   mode: number;
   /**
-     * 语音段两侧 padding（ms）（默认 300）
+     * 语音段两侧 padding（ms）（默认 500）
      * @minimum 0
      */
   padding_ms: number;
@@ -803,15 +803,6 @@ export interface TaskmillControlOk {
  */
 export interface TaskmillDeleteHistoryRes {
   deleted: boolean;
-}
-
-/**
- * 重新执行历史任务的结果。
- */
-export interface TaskmillRerunHistoryRes {
-  submitted: boolean;
-  /** @nullable */
-  task_id?: number | null;
 }
 
 export interface TaskmillSnapshot {
@@ -1873,62 +1864,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteHistoryJobsMutationOptions(options), queryClient);
-    }
-
-export const rerunHistoryJobs = (
-    id: number,
- options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
-) => {
-
-
-      return axiosInstance<TaskmillRerunHistoryRes>(
-      {url: `/api/jobs/history/${id}/rerun`, method: 'POST', signal
-    },
-      options);
-    }
-
-
-
-export const getRerunHistoryJobsMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rerunHistoryJobs>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
-): UseMutationOptions<Awaited<ReturnType<typeof rerunHistoryJobs>>, TError,{id: number}, TContext> => {
-
-const mutationKey = ['rerunHistoryJobs'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rerunHistoryJobs>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
-
-          return  rerunHistoryJobs(id,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RerunHistoryJobsMutationResult = NonNullable<Awaited<ReturnType<typeof rerunHistoryJobs>>>
-
-    export type RerunHistoryJobsMutationError = ErrorType<unknown>
-
-    export const useRerunHistoryJobs = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rerunHistoryJobs>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof axiosInstance>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof rerunHistoryJobs>>,
-        TError,
-        {id: number},
-        TContext
-      > => {
-      return useMutation(getRerunHistoryJobsMutationOptions(options), queryClient);
     }
 
 export const scanGenerateJobs = (

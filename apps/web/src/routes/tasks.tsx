@@ -23,7 +23,6 @@ import { SubtitleTaskCreateDrawerForm } from '@/components/subtitle-task-create-
 import { SubtitleTranslateTaskCreateDrawerForm } from '@/components/subtitle-translate-task-create-drawer-form'
 import { TaskmillExecLogPanel } from '@/components/taskmill-exec-log-panel'
 
-const historyQueryParams = { limit: 100, offset: 0 } as const
 const execLogQueryParams = { limit: 250 } as const
 const activeQueryParams = { limit: 200 } as const
 
@@ -36,6 +35,7 @@ function PageComponent() {
   const [createOpen, setCreateOpen] = useState(false)
   const [scanGenerateOpen, setScanGenerateOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
+  const [historyLimit, setHistoryLimit] = useState(100)
 
   const snapshotQuery = useQuery({
     queryKey: getSnapshotJobsQueryKey(),
@@ -48,6 +48,8 @@ function PageComponent() {
     queryFn: () => activeTasksJobs(activeQueryParams) as Promise<TaskmillTaskRecord[]>,
     refetchInterval: 3000,
   })
+
+  const historyQueryParams = { limit: historyLimit, offset: 0 } as const
 
   const historyQuery = useQuery({
     queryKey: getHistoryJobsQueryKey(historyQueryParams),
@@ -99,11 +101,13 @@ function PageComponent() {
         items={execLogQuery.data}
         activeItems={activeQuery.data}
         historyItems={historyQuery.data}
+        historyHasMore={(historyQuery.data?.length ?? 0) >= historyLimit}
         progressItems={snapshotQuery.data?.scheduler.progress}
         snapshot={snapshotQuery.data}
         loading={execLogQuery.isLoading || execLogQuery.isFetching}
         onQueueChanged={refreshAll}
         onCreateSubtitle={() => setCreateOpen(true)}
+        onHistoryLimitChange={setHistoryLimit}
         onScanGenerate={() => setScanGenerateOpen(true)}
         onTranslate={() => setTranslateOpen(true)}
       />

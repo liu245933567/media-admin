@@ -128,7 +128,7 @@ export const GenerateJobsBody = zod.object({
   "max_segment_ms": zod.number().min(generateJobsBodyConfigTwoVadConfigTwoMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(generateJobsBodyConfigTwoVadConfigTwoMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(generateJobsBodyConfigTwoVadConfigTwoModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(generateJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(generateJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置')]).optional(),
   "whisper_engine_config": zod.union([zod.null(),zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -177,7 +177,7 @@ export const GenerateDefaultsJobsResponse = zod.object({
   "max_segment_ms": zod.number().min(generateDefaultsJobsResponseConfigVadConfigTwoMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(generateDefaultsJobsResponseConfigVadConfigTwoMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(generateDefaultsJobsResponseConfigVadConfigTwoModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(generateDefaultsJobsResponseConfigVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(generateDefaultsJobsResponseConfigVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置')]).optional(),
   "whisper_engine_config": zod.union([zod.null(),zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -225,7 +225,7 @@ export const GenerateBulkJobsBody = zod.object({
   "max_segment_ms": zod.number().min(generateBulkJobsBodyConfigTwoVadConfigTwoMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(generateBulkJobsBodyConfigTwoVadConfigTwoMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(generateBulkJobsBodyConfigTwoVadConfigTwoModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(generateBulkJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(generateBulkJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置')]).optional(),
   "whisper_engine_config": zod.union([zod.null(),zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -274,16 +274,6 @@ export const DeleteHistoryJobsResponse = zod.object({
 }).describe('删除历史记录结果。')
 
 
-export const RerunHistoryJobsParams = zod.object({
-  "id": zod.number().describe('历史记录 ID')
-})
-
-export const RerunHistoryJobsResponse = zod.object({
-  "submitted": zod.boolean(),
-  "task_id": zod.number().nullish()
-}).describe('重新执行历史任务的结果。')
-
-
 export const scanGenerateJobsBodyConfigTwoVadConfigTwoFrameMsMin = 0;
 
 export const scanGenerateJobsBodyConfigTwoVadConfigTwoMaxSegmentMsMin = 0;
@@ -312,7 +302,7 @@ export const ScanGenerateJobsBody = zod.object({
   "max_segment_ms": zod.number().min(scanGenerateJobsBodyConfigTwoVadConfigTwoMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(scanGenerateJobsBodyConfigTwoVadConfigTwoMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(scanGenerateJobsBodyConfigTwoVadConfigTwoModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(scanGenerateJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(scanGenerateJobsBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置')]).optional(),
   "whisper_engine_config": zod.union([zod.null(),zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -551,7 +541,7 @@ export const GetAppConfigSettingsResponse = zod.object({
   "max_segment_ms": zod.number().min(getAppConfigSettingsResponseVadConfigMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(getAppConfigSettingsResponseVadConfigMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(getAppConfigSettingsResponseVadConfigModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(getAppConfigSettingsResponseVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(getAppConfigSettingsResponseVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置'),
   "whisper_engine_config": zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -608,7 +598,7 @@ export const PutAppConfigSettingsBody = zod.object({
   "max_segment_ms": zod.number().min(putAppConfigSettingsBodyVadConfigMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(putAppConfigSettingsBodyVadConfigMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(putAppConfigSettingsBodyVadConfigModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(putAppConfigSettingsBodyVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(putAppConfigSettingsBodyVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置'),
   "whisper_engine_config": zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
@@ -661,7 +651,7 @@ export const PutAppConfigSettingsResponse = zod.object({
   "max_segment_ms": zod.number().min(putAppConfigSettingsResponseVadConfigMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
   "min_speech_ms": zod.number().min(putAppConfigSettingsResponseVadConfigMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
   "mode": zod.number().min(putAppConfigSettingsResponseVadConfigModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
-  "padding_ms": zod.number().min(putAppConfigSettingsResponseVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 300）')
+  "padding_ms": zod.number().min(putAppConfigSettingsResponseVadConfigPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
 }).describe('VAD 配置'),
   "whisper_engine_config": zod.object({
   "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),

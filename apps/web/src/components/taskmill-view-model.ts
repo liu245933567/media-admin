@@ -10,7 +10,8 @@ import { clampTaskPercent, formatPercent } from '@/components/taskmill-exec-log-
 
 export const PIPELINE_PAGE_SIZE_OPTIONS = [10, 20, 50] as const
 export const CANCELLABLE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])
-export const RERUNNABLE_STATUSES = new Set(['failed', 'dead_letter', 'dependency_failed', 'expired'])
+export const PAUSABLE_STATUSES = new Set(['pending', 'blocked'])
+export const RESUMABLE_STATUSES = new Set(['paused'])
 export const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'superseded', 'expired', 'dependency_failed', 'dead_letter'])
 export const ACTIVE_STATUSES = new Set(['running', 'waiting', 'pending', 'paused', 'blocked'])
 export const FAILED_STATUSES = new Set(['failed', 'dead_letter', 'dependency_failed', 'expired'])
@@ -178,10 +179,6 @@ function historySubjectKey(task: TaskmillTaskHistoryRecord): string | undefined 
 
 function isHistoryTask(task: TaskmillKnownTask): task is TaskmillTaskHistoryRecord {
   return 'completed_at' in task
-}
-
-export function canRerunStatus(status: string): boolean {
-  return RERUNNABLE_STATUSES.has(status)
 }
 
 function eventTone(type: string): EventTone {
@@ -395,7 +392,6 @@ function mergeTask(
     lastError: task.last_error,
     dependencies: isHistory ? [] : task.dependencies,
     isHistory: isHistory || existing?.isHistory === true,
-    canRerun: isHistory && canRerunStatus(task.status),
     status: task.status,
     createdAt: task.created_at,
     startedAt: task.started_at,
@@ -531,7 +527,6 @@ export function buildTaskLogGroups(
       lastError: existing?.lastError ?? null,
       dependencies: existing?.dependencies ?? [],
       isHistory: existing?.isHistory ?? false,
-      canRerun: existing?.canRerun ?? false,
       status,
       createdAt: existing?.createdAt ?? null,
       startedAt: existing?.startedAt ?? null,
@@ -697,6 +692,14 @@ export function cancellableJobOf(pipeline: PipelineView): TaskLogGroup | undefin
   return pipeline.jobs.find(job => CANCELLABLE_STATUSES.has(job.status))
 }
 
+export function pausableJobOf(pipeline: PipelineView): TaskLogGroup | undefined {
+  return pipeline.jobs.find(job => PAUSABLE_STATUSES.has(job.status))
+}
+
+export function resumableJobOf(pipeline: PipelineView): TaskLogGroup | undefined {
+  return pipeline.jobs.find(job => RESUMABLE_STATUSES.has(job.status))
+}
+
 export function historyRecordIdOf(pipeline: PipelineView): number | null {
   if (pipeline.historyRecordId != null) {
     return pipeline.historyRecordId
@@ -731,15 +734,17 @@ export function paginationItems(page: number, totalPages: number): PipelinePageI
   return pages
 }
 
-export function pagePipelines(pipelines: PipelineView[], page: number, pageSize: number) {
+export function pagePipelines(pipelines: PipelineView[], page: number, pageSize: number, hasMore = false) {
   const total = pipelines.length
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const loadedPages = Math.max(1, Math.ceil(total / pageSize))
+  const totalPages = loadedPages + (hasMore ? 1 : 0)
   const currentPage = Math.min(page, totalPages)
   const pageStart = total === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const pageEnd = Math.min(currentPage * pageSize, total)
 
   return {
     currentPage,
+    hasMore,
     pageEnd,
     pageItems: paginationItems(currentPage, totalPages),
     pageStart,

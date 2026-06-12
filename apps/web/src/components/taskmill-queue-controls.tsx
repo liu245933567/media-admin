@@ -14,16 +14,18 @@ import { useAppToast } from './app-toast'
 const taskmillSnapshotQueryKey = getSnapshotJobsQueryKey()
 
 export interface TaskmillQueueControlsProps {
+  isPaused?: boolean
   onChanged?: () => void
 }
 
-export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps) {
+export function TaskmillQueueControls({ isPaused, onChanged }: TaskmillQueueControlsProps) {
   const message = useAppToast()
   const queryClient = useQueryClient()
 
   const snapshotQuery = useQuery({
     queryKey: taskmillSnapshotQueryKey,
     queryFn: () => snapshotJobs() as Promise<TaskmillJobSnapshot>,
+    enabled: isPaused == null,
     refetchInterval: 2000,
   })
 
@@ -55,11 +57,11 @@ export function TaskmillQueueControls({ onChanged }: TaskmillQueueControlsProps)
     },
   })
 
-  const isPaused = snapshotQuery.data?.scheduler.is_paused ?? false
+  const isSchedulerPaused = isPaused ?? snapshotQuery.data?.scheduler.is_paused ?? false
 
   return (
     <>
-      {isPaused
+      {isSchedulerPaused
         ? (
             <Button
               size="sm"

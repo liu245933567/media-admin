@@ -29,7 +29,6 @@ export interface TaskLogGroup {
   lastError: string | null
   dependencies: number[]
   isHistory: boolean
-  canRerun: boolean
   status: string
   createdAt: string | null
   startedAt: string | null

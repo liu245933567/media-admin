@@ -8,7 +8,7 @@ use ma_service::job::{
     ScanGenerateSubtitleReq, ScanGenerateSubtitleRes, SubtitleGenerateBulkReq,
     SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes, SubtitleGenerateReq,
     SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord, TaskmillCancelRes, TaskmillControlOk,
-    TaskmillDeleteHistoryRes, TaskmillRerunHistoryRes, TaskmillSnapshot, TimestampedSchedulerEvent,
+    TaskmillDeleteHistoryRes, TaskmillSnapshot, TimestampedSchedulerEvent,
     bulk_enqueue_subtitle_generate, enqueue_subtitle_generate, enqueue_subtitle_translate_req,
     scan_and_enqueue_subtitle_generate, subtitle_generate_defaults,
 };
@@ -67,7 +67,7 @@ pub fn routes() -> StateRouter {
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
         .route("/history/{id}", delete(delete_history_handler))
-        .route("/history/{id}/rerun", post(rerun_history_handler))
+
         .route("/exec-log", get(exec_log_handler))
         .route("/active", get(active_tasks_handler))
         .route("/scheduler/pause", post(scheduler_pause_handler))
@@ -351,22 +351,4 @@ pub(crate) async fn delete_history_handler(
     Ok(Json(TaskmillDeleteHistoryRes { deleted }))
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/jobs/history/{id}/rerun",
-    operation_id = "rerunHistoryJobs",
-    tag = "jobs",
-    params(("id" = i64, Path, description = "历史记录 ID")),
-    responses((status = 200, body = TaskmillRerunHistoryRes))
-)]
-pub(crate) async fn rerun_history_handler(
-    State(state): State<AppState>,
-    Path(id): Path<i64>,
-) -> Result<Json<TaskmillRerunHistoryRes>, AppError> {
-    let res = state
-        .taskmill
-        .rerun_history(id)
-        .await
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
-    Ok(Json(res))
-}
+

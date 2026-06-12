@@ -7,9 +7,7 @@ mod storage;
 mod submit;
 mod types;
 
-pub use control::{
-    TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes, TaskmillRerunHistoryRes,
-};
+pub use control::{TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes};
 pub use ma_subtitle::types::SubtitleGenerateConfig;
 pub use spawn::spawn_taskmill_scheduler;
 pub use storage::{TaskmillRuntime, TaskmillSnapshot, TimestampedSchedulerEvent};
