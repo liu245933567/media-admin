@@ -51,6 +51,15 @@ pub async fn probe_video_playback(path: String) -> Result<VideoPlaybackProbeRes>
     Ok(evaluate_probe(&out))
 }
 
+/// 判断本地视频是否包含内嵌字幕流。
+pub async fn video_has_embedded_subtitle(path: &Path) -> Result<bool> {
+    crate::media_paths::validate_video_path(path).await?;
+
+    let ffprobe = ffprobe_bin_path()?;
+    let out = run_ffprobe_json(&ffprobe, path).await?;
+    Ok(has_subtitle_stream(&out))
+}
+
 fn ffprobe_bin_path() -> Result<String> {
     let ffmpeg = get_ffmpeg_bin_path()?;
     let probe = if ffmpeg.ends_with("ffmpeg.exe") {
@@ -131,6 +140,14 @@ fn evaluate_probe(probe: &FfprobeOut) -> VideoPlaybackProbeRes {
         audio_codec,
         container,
     }
+}
+
+fn has_subtitle_stream(probe: &FfprobeOut) -> bool {
+    probe.streams.as_ref().is_some_and(|streams| {
+        streams
+            .iter()
+            .any(|stream| stream.codec_type.as_deref() == Some("subtitle"))
+    })
 }
 
 /// 浏览器 `<video>` 直链可播的常见组合（不含 HEVC / MKV 等）。

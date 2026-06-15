@@ -182,7 +182,7 @@ mod video_probe;
 mod video_stream;
 mod video_transcode;
 
-pub use video_probe::{VideoPlaybackProbeRes, probe_video_playback};
+pub use video_probe::{VideoPlaybackProbeRes, probe_video_playback, video_has_embedded_subtitle};
 pub use video_stream::{LocalVideoStream, stream_local_video};
 pub use video_transcode::{
     VideoTranscodePhase, VideoTranscodeStatusRes, resolve_transcoded_video_path,

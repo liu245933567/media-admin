@@ -51,6 +51,10 @@ function taskGroupKey(task: { group_key?: string | null, task_type: string }): s
   return task.group_key?.trim() || inferTaskGroup(task.task_type)
 }
 
+function taskLogGroupKey(task: Pick<TaskLogGroup, 'groupKey' | 'taskType'>): string | null {
+  return task.groupKey?.trim() || inferTaskGroup(task.taskType)
+}
+
 interface TaskEventHeaderLike {
   task_id?: number
   key?: string
@@ -730,10 +734,29 @@ export function pagePipelines(pipelines: PipelineView[], page: number, pageSize:
 }
 
 export function pipelineLaneKey(pipeline: PipelineView): string {
-  return pipeline.root.groupKey
-    ?? pipeline.jobs.find(job => job.groupKey)?.groupKey
-    ?? inferTaskGroup(pipeline.root.taskType)
+  return taskLogGroupKey(pipeline.root)
+    ?? pipeline.jobs.map(taskLogGroupKey).find(Boolean)
     ?? 'ungrouped'
+}
+
+function activePipelineLaneKeys(pipeline: PipelineView): string[] {
+  const keys = new Set<string>()
+
+  for (const job of pipeline.jobs) {
+    if (!ACTIVE_STATUSES.has(job.status)) {
+      continue
+    }
+    const key = taskLogGroupKey(job)
+    if (key) {
+      keys.add(key)
+    }
+  }
+
+  if (keys.size === 0) {
+    keys.add(pipelineLaneKey(pipeline))
+  }
+
+  return Array.from(keys)
 }
 
 export function groupLabel(key: string | null | undefined): string {
@@ -785,11 +808,12 @@ export function buildTaskmillGroupLanes(
     if (!ACTIVE_STATUSES.has(pipeline.status)) {
       continue
     }
-    const key = pipelineLaneKey(pipeline)
-    keys.add(key)
-    const rows = pipelinesByGroup.get(key) ?? []
-    rows.push(pipeline)
-    pipelinesByGroup.set(key, rows)
+    for (const key of activePipelineLaneKeys(pipeline)) {
+      keys.add(key)
+      const rows = pipelinesByGroup.get(key) ?? []
+      rows.push(pipeline)
+      pipelinesByGroup.set(key, rows)
+    }
   }
 
   for (const item of snapshot?.scheduler.group_allocations ?? []) {

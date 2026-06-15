@@ -12,6 +12,8 @@ use tokio_util::sync::CancellationToken;
 use crate::types::WhisperEngineConfig;
 use crate::whisper::WhisperEngine;
 
+static POOL_SIZE: OnceLock<AtomicUsize> = OnceLock::new();
+
 /// 缓存条目：同配置引擎池 + 最近一次被 acquire 的时间。
 struct CacheEntry {
     pool: Arc<WhisperEnginePool>,
@@ -161,7 +163,6 @@ fn engine_cache() -> &'static Mutex<HashMap<WhisperEngineConfig, CacheEntry>> {
 ///
 /// 环境变量：`WHISPER_ENGINE_POOL_SIZE`，默认 1。显存充足时可设置为 2 或 3。
 pub fn engine_pool_size() -> usize {
-    static POOL_SIZE: OnceLock<AtomicUsize> = OnceLock::new();
     POOL_SIZE
         .get_or_init(|| AtomicUsize::new(read_engine_pool_size_from_env()))
         .load(Ordering::Relaxed)
@@ -170,7 +171,6 @@ pub fn engine_pool_size() -> usize {
 
 /// 更新同配置模型池大小；新建模型池会使用该值，已存在模型池需清空缓存后生效。
 pub fn set_engine_pool_size(size: usize) {
-    static POOL_SIZE: OnceLock<AtomicUsize> = OnceLock::new();
     let size = size.max(1);
     POOL_SIZE
         .get_or_init(|| AtomicUsize::new(read_engine_pool_size_from_env()))
@@ -380,4 +380,18 @@ pub fn acquire_pooled_engine(
     };
 
     pool.acquire()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_engine_pool_size_updates_runtime_value() {
+        set_engine_pool_size(2);
+        assert_eq!(engine_pool_size(), 2);
+
+        set_engine_pool_size(1);
+        assert_eq!(engine_pool_size(), 1);
+    }
 }

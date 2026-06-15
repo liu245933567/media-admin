@@ -35,6 +35,17 @@ impl TypedExecutor<VideoSubtitleGenerateTask> for VideoSubtitleGenerateExecutor 
             .report(0.05, Some(format!("开始字幕流水线编排: {video_path}")));
         ctx.check_cancelled()?;
 
+        let has_embedded_subtitle = crate::fs::video_has_embedded_subtitle(Path::new(video_path))
+            .await
+            .map_err(|e| TaskError::retryable(format!("检测内嵌字幕失败: {e:#}")))?;
+        if has_embedded_subtitle {
+            ctx.progress().report(
+                1.0,
+                Some(format!("检测到内嵌字幕，已跳过字幕生成: {video_path}")),
+            );
+            return Ok(());
+        }
+
         ctx.spawn_child_with(VideoSubtitleExtractWavTask {
             video_path: video_path.to_string(),
             config: job.config,
@@ -87,12 +98,13 @@ impl TypedExecutor<VideoSubtitleExtractWavTask> for VideoSubtitleExtractWavExecu
             return Err(e);
         }
 
-        if let Err(e) = ctx.spawn_sibling_with(VideoSubtitleRecognizeTask {
-            video_path: video_path.to_string(),
-            wav_path: wav_path.to_string_lossy().into_owned(),
-            config: job.config,
-        })
-        .await
+        if let Err(e) = ctx
+            .spawn_sibling_with(VideoSubtitleRecognizeTask {
+                video_path: video_path.to_string(),
+                wav_path: wav_path.to_string_lossy().into_owned(),
+                config: job.config,
+            })
+            .await
         {
             remove_wav_cache_best_effort(wav_path.to_string_lossy().as_ref()).await;
             return Err(TaskError::retryable(format!("入队识别子任务失败: {e:#}")));
