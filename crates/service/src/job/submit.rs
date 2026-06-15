@@ -5,15 +5,21 @@ use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use serde::{Deserialize, Serialize};
 use taskmill::{SubmitOutcome, TypedTask};
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
-use crate::app_config::{AppConfig, merge_subtitle_generate_config, merge_subtitle_translate_job_config};
+use crate::app_config::{
+    AppConfig, merge_subtitle_generate_config, merge_subtitle_translate_job_config,
+};
+use crate::media_library::{
+    MediaLibraryScanRes, list_media_videos_under_dir, resolve_media_child_dir, scan_media_dir,
+};
 
 use super::storage::TaskmillRuntime;
 use super::types::{SubtitleTranslateJob, VideoSubtitleGenerateTask};
 
 /// 提交单条字幕生成任务（`video_path` 与识别/翻译配置分离）。
 #[typeshare]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct SubtitleGenerateReq {
     pub video_path: String,
     /// `None` 表示整包采用全局 [`AppConfig`] 对应的默认生成配置。
@@ -21,7 +27,7 @@ pub struct SubtitleGenerateReq {
 }
 
 #[typeshare]
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct SubtitleGenerateBulkReq {
     pub video_paths: Vec<String>,
     /// `None` 表示整包采用全局默认。
@@ -31,15 +37,36 @@ pub struct SubtitleGenerateBulkReq {
 }
 
 #[typeshare]
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, ToSchema)]
 pub struct SubtitleGenerateBulkFailedItem {
     pub video_path: String,
     pub error: String,
 }
 
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SubtitleGenerateBulkRes {
+    pub submitted: Vec<String>,
+    pub skipped: Vec<String>,
+    pub failed: Vec<SubtitleGenerateBulkFailedItem>,
+}
+
+#[typeshare]
+#[derive(Deserialize, ToSchema)]
+pub struct ScanGenerateSubtitleReq {
+    pub folder_path: String,
+    /// `None` 表示整包采用全局默认。
+    pub config: Option<SubtitleGenerateConfig>,
+    /// 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）
+    pub skip_if_exists: Option<bool>,
+}
+
+#[typeshare]
+#[derive(Serialize, ToSchema)]
+pub struct ScanGenerateSubtitleRes {
+    pub scan: MediaLibraryScanRes,
+    pub matched_videos: u32,
+    pub without_subtitles: u32,
     pub submitted: Vec<String>,
     pub skipped: Vec<String>,
     pub failed: Vec<SubtitleGenerateBulkFailedItem>,
@@ -47,7 +74,7 @@ pub struct SubtitleGenerateBulkRes {
 
 /// 新建任务表单的默认配置（来自当前全局 [`AppConfig`]）。
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SubtitleGenerateDefaultsRes {
     pub config: SubtitleGenerateConfig,
 }
@@ -60,7 +87,7 @@ pub fn subtitle_generate_defaults(global: &AppConfig) -> SubtitleGenerateDefault
 
 /// 独立翻译任务提交体：`config == None` 表示使用全局翻译配置。
 #[typeshare]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
 pub struct SubtitleTranslateJobReq {
     pub source_srt_path: String,
     pub config: Option<SubtitleTranslateConfig>,
@@ -77,10 +104,7 @@ pub async fn enqueue_subtitle_generate(
     }
     let config = merge_subtitle_generate_config(req.config, global);
     runtime
-        .enqueue_generate(VideoSubtitleGenerateTask {
-            video_path,
-            config,
-        })
+        .enqueue_generate(VideoSubtitleGenerateTask { video_path, config })
         .await
 }
 
@@ -138,6 +162,60 @@ pub async fn bulk_enqueue_subtitle_generate(
         submitted,
         skipped,
         failed,
+    })
+}
+
+pub async fn scan_and_enqueue_subtitle_generate(
+    pool: &ma_db::SqlitePool,
+    runtime: &TaskmillRuntime,
+    req: ScanGenerateSubtitleReq,
+    global: &AppConfig,
+) -> Result<ScanGenerateSubtitleRes> {
+    let folder_path = req.folder_path.trim();
+    if folder_path.is_empty() {
+        bail!("folder_path 不能为空");
+    }
+
+    let resolved = resolve_media_child_dir(pool, folder_path).await?;
+    let scan = scan_media_dir(pool, resolved.root_id, &resolved.folder_path).await?;
+    let videos = list_media_videos_under_dir(pool, resolved.root_id, &resolved.folder_path).await?;
+    let target_paths = videos
+        .iter()
+        .filter(|row| row.subtitle_count == 0)
+        .map(|row| row.file_path.clone())
+        .collect::<Vec<_>>();
+    let matched_videos = u32::try_from(videos.len()).unwrap_or(u32::MAX);
+    let without_subtitles = u32::try_from(target_paths.len()).unwrap_or(u32::MAX);
+
+    if target_paths.is_empty() {
+        return Ok(ScanGenerateSubtitleRes {
+            scan,
+            matched_videos,
+            without_subtitles,
+            submitted: Vec::new(),
+            skipped: Vec::new(),
+            failed: Vec::new(),
+        });
+    }
+
+    let enqueue_res = bulk_enqueue_subtitle_generate(
+        runtime,
+        SubtitleGenerateBulkReq {
+            video_paths: target_paths,
+            config: req.config,
+            skip_if_exists: req.skip_if_exists,
+        },
+        global,
+    )
+    .await?;
+
+    Ok(ScanGenerateSubtitleRes {
+        scan,
+        matched_videos,
+        without_subtitles,
+        submitted: enqueue_res.submitted,
+        skipped: enqueue_res.skipped,
+        failed: enqueue_res.failed,
     })
 }
 

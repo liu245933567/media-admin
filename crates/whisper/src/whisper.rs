@@ -12,7 +12,7 @@ use whisper_rs::{
 };
 
 use crate::types::{
-    WhisperEngineConfig, WhisperTranscribeItem, WhisperTranscribeConfig, WhisperTranscribeOutput,
+    WhisperEngineConfig, WhisperTranscribeConfig, WhisperTranscribeItem, WhisperTranscribeOutput,
 };
 
 /// 确保 `install_logging_hooks` 只调用一次（whisper-rs 是全局副作用）
@@ -23,7 +23,7 @@ fn ensure_logging_hooks() {
     });
 }
 
-/// whisper 引擎：模型只加载一次，可对多个语音片段重复转写
+/// whisper 引擎：对多个 VAD 片段重复转写；跨任务复用见 [`crate::engine_cache`]
 pub struct WhisperEngine {
     ctx: WhisperContext,
     cfg: WhisperEngineConfig,

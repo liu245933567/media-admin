@@ -1,13 +1,17 @@
+mod entities;
 mod filter;
+mod metadata;
+mod path;
 mod scenes;
 mod types;
 
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
 use futures::Stream;
-use reqwest::header::{HeaderMap, HeaderName, CONTENT_TYPE, RANGE};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, RANGE};
 use std::pin::Pin;
 
+pub use entities::search_entities;
 pub use filter::{
     StashCriterionModifier, StashCustomFieldCriterion, StashDateCriterion,
     StashDuplicationCriterion, StashHierarchicalMultiCriterion, StashIdCriterion,
@@ -15,13 +19,15 @@ pub use filter::{
     StashOrientationCriterion, StashPhashDistanceCriterion, StashResolution,
     StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
 };
+pub use path::{StashPathMapping, map_stash_file_path};
 pub use scenes::list_scenes;
 pub use types::{
-    StashConnectConfig, StashSceneListReq, StashSceneFile, StashScenePaths, StashSceneRow,
+    StashConnectConfig, StashEntityKind, StashEntitySearchItem, StashEntitySearchReq,
+    StashEntitySearchRes, StashFilter, StashSceneFile, StashSceneListReq, StashScenePaths,
+    StashSceneRow,
 };
 
-pub type MediaBodyStream =
-    Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>;
+pub type MediaBodyStream = Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>;
 
 pub struct ProxiedMedia {
     pub status: reqwest::StatusCode,
@@ -56,7 +62,10 @@ pub fn stash_graphql_url(cfg: &StashConnectConfig) -> Result<String> {
 }
 
 /// 将完整 GraphQL body（含 `query` / `variables` / `operationName` 等）转发到 Stash，返回响应文本。
-pub async fn forward_graphql(cfg: &StashConnectConfig, payload: serde_json::Value) -> Result<String> {
+pub async fn forward_graphql(
+    cfg: &StashConnectConfig,
+    payload: serde_json::Value,
+) -> Result<String> {
     let gql_url = stash_graphql_url(cfg)?;
     let api_key = cfg.api_key.trim();
 
@@ -91,10 +100,7 @@ pub fn resolve_stash_media_url(cfg: &StashConnectConfig, path: &str) -> Result<S
     }
 
     let base_url = normalized_base_url(cfg)?;
-    Ok(format!(
-        "{base_url}/{}",
-        path.trim_start_matches('/')
-    ))
+    Ok(format!("{base_url}/{}", path.trim_start_matches('/')))
 }
 
 fn forward_response_header(name: &HeaderName) -> bool {
@@ -140,7 +146,11 @@ pub async fn proxy_media(
         return Err(anyhow!("stash media http {}: {}", status.as_u16(), text));
     }
 
-    if let Some(ct) = resp.headers().get(CONTENT_TYPE).and_then(|v| v.to_str().ok()) {
+    if let Some(ct) = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+    {
         if ct.starts_with("text/html") {
             return Err(anyhow!(
                 "stash 返回了 HTML 而非媒体文件，请检查 path 与 Stash Base URL 是否一致: {url}"
@@ -172,6 +182,7 @@ mod tests {
         StashConnectConfig {
             base_url: "https://stash.example.com:55001".to_string(),
             api_key: String::new(),
+            path_mappings: Vec::new(),
         }
     }
 
@@ -181,3 +192,7 @@ mod tests {
         assert_eq!(resolve_stash_media_url(&test_cfg(), url).unwrap(), url);
     }
 }
+pub use metadata::{
+    StashIdentifyFieldOption, StashIdentifyFieldStrategy, StashIdentifySource,
+    StashSceneMetadataCompleteReq, StashSceneMetadataCompleteRes, complete_scene_metadata,
+};

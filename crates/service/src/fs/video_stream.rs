@@ -5,14 +5,15 @@ use std::{io, path::PathBuf, pin::Pin};
 use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures::Stream;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE};
+use reqwest::header::{
+    ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderMap, HeaderValue,
+};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 
 use crate::media_paths::{is_video_file, video_mime_type};
 
-pub type VideoBodyStream =
-    Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
+pub type VideoBodyStream = Pin<Box<dyn Stream<Item = Result<Bytes, io::Error>> + Send>>;
 
 /// 本地视频流响应（供 API 层组装 axum Response）。
 pub struct LocalVideoStream {
@@ -27,7 +28,10 @@ struct ByteRange {
 }
 
 /// 校验并打开本地视频，按 `Range` 读取字节流。
-pub async fn stream_local_video(path: String, range_header: Option<&str>) -> Result<LocalVideoStream> {
+pub async fn stream_local_video(
+    path: String,
+    range_header: Option<&str>,
+) -> Result<LocalVideoStream> {
     let p = PathBuf::from(path.trim());
     if !p.is_absolute() {
         bail!("path 必须为绝对路径");
@@ -106,9 +110,7 @@ fn parse_range_header(range: &str, file_len: u64) -> Result<ByteRange> {
     }
 
     let start = if parts[0].is_empty() {
-        let suffix: u64 = parts[1]
-            .parse()
-            .context("Range 后缀长度无效")?;
+        let suffix: u64 = parts[1].parse().context("Range 后缀长度无效")?;
         file_len.saturating_sub(suffix)
     } else {
         parts[0].parse().context("Range 起始无效")?

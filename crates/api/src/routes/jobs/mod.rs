@@ -5,17 +5,19 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use ma_service::job::{
-    SubtitleGenerateBulkReq, SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes,
-    SubtitleGenerateReq, SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord,
-    TaskmillCancelRes, TaskmillControlOk, TaskmillDeleteHistoryRes, TaskmillSnapshot,
-    TimestampedSchedulerEvent, bulk_enqueue_subtitle_generate, enqueue_subtitle_generate,
-    enqueue_subtitle_translate_req, subtitle_generate_defaults,
+    ScanGenerateSubtitleReq, ScanGenerateSubtitleRes, SubtitleGenerateBulkReq,
+    SubtitleGenerateBulkRes, SubtitleGenerateDefaultsRes, SubtitleGenerateReq,
+    SubtitleTranslateJobReq, TaskHistoryRecord, TaskRecord, TaskmillCancelRes, TaskmillControlOk,
+    TaskmillDeleteHistoryRes, TaskmillSnapshot, TimestampedSchedulerEvent,
+    bulk_enqueue_subtitle_generate, enqueue_subtitle_generate, enqueue_subtitle_translate_req,
+    scan_and_enqueue_subtitle_generate, subtitle_generate_defaults,
 };
 use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{AppState, StateRouter, error::AppError};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct JobsHistoryQuery {
     #[serde(default = "default_history_limit")]
     limit: i32,
@@ -31,7 +33,7 @@ fn clamp_history_params(limit: i32, offset: i32) -> (i32, i32) {
     (limit.clamp(1, 200), offset.max(0))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct JobsExecLogQuery {
     #[serde(default = "default_exec_log_limit")]
     limit: usize,
@@ -45,7 +47,7 @@ fn clamp_exec_log_limit(limit: usize) -> usize {
     limit.clamp(1, 500)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct JobsActiveQuery {
     #[serde(default = "default_active_limit")]
     limit: i32,
@@ -60,6 +62,7 @@ pub fn routes() -> StateRouter {
         .route("/generate-defaults", get(generate_defaults_handler))
         .route("/generate", post(generate_handler))
         .route("/generate/bulk", post(generate_bulk_handler))
+        .route("/scan-generate", post(scan_generate_handler))
         .route("/translate", post(translate_handler))
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
@@ -73,14 +76,29 @@ pub fn routes() -> StateRouter {
         .route("/tasks/{id}/resume", post(task_resume_handler))
 }
 
-async fn generate_defaults_handler(
+#[utoipa::path(
+    get,
+    path = "/api/jobs/generate-defaults",
+    operation_id = "generateDefaultsJobs",
+    tag = "jobs",
+    responses((status = 200, body = SubtitleGenerateDefaultsRes))
+)]
+pub(crate) async fn generate_defaults_handler(
     State(state): State<AppState>,
 ) -> Json<SubtitleGenerateDefaultsRes> {
     let global = state.app_config.read().await;
     Json(subtitle_generate_defaults(&global))
 }
 
-async fn generate_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/generate",
+    operation_id = "generateJobs",
+    tag = "jobs",
+    request_body = SubtitleGenerateReq,
+    responses((status = 200))
+)]
+pub(crate) async fn generate_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateReq>, AppError>,
 ) -> Result<Json<()>, AppError> {
@@ -91,7 +109,15 @@ async fn generate_handler(
     Ok(Json(()))
 }
 
-async fn generate_bulk_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/generate/bulk",
+    operation_id = "generateBulkJobs",
+    tag = "jobs",
+    request_body = SubtitleGenerateBulkReq,
+    responses((status = 200, body = SubtitleGenerateBulkRes))
+)]
+pub(crate) async fn generate_bulk_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleGenerateBulkReq>, AppError>,
 ) -> Result<Json<SubtitleGenerateBulkRes>, AppError> {
@@ -102,7 +128,34 @@ async fn generate_bulk_handler(
     Ok(Json(res))
 }
 
-async fn translate_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/scan-generate",
+    operation_id = "scanGenerateJobs",
+    tag = "jobs",
+    request_body = ScanGenerateSubtitleReq,
+    responses((status = 200, body = ScanGenerateSubtitleRes))
+)]
+pub(crate) async fn scan_generate_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<ScanGenerateSubtitleReq>, AppError>,
+) -> Result<Json<ScanGenerateSubtitleRes>, AppError> {
+    let global = state.app_config.read().await;
+    let res = scan_and_enqueue_subtitle_generate(&state.db, &state.taskmill, body, &global)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/jobs/translate",
+    operation_id = "translateJobs",
+    tag = "jobs",
+    request_body = SubtitleTranslateJobReq,
+    responses((status = 200))
+)]
+pub(crate) async fn translate_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<SubtitleTranslateJobReq>, AppError>,
 ) -> Result<Json<()>, AppError> {
@@ -113,7 +166,14 @@ async fn translate_handler(
     Ok(Json(()))
 }
 
-async fn snapshot_handler(
+#[utoipa::path(
+    get,
+    path = "/api/jobs/snapshot",
+    operation_id = "snapshotJobs",
+    tag = "jobs",
+    responses((status = 200, body = TaskmillSnapshot))
+)]
+pub(crate) async fn snapshot_handler(
     State(state): State<AppState>,
 ) -> Result<Json<TaskmillSnapshot>, AppError> {
     let snapshot = state
@@ -124,7 +184,15 @@ async fn snapshot_handler(
     Ok(Json(snapshot))
 }
 
-async fn history_handler(
+#[utoipa::path(
+    get,
+    path = "/api/jobs/history",
+    operation_id = "historyJobs",
+    tag = "jobs",
+    params(JobsHistoryQuery),
+    responses((status = 200, body = Vec<serde_json::Value>))
+)]
+pub(crate) async fn history_handler(
     State(state): State<AppState>,
     Query(q): Query<JobsHistoryQuery>,
 ) -> Result<Json<Vec<TaskHistoryRecord>>, AppError> {
@@ -137,7 +205,15 @@ async fn history_handler(
     Ok(Json(rows))
 }
 
-async fn exec_log_handler(
+#[utoipa::path(
+    get,
+    path = "/api/jobs/exec-log",
+    operation_id = "execLogJobs",
+    tag = "jobs",
+    params(JobsExecLogQuery),
+    responses((status = 200, body = Vec<TimestampedSchedulerEvent>))
+)]
+pub(crate) async fn exec_log_handler(
     State(state): State<AppState>,
     Query(q): Query<JobsExecLogQuery>,
 ) -> Result<Json<Vec<TimestampedSchedulerEvent>>, AppError> {
@@ -146,7 +222,15 @@ async fn exec_log_handler(
     Ok(Json(rows))
 }
 
-async fn active_tasks_handler(
+#[utoipa::path(
+    get,
+    path = "/api/jobs/active",
+    operation_id = "activeTasksJobs",
+    tag = "jobs",
+    params(JobsActiveQuery),
+    responses((status = 200, body = Vec<serde_json::Value>))
+)]
+pub(crate) async fn active_tasks_handler(
     State(state): State<AppState>,
     Query(q): Query<JobsActiveQuery>,
 ) -> Result<Json<Vec<TaskRecord>>, AppError> {
@@ -158,21 +242,43 @@ async fn active_tasks_handler(
     Ok(Json(rows))
 }
 
-async fn scheduler_pause_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/scheduler/pause",
+    operation_id = "pauseSchedulerJobs",
+    tag = "jobs",
+    responses((status = 200, body = TaskmillControlOk))
+)]
+pub(crate) async fn scheduler_pause_handler(
     State(state): State<AppState>,
 ) -> Json<TaskmillControlOk> {
     state.taskmill.pause_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }
 
-async fn scheduler_resume_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/scheduler/resume",
+    operation_id = "resumeSchedulerJobs",
+    tag = "jobs",
+    responses((status = 200, body = TaskmillControlOk))
+)]
+pub(crate) async fn scheduler_resume_handler(
     State(state): State<AppState>,
 ) -> Json<TaskmillControlOk> {
     state.taskmill.resume_scheduler().await;
     Json(TaskmillControlOk { ok: true })
 }
 
-async fn task_cancel_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/tasks/{id}/cancel",
+    operation_id = "cancelTaskJobs",
+    tag = "jobs",
+    params(("id" = i64, Path, description = "任务 ID")),
+    responses((status = 200, body = TaskmillCancelRes))
+)]
+pub(crate) async fn task_cancel_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<TaskmillCancelRes>, AppError> {
@@ -184,7 +290,15 @@ async fn task_cancel_handler(
     Ok(Json(TaskmillCancelRes { cancelled }))
 }
 
-async fn task_pause_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/tasks/{id}/pause",
+    operation_id = "pauseTaskJobs",
+    tag = "jobs",
+    params(("id" = i64, Path, description = "任务 ID")),
+    responses((status = 200, body = TaskmillControlOk))
+)]
+pub(crate) async fn task_pause_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<TaskmillControlOk>, AppError> {
@@ -196,7 +310,15 @@ async fn task_pause_handler(
     Ok(Json(TaskmillControlOk { ok: true }))
 }
 
-async fn task_resume_handler(
+#[utoipa::path(
+    post,
+    path = "/api/jobs/tasks/{id}/resume",
+    operation_id = "resumeTaskJobs",
+    tag = "jobs",
+    params(("id" = i64, Path, description = "任务 ID")),
+    responses((status = 200, body = TaskmillControlOk))
+)]
+pub(crate) async fn task_resume_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<TaskmillControlOk>, AppError> {
@@ -208,7 +330,15 @@ async fn task_resume_handler(
     Ok(Json(TaskmillControlOk { ok: true }))
 }
 
-async fn delete_history_handler(
+#[utoipa::path(
+    delete,
+    path = "/api/jobs/history/{id}",
+    operation_id = "deleteHistoryJobs",
+    tag = "jobs",
+    params(("id" = i64, Path, description = "历史记录 ID")),
+    responses((status = 200, body = TaskmillDeleteHistoryRes))
+)]
+pub(crate) async fn delete_history_handler(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<TaskmillDeleteHistoryRes>, AppError> {

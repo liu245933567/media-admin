@@ -11,6 +11,7 @@ anyhow.workspace = true
 tracing.workspace = true
 serde.workspace = true
 typeshare.workspace = true
+utoipa.workspace = true
 
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
+use utoipa::{IntoParams, ToSchema};
 
 fn default_list_page() -> i32 {
     1
@@ -10,7 +11,7 @@ fn default_list_page_size() -> i32 {
 }
 
 #[typeshare]
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams, ToSchema)]
 pub struct PageParams {
     #[serde(default = "default_list_page")]
     pub current: i32,
@@ -19,7 +20,7 @@ pub struct PageParams {
 }
 
 #[typeshare]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PageResult<T> {
     pub data: Vec<T>,
     pub total: i32,

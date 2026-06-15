@@ -1,6 +1,6 @@
 use axum::Router;
-use ma_service::AppConfig;
 use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
+use ma_service::{AppConfig, apply_whisper_runtime_config};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
@@ -8,7 +8,11 @@ use tower_http::services::{ServeDir, ServeFile};
 
 mod app_config_store;
 mod error;
+mod openapi;
 mod routes;
+
+#[cfg(feature = "openapi")]
+pub use openapi::openapi_json;
 
 fn build_router(app_state: AppState) -> Router<()> {
     Router::new()
@@ -23,20 +27,26 @@ fn build_router(app_state: AppState) -> Router<()> {
 pub async fn serve() -> anyhow::Result<()> {
     ma_utils::log::init_tracing();
 
-    let listen = std::env::var("LISTEN").unwrap_or_else(|_| "0.0.0.0:3000".to_string());
+    let listen = std::env::var("LISTEN").unwrap_or_else(|_| "0.0.0.0:4200".to_string());
 
     let listener = TcpListener::bind(&listen).await?;
 
     let app_config = Arc::new(RwLock::new(
         app_config_store::load_or_init_app_config().await?,
     ));
+    {
+        let app_config_guard = app_config.read().await;
+        apply_whisper_runtime_config(None, &app_config_guard);
+    }
 
-    let taskmill = TaskmillRuntime::setup().await?;
+    let db = ma_db::connect().await?;
+    let taskmill = TaskmillRuntime::setup(db.clone()).await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         taskmill,
         app_config,
+        db,
     };
 
     let app = build_router(app_state);
@@ -56,13 +66,19 @@ pub async fn spawn_server(listen: impl AsRef<str>) -> anyhow::Result<std::net::S
     let app_config = Arc::new(RwLock::new(
         app_config_store::load_or_init_app_config().await?,
     ));
+    {
+        let app_config_guard = app_config.read().await;
+        apply_whisper_runtime_config(None, &app_config_guard);
+    }
 
-    let taskmill = TaskmillRuntime::setup().await?;
+    let db = ma_db::connect().await?;
+    let taskmill = TaskmillRuntime::setup(db.clone()).await?;
     spawn_taskmill_scheduler(&taskmill);
 
     let app_state = AppState {
         taskmill,
         app_config,
+        db,
     };
     let app = build_router(app_state);
 
@@ -87,6 +103,7 @@ pub async fn start() {
 pub(crate) struct AppState {
     pub taskmill: TaskmillRuntime,
     pub app_config: Arc<RwLock<AppConfig>>,
+    pub db: ma_db::SqlitePool,
 }
 
 type StateRouter = Router<AppState>;

@@ -5,43 +5,45 @@ use std::{
 
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[typeshare::typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FsListReq {
     pub parent_path: Option<String>,
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FsReadTextReq {
     pub path: String,
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FsReadTextRes {
     pub content: String,
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct FsDeleteReq {
     pub path: String,
 }
 
 #[typeshare::typeshare]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FsDeleteRes {
     pub ok: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FsListItem {
     pub name: String,
     pub full_path: String,
     pub is_dir: bool,
     pub size: u64,
+    #[schema(value_type = String, format = DateTime)]
     pub last_modified: time::SystemTime,
 }
 
@@ -180,9 +182,9 @@ mod video_probe;
 mod video_stream;
 mod video_transcode;
 
-pub use video_probe::{probe_video_playback, VideoPlaybackProbeRes};
-pub use video_stream::{stream_local_video, LocalVideoStream};
+pub use video_probe::{VideoPlaybackProbeRes, probe_video_playback, video_has_embedded_subtitle};
+pub use video_stream::{LocalVideoStream, stream_local_video};
 pub use video_transcode::{
-    resolve_transcoded_video_path, start_video_transcode, video_transcode_status,
-    VideoTranscodePhase, VideoTranscodeStatusRes,
+    VideoTranscodePhase, VideoTranscodeStatusRes, resolve_transcoded_video_path,
+    start_video_transcode, video_transcode_status,
 };

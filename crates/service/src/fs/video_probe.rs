@@ -6,15 +6,13 @@ use anyhow::{Context, Result, bail};
 use ma_utils::config::get_ffmpeg_bin_path;
 use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
-
-#[cfg(windows)]
-use std::os::windows::process::CommandExt as _;
+use utoipa::ToSchema;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct VideoPlaybackProbeRes {
     /// 是否建议走直链（H.264/AAC 等浏览器常见组合）
@@ -29,7 +27,6 @@ pub struct VideoPlaybackProbeRes {
 #[derive(Debug, Deserialize)]
 struct FfprobeFormat {
     format_name: Option<String>,
-    duration: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +49,15 @@ pub async fn probe_video_playback(path: String) -> Result<VideoPlaybackProbeRes>
     let ffprobe = ffprobe_bin_path()?;
     let out = run_ffprobe_json(&ffprobe, p).await?;
     Ok(evaluate_probe(&out))
+}
+
+/// 判断本地视频是否包含内嵌字幕流。
+pub async fn video_has_embedded_subtitle(path: &Path) -> Result<bool> {
+    crate::media_paths::validate_video_path(path).await?;
+
+    let ffprobe = ffprobe_bin_path()?;
+    let out = run_ffprobe_json(&ffprobe, path).await?;
+    Ok(has_subtitle_stream(&out))
 }
 
 fn ffprobe_bin_path() -> Result<String> {
@@ -122,7 +128,11 @@ fn evaluate_probe(probe: &FfprobeOut) -> VideoPlaybackProbeRes {
         .and_then(|f| f.format_name.clone())
         .map(|names| names.split(',').next().unwrap_or(&names).to_string());
 
-    let direct = is_direct_playable(container.as_deref(), video_codec.as_deref(), audio_codec.as_deref());
+    let direct = is_direct_playable(
+        container.as_deref(),
+        video_codec.as_deref(),
+        audio_codec.as_deref(),
+    );
     VideoPlaybackProbeRes {
         direct_playable: direct,
         needs_transcode: !direct,
@@ -130,6 +140,14 @@ fn evaluate_probe(probe: &FfprobeOut) -> VideoPlaybackProbeRes {
         audio_codec,
         container,
     }
+}
+
+fn has_subtitle_stream(probe: &FfprobeOut) -> bool {
+    probe.streams.as_ref().is_some_and(|streams| {
+        streams
+            .iter()
+            .any(|stream| stream.codec_type.as_deref() == Some("subtitle"))
+    })
 }
 
 /// 浏览器 `<video>` 直链可播的常见组合（不含 HEVC / MKV 等）。

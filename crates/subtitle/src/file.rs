@@ -2,6 +2,8 @@ use anyhow::{Context, Result, anyhow};
 use ma_whisper::types::WhisperTranscribeItem;
 use std::path::{Path, PathBuf};
 
+use crate::segment_filter::is_meaningless_segment;
+
 /// SRT 单条记录（保留原时间戳行，避免重新格式化引入差异）
 #[derive(Clone, Debug)]
 pub struct SrtEntry {
@@ -96,7 +98,8 @@ pub async fn write_srt_file(
     let mut idx = 1usize;
     for seg in segments {
         let text = seg.text.trim();
-        if text.is_empty() {
+        let dur = seg.end_cs.saturating_sub(seg.start_cs);
+        if text.is_empty() || is_meaningless_segment(text, dur) {
             continue;
         }
 

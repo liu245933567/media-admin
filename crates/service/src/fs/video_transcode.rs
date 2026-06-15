@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use tokio::sync::Mutex;
 use typeshare::typeshare;
+use utoipa::ToSchema;
 
 use crate::media_paths::validate_video_path;
 
@@ -25,7 +26,7 @@ use std::os::windows::process::CommandExt as _;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VideoTranscodePhase {
     Idle,
@@ -35,7 +36,7 @@ pub enum VideoTranscodePhase {
 }
 
 #[typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct VideoTranscodeStatusRes {
     pub phase: VideoTranscodePhase,
     /// 0.0–1.0，仅 `running` 时有效
@@ -210,12 +211,7 @@ fn cache_key(source: &Path, meta: &std::fs::Metadata) -> String {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let payload = format!(
-        "{}:{}:{}",
-        source.to_string_lossy(),
-        meta.len(),
-        mtime
-    );
+    let payload = format!("{}:{}:{}", source.to_string_lossy(), meta.len(), mtime);
     hex::encode(Sha1::digest(payload.as_bytes()))
 }
 
@@ -276,7 +272,11 @@ fn ffmpeg_nvenc_available(ffmpeg: &str) -> bool {
     })
 }
 
-fn build_transcode_args(input: &Path, output_tmp: &Path, backend: TranscodeVideoBackend) -> Vec<String> {
+fn build_transcode_args(
+    input: &Path,
+    output_tmp: &Path,
+    backend: TranscodeVideoBackend,
+) -> Vec<String> {
     let input_s = input.to_string_lossy().into_owned();
     let output_s = output_tmp.to_string_lossy().into_owned();
     let mut args = vec!["-y".to_string()];
@@ -372,7 +372,14 @@ async fn run_ffmpeg_transcode(
     let copy_mode = probe_can_remux(input).await.unwrap_or(false);
     if copy_mode {
         let args = build_transcode_args(input, output_tmp, TranscodeVideoBackend::RemuxCopy);
-        return run_ffmpeg_with_args(&ffmpeg, &args, duration_secs, runtime, TranscodeVideoBackend::RemuxCopy).await;
+        return run_ffmpeg_with_args(
+            &ffmpeg,
+            &args,
+            duration_secs,
+            runtime,
+            TranscodeVideoBackend::RemuxCopy,
+        )
+        .await;
     }
 
     if should_try_nvenc(&ffmpeg) {
@@ -381,7 +388,14 @@ async fn run_ffmpeg_transcode(
             inner.message = "正在使用 NVIDIA GPU 转码…".into();
         }
         let args = build_transcode_args(input, output_tmp, TranscodeVideoBackend::NvencCuda);
-        match run_ffmpeg_with_args(&ffmpeg, &args, duration_secs, runtime.clone(), TranscodeVideoBackend::NvencCuda).await
+        match run_ffmpeg_with_args(
+            &ffmpeg,
+            &args,
+            duration_secs,
+            runtime.clone(),
+            TranscodeVideoBackend::NvencCuda,
+        )
+        .await
         {
             Ok(()) => return Ok(()),
             Err(gpu_err) => {
@@ -395,7 +409,14 @@ async fn run_ffmpeg_transcode(
     }
 
     let args = build_transcode_args(input, output_tmp, TranscodeVideoBackend::Libx264);
-    run_ffmpeg_with_args(&ffmpeg, &args, duration_secs, runtime, TranscodeVideoBackend::Libx264).await
+    run_ffmpeg_with_args(
+        &ffmpeg,
+        &args,
+        duration_secs,
+        runtime,
+        TranscodeVideoBackend::Libx264,
+    )
+    .await
 }
 
 async fn run_ffmpeg_with_args(
@@ -415,10 +436,7 @@ async fn run_ffmpeg_with_args(
     cmd.stderr(std::process::Stdio::piped());
 
     let mut child = cmd.spawn().context("启动 ffmpeg 转码失败")?;
-    let stdout = child
-        .stdout
-        .take()
-        .context("ffmpeg stdout 不可用")?;
+    let stdout = child.stdout.take().context("ffmpeg stdout 不可用")?;
 
     let rt_progress = runtime.clone();
     let progress_task = tokio::spawn(async move {
@@ -473,7 +491,9 @@ fn parse_out_time_ms(line: &str) -> Option<f64> {
 
 async fn ffprobe_duration(input: &Path) -> Result<f64> {
     let ffmpeg = get_ffmpeg_bin_path()?;
-    let ffprobe = ffmpeg.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe");
+    let ffprobe = ffmpeg
+        .replace("ffmpeg.exe", "ffprobe.exe")
+        .replace("ffmpeg", "ffprobe");
     let mut cmd = tokio::process::Command::new(&ffprobe);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
@@ -498,9 +518,11 @@ async fn ffprobe_duration(input: &Path) -> Result<f64> {
 
 /// H.264 + AAC 在 MP4 容器内时可尝试流复制以加速。
 async fn probe_can_remux(input: &Path) -> Result<bool> {
-    let res = super::video_probe::probe_video_playback(input.to_string_lossy().into_owned()).await?;
-    let mp4_like = input.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-        matches!(e.to_ascii_lowercase().as_str(), "mp4" | "m4v" | "mov")
-    });
+    let res =
+        super::video_probe::probe_video_playback(input.to_string_lossy().into_owned()).await?;
+    let mp4_like = input
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "mp4" | "m4v" | "mov"));
     Ok(res.direct_playable && mp4_like)
 }

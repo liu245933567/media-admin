@@ -4,17 +4,19 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev:web": "pnpm --filter web dev",
-    "dev:server": "cargo run -p media-admin-server",
-    "dev:server:cuda": "cargo run -p media-admin-server --features cuda",
-    "dev:desktop": "pnpm --filter @media-admin/desktop dev",
-    "dev:desktop:cuda": "pnpm --filter @media-admin/desktop dev:cuda",
-    "build:web": "pnpm --filter web build",
-    "build:server": "cargo build -p media-admin-server",
-    "build:desktop": "pnpm --filter @media-admin/desktop build",
-    "build:desktop:cuda": "pnpm --filter @media-admin/desktop build:cuda",
-    "lint": "pnpm --filter web lint",
-    "preview": "pnpm --filter web preview",
-    "typeshare": "typeshare crates --lang=typescript --output-file=apps/web/src/types/api.ts"
+    "web:dev": "pnpm --filter web dev",
+    "web:lint": "pnpm --filter web lint",
+    "web:preview": "pnpm --filter web preview",
+    "web:build": "pnpm --filter web build",
+    "web:typegen": "pnpm --filter web typegen",
+    "web:openapi": "pnpm openapi:export && pnpm web:typegen",
+    "server:dev": "cargo run -p media-admin-server",
+    "server:dev:cuda": "cargo run -p media-admin-server --features cuda",
+    "server:build": "cargo build -p media-admin-server",
+    "desktop:dev": "pnpm --filter @media-admin/desktop dev",
+    "desktop:dev:cuda": "pnpm --filter @media-admin/desktop dev:cuda",
+    "desktop:build": "pnpm --filter @media-admin/desktop build",
+    "desktop:build:cuda": "pnpm --filter @media-admin/desktop build:cuda",
+    "openapi:export": "cargo run -p media-admin-api --bin media-admin-openapi --features openapi -q -- apps/web/openapi.json"
   }
 }

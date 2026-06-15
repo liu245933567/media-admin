@@ -40,10 +40,7 @@ pub fn ffmpeg_tool_installed() -> bool {
 pub fn get_ffmpeg_bin_path() -> Result<String> {
     let dir = get_ffmpeg_dir();
     let candidates = if cfg!(windows) {
-        [
-            dir.join("bin/ffmpeg.exe"),
-            dir.join("ffmpeg.exe"),
-        ]
+        [dir.join("bin/ffmpeg.exe"), dir.join("ffmpeg.exe")]
     } else {
         [dir.join("bin/ffmpeg"), dir.join("ffmpeg")]
     };
@@ -68,6 +65,14 @@ pub fn get_transcode_cache_dir() -> PathBuf {
     match std::env::var("TRANSCODE_CACHE_DIR") {
         Ok(path) => PathBuf::from(path),
         Err(_) => get_default_app_path().join("temp/transcode"),
+    }
+}
+
+/// 获取 字幕 缓存目录
+pub fn get_subtitle_cache_dir() -> PathBuf {
+    match std::env::var("SUBTITLE_CACHE_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => get_default_app_path().join("temp/subtitle"),
     }
 }
 

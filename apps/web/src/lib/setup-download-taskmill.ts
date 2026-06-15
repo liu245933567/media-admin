@@ -1,5 +1,4 @@
-import type { TaskmillJobSnapshot, TaskmillTaskRecord } from '@/types'
-import type { TaskmillTaskHistoryRecord } from '@/types/taskmill-history'
+import type { TaskmillJobSnapshot, TaskmillTaskHistoryRecord, TaskmillTaskRecord } from '@/api'
 
 /** 设置页下载任务在 UI 上的进度形态。 */
 export interface SetupDownloadUiProgress {

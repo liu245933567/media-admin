@@ -1,47 +1,46 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use utoipa::ToSchema;
 
 /// GraphQL `Any` / 任意 JSON（透传 Stash 原生结构）
 #[typeshare::typeshare(serialized_as = "unknown")]
 pub type StashJsonValue = JsonValue;
 
-/// Stash `CriterionModifier`（与 GraphQL 枚举值一致）
+/// Stash `CriterionModifier`。
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 pub enum StashCriterionModifier {
-    #[serde(rename = "=")]
-    Eq,
+    #[serde(rename = "EQUALS", alias = "=", alias = "Equals")]
     Equals,
-    #[serde(rename = "!=")]
-    NotEq,
+    #[serde(rename = "NOT_EQUALS", alias = "!=", alias = "NotEquals")]
     NotEquals,
-    #[serde(rename = ">")]
-    GreaterThanSymbol,
+    #[serde(rename = "GREATER_THAN", alias = ">", alias = "GreaterThan")]
     GreaterThan,
-    #[serde(rename = "<")]
-    LessThanSymbol,
+    #[serde(rename = "LESS_THAN", alias = "<", alias = "LessThan")]
     LessThan,
-    #[serde(rename = "IS NULL")]
+    #[serde(rename = "IS_NULL", alias = "IS NULL")]
     IsNull,
-    #[serde(rename = "IS NOT NULL")]
+    #[serde(rename = "NOT_NULL", alias = "IS NOT NULL")]
     NotNull,
-    #[serde(rename = "INCLUDES ALL")]
+    #[serde(rename = "INCLUDES_ALL", alias = "INCLUDES ALL")]
     IncludesAll,
+    #[serde(rename = "INCLUDES", alias = "Includes")]
     Includes,
+    #[serde(rename = "EXCLUDES", alias = "Excludes")]
     Excludes,
-    #[serde(rename = "MATCHES REGEX")]
+    #[serde(rename = "MATCHES_REGEX", alias = "MATCHES REGEX")]
     MatchesRegex,
-    #[serde(rename = "NOT MATCHES REGEX")]
+    #[serde(rename = "NOT_MATCHES_REGEX", alias = "NOT MATCHES REGEX")]
     NotMatchesRegex,
-    #[serde(rename = ">= AND <=")]
+    #[serde(rename = "BETWEEN", alias = ">= AND <=")]
     Between,
-    #[serde(rename = "< OR >")]
+    #[serde(rename = "NOT_BETWEEN", alias = "< OR >")]
     NotBetween,
 }
 
 /// Stash `StringCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashStringCriterion {
     pub value: String,
     pub modifier: StashCriterionModifier,
@@ -49,7 +48,7 @@ pub struct StashStringCriterion {
 
 /// Stash `IntCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashIntCriterion {
     pub value: i32,
     pub value2: Option<i32>,
@@ -58,7 +57,7 @@ pub struct StashIntCriterion {
 
 /// Stash `MultiCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashMultiCriterion {
     pub value: Option<Vec<String>>,
     pub modifier: StashCriterionModifier,
@@ -67,7 +66,7 @@ pub struct StashMultiCriterion {
 
 /// Stash `HierarchicalMultiCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashHierarchicalMultiCriterion {
     pub value: Option<Vec<String>>,
     pub modifier: StashCriterionModifier,
@@ -77,7 +76,7 @@ pub struct StashHierarchicalMultiCriterion {
 
 /// Stash `DateCriterionInput` / `TimestampCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashDateCriterion {
     pub value: String,
     pub value2: Option<String>,
@@ -86,7 +85,7 @@ pub struct StashDateCriterion {
 
 /// Stash `PhashDistanceCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashPhashDistanceCriterion {
     pub value: String,
     pub modifier: StashCriterionModifier,
@@ -95,7 +94,7 @@ pub struct StashPhashDistanceCriterion {
 
 /// Stash `StashIDCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashIdCriterion {
     pub endpoint: Option<String>,
     pub stash_id: Option<String>,
@@ -104,7 +103,7 @@ pub struct StashIdCriterion {
 
 /// Stash `StashIDsCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashIdsCriterion {
     pub endpoint: Option<String>,
     pub stash_ids: Option<Vec<String>>,
@@ -113,16 +112,17 @@ pub struct StashIdsCriterion {
 
 /// Stash `CustomFieldCriterionInput`（`value` 为 GraphQL `Any`，透传 JSON）
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashCustomFieldCriterion {
     pub field: String,
+    #[schema(value_type = Vec<serde_json::Value>)]
     pub value: Vec<StashJsonValue>,
     pub modifier: StashCriterionModifier,
 }
 
 /// Stash `ResolutionEnum`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StashResolution {
     VeryLow,
@@ -143,7 +143,7 @@ pub enum StashResolution {
 
 /// Stash `ResolutionCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashResolutionCriterion {
     pub value: StashResolution,
     pub modifier: StashCriterionModifier,
@@ -151,7 +151,7 @@ pub struct StashResolutionCriterion {
 
 /// Stash `OrientationEnum`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StashOrientation {
     Landscape,
@@ -161,14 +161,14 @@ pub enum StashOrientation {
 
 /// Stash `OrientationCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashOrientationCriterion {
     pub value: Vec<StashOrientation>,
 }
 
 /// Stash `DuplicationCriterionInput`
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StashDuplicationCriterion {
     pub distance: Option<i32>,
     pub phash: Option<bool>,
@@ -179,14 +179,17 @@ pub struct StashDuplicationCriterion {
 
 /// Stash GraphQL `SceneFilterType`（字段与官方 schema 对齐，未建模的关联过滤器以 JSON 透传）
 #[typeshare::typeshare]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct StashSceneFilterType {
     #[serde(rename = "AND", skip_serializing_if = "Option::is_none")]
+    #[schema(no_recursion)]
     pub and: Option<Box<StashSceneFilterType>>,
     #[serde(rename = "OR", skip_serializing_if = "Option::is_none")]
+    #[schema(no_recursion)]
     pub or: Option<Box<StashSceneFilterType>>,
     #[serde(rename = "NOT", skip_serializing_if = "Option::is_none")]
+    #[schema(no_recursion)]
     pub not: Option<Box<StashSceneFilterType>>,
 
     pub id: Option<StashIntCriterion>,
@@ -246,20 +249,28 @@ pub struct StashSceneFilterType {
 
     /// 关联实体过滤器（结构体庞大，按需透传 Stash 原生 JSON）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub galleries_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub performers_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub studios_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub tags_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub movies_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub groups_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub markers_filter: Option<StashJsonValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<serde_json::Value>)]
     pub files_filter: Option<StashJsonValue>,
 
     #[serde(skip_serializing_if = "Option::is_none")]

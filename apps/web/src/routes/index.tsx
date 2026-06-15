@@ -1,4 +1,4 @@
-import { PageContainer } from '@ant-design/pro-components'
+import { Card } from '@heroui/react'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
@@ -7,8 +7,11 @@ export const Route = createFileRoute('/')({
 
 function PageComponent() {
   return (
-    <PageContainer>
-      首页
-    </PageContainer>
+    <Card>
+      <Card.Header>
+        <Card.Title>Media Admin</Card.Title>
+        <Card.Description>选择左侧导航进入媒体库、任务管理或设置。</Card.Description>
+      </Card.Header>
+    </Card>
   )
 }

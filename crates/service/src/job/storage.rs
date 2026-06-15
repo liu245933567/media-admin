@@ -1,11 +1,6 @@
 //! Taskmill SQLite 持久化调度器（与业务 DB 分离）。
 
-use std::{
-    collections::VecDeque,
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc, time::Duration};
 
 use tokio::sync::Mutex;
 
@@ -15,63 +10,108 @@ use ma_utils::config::get_app_data_dir;
 use serde::Serialize;
 use taskmill::{
     Domain, DomainHandle, MetricsSnapshot, Scheduler, SchedulerEvent, SchedulerSnapshot,
-    SubmitOutcome, TaskHistoryRecord,
+    SubmitOutcome, TaskHistoryRecord, TaskRecord, TypedTask,
 };
 use tokio_util::sync::CancellationToken;
+use utoipa::ToSchema;
 
-use super::setup_download_exec::{
-    FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor,
-};
+use super::setup_download_exec::{FfmpegSetupDownloadExecutor, WhisperModelDownloadExecutor};
 use super::spawn::{
-    ExtractWavExecutor, SubtitleTranslateExecutor, VideoSubtitleGenerateExecutor,
-    WhisperVadSrtExecutor,
+    SubtitleTranslateExecutor, VideoSubtitleExtractWavExecutor, VideoSubtitleGenerateExecutor,
+    VideoSubtitleRecognizeExecutor,
 };
 use super::types::{
-    ExtractWavTask, FfmpegSetupDownloadTask, MediaJobsDomain, SubtitleTranslateJob,
-    VideoSubtitleGenerateTask, WhisperModelDownloadTask, WhisperVadSrtTask, GROUP_FFMPEG,
-    GROUP_SETUP_DOWNLOAD, GROUP_TRANSLATE, GROUP_WHISPER,
+    FfmpegSetupDownloadTask, GROUP_MEDIA_SCAN, GROUP_SETUP_DOWNLOAD, GROUP_SUBTITLE_PIPELINE,
+    GROUP_TRANSLATE, GROUP_WHISPER, MediaJobsDomain, MediaLibraryScanTask, SubtitleTranslateJob,
+    VideoSubtitleExtractWavTask, VideoSubtitleGenerateTask, VideoSubtitleRecognizeTask,
+    WhisperModelDownloadTask,
 };
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillSnapshot {
+    #[schema(value_type = serde_json::Value)]
     pub scheduler: SchedulerSnapshot,
+    #[schema(value_type = serde_json::Value)]
     pub metrics: MetricsSnapshot,
 }
 
 /// 一条带接收时间的调度器事件，供任务页展示「执行中」流式日志。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TimestampedSchedulerEvent {
     pub received_at: chrono::DateTime<Utc>,
+    #[schema(value_type = serde_json::Value)]
     pub event: SchedulerEvent,
+}
+
+/// 兼容早期入库或外部恢复的任务记录：按任务类型补齐资源组。
+pub fn infer_task_group(task_type: &str) -> Option<&'static str> {
+    match task_type
+        .rsplit_once("::")
+        .map(|(_, ty)| ty)
+        .unwrap_or(task_type)
+    {
+        VideoSubtitleGenerateTask::TASK_TYPE | VideoSubtitleExtractWavTask::TASK_TYPE => {
+            Some(GROUP_SUBTITLE_PIPELINE)
+        }
+        VideoSubtitleRecognizeTask::TASK_TYPE => Some(GROUP_WHISPER),
+        SubtitleTranslateJob::TASK_TYPE => Some(GROUP_TRANSLATE),
+        MediaLibraryScanTask::TASK_TYPE => Some(GROUP_MEDIA_SCAN),
+        WhisperModelDownloadTask::TASK_TYPE | FfmpegSetupDownloadTask::TASK_TYPE => {
+            Some(GROUP_SETUP_DOWNLOAD)
+        }
+        _ => None,
+    }
+}
+
+/// 给活跃任务记录补齐缺失的资源组，避免 UI 出现 unknown 分组。
+pub fn normalize_task_record_group(mut task: TaskRecord) -> TaskRecord {
+    if task.group_key.as_deref().is_none_or(str::is_empty) {
+        task.group_key = infer_task_group(&task.task_type).map(str::to_string);
+    }
+    task
+}
+
+/// 给历史任务记录补齐缺失的资源组。
+pub fn normalize_history_record_group(mut task: TaskHistoryRecord) -> TaskHistoryRecord {
+    if task.group_key.as_deref().is_none_or(str::is_empty) {
+        task.group_key = infer_task_group(&task.task_type).map(str::to_string);
+    }
+    task
 }
 
 const EXEC_EVENT_LOG_CAP: usize = 400;
 
 const DEFAULT_MAX_CONCURRENCY: usize = 8;
-const DEFAULT_GROUP_FFMPEG: usize = 2;
-const DEFAULT_GROUP_WHISPER: usize = 1;
+const DEFAULT_GROUP_SUBTITLE_PIPELINE: usize = 2;
+const DEFAULT_GROUP_WHISPER: usize = 2;
 const DEFAULT_GROUP_TRANSLATE: usize = 2;
 const DEFAULT_GROUP_SETUP_DOWNLOAD: usize = 1;
+const DEFAULT_GROUP_MEDIA_SCAN: usize = 1;
 
 /// 调度器全局并发与各资源组上限（可由环境变量覆盖）。
 struct SchedulerConcurrencyLimits {
     max_concurrency: usize,
-    ffmpeg: usize,
+    subtitle_pipeline: usize,
     whisper: usize,
     translate: usize,
     setup_download: usize,
+    media_scan: usize,
 }
 
 fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
     SchedulerConcurrencyLimits {
         max_concurrency: env_usize("TASKMILL_MAX_CONCURRENCY", DEFAULT_MAX_CONCURRENCY),
-        ffmpeg: env_usize("TASKMILL_GROUP_FFMPEG", DEFAULT_GROUP_FFMPEG),
+        subtitle_pipeline: env_usize(
+            "TASKMILL_GROUP_SUBTITLE_PIPELINE",
+            DEFAULT_GROUP_SUBTITLE_PIPELINE,
+        ),
         whisper: env_usize("TASKMILL_GROUP_WHISPER", DEFAULT_GROUP_WHISPER),
         translate: env_usize("TASKMILL_GROUP_TRANSLATE", DEFAULT_GROUP_TRANSLATE),
         setup_download: env_usize(
             "TASKMILL_GROUP_SETUP_DOWNLOAD",
             DEFAULT_GROUP_SETUP_DOWNLOAD,
         ),
+        media_scan: env_usize("TASKMILL_GROUP_MEDIA_SCAN", DEFAULT_GROUP_MEDIA_SCAN),
     }
 }
 
@@ -80,6 +120,12 @@ fn scheduler_concurrency_limits() -> SchedulerConcurrencyLimits {
 pub struct SetupDownloadDeps {
     pub http_client: reqwest::Client,
     pub staging_lock: Arc<Mutex<()>>,
+}
+
+/// 媒体库扫描 executor 共享依赖。
+#[derive(Clone)]
+pub struct MediaLibraryScanDeps {
+    pub db: ma_db::SqlitePool,
 }
 
 fn env_usize(name: &str, default: usize) -> usize {
@@ -95,12 +141,13 @@ pub struct TaskmillRuntime {
     pub domain: DomainHandle<MediaJobsDomain>,
     pub cancellation: CancellationToken,
     pub setup_download_deps: SetupDownloadDeps,
+    pub media_library_scan_deps: MediaLibraryScanDeps,
     exec_event_log: Arc<tokio::sync::Mutex<VecDeque<TimestampedSchedulerEvent>>>,
 }
 
 impl TaskmillRuntime {
     /// 连接独立 SQLite，并构造 Taskmill 调度器与 typed domain。
-    pub async fn setup() -> anyhow::Result<Self> {
+    pub async fn setup(db: ma_db::SqlitePool) -> anyhow::Result<Self> {
         let db_path = taskmill_sqlite_path().context("解析 TASKMILL_SQLITE / 默认路径")?;
         if let Some(parent) = db_path.parent() {
             let parent_display = parent.display().to_string();
@@ -113,10 +160,11 @@ impl TaskmillRuntime {
         let limits = scheduler_concurrency_limits();
         tracing::info!(
             max_concurrency = limits.max_concurrency,
-            group_ffmpeg = limits.ffmpeg,
+            group_subtitle_pipeline = limits.subtitle_pipeline,
             group_whisper = limits.whisper,
             group_translate = limits.translate,
             group_setup_download = limits.setup_download,
+            group_media_scan = limits.media_scan,
             "taskmill 并发：全局与各资源组上限"
         );
 
@@ -130,23 +178,28 @@ impl TaskmillRuntime {
         };
         let whisper_dl_exec = WhisperModelDownloadExecutor::new(setup_download_deps.clone());
         let ffmpeg_dl_exec = FfmpegSetupDownloadExecutor::new(setup_download_deps.clone());
-
+        let media_library_scan_deps = MediaLibraryScanDeps { db };
+        let media_scan_exec =
+            super::spawn::MediaLibraryScanExecutor::new(media_library_scan_deps.clone());
         let scheduler = Scheduler::builder()
             .store_path(&store_path)
             .domain(
                 Domain::<MediaJobsDomain>::new()
                     .task::<VideoSubtitleGenerateTask>(VideoSubtitleGenerateExecutor)
-                    .task::<ExtractWavTask>(ExtractWavExecutor)
-                    .task::<WhisperVadSrtTask>(WhisperVadSrtExecutor)
+                    .task::<VideoSubtitleExtractWavTask>(VideoSubtitleExtractWavExecutor)
+                    .task::<VideoSubtitleRecognizeTask>(VideoSubtitleRecognizeExecutor)
                     .task::<SubtitleTranslateJob>(SubtitleTranslateExecutor)
+                    .task::<MediaLibraryScanTask>(media_scan_exec)
                     .task::<WhisperModelDownloadTask>(whisper_dl_exec)
                     .task::<FfmpegSetupDownloadTask>(ffmpeg_dl_exec),
             )
             .max_concurrency(limits.max_concurrency)
-            .group_concurrency(GROUP_FFMPEG, limits.ffmpeg)
+            .group_concurrency(GROUP_SUBTITLE_PIPELINE, limits.subtitle_pipeline)
             .group_concurrency(GROUP_WHISPER, limits.whisper)
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
+            .group_concurrency(GROUP_MEDIA_SCAN, limits.media_scan)
+            .group_minimum_slots(GROUP_TRANSLATE, 1)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))
             .build()
@@ -191,6 +244,7 @@ impl TaskmillRuntime {
             domain,
             cancellation,
             setup_download_deps,
+            media_library_scan_deps,
             exec_event_log,
         })
     }
@@ -213,6 +267,17 @@ impl TaskmillRuntime {
             .submit(input)
             .await
             .context("提交字幕翻译任务失败")
+    }
+
+    /// 入队媒体库扫描。
+    pub async fn enqueue_media_library_scan(
+        &self,
+        input: MediaLibraryScanTask,
+    ) -> anyhow::Result<SubmitOutcome> {
+        self.domain
+            .submit(input)
+            .await
+            .context("提交媒体库扫描任务失败")
     }
 
     /// 入队 Whisper 模型下载。
@@ -238,16 +303,18 @@ impl TaskmillRuntime {
     }
 
     pub async fn snapshot(&self) -> anyhow::Result<TaskmillSnapshot> {
-        let scheduler = self
+        let mut scheduler = self
             .scheduler
             .snapshot()
             .await
             .context("读取 taskmill 快照失败")?;
+        scheduler.running = scheduler
+            .running
+            .into_iter()
+            .map(normalize_task_record_group)
+            .collect();
         let metrics = self.scheduler.metrics_snapshot().await;
-        Ok(TaskmillSnapshot {
-            scheduler,
-            metrics,
-        })
+        Ok(TaskmillSnapshot { scheduler, metrics })
     }
 
     pub async fn recent_history(
@@ -259,6 +326,11 @@ impl TaskmillRuntime {
             .store()
             .history(limit, offset)
             .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(normalize_history_record_group)
+                    .collect()
+            })
             .context("读取 taskmill 任务历史失败")
     }
 

@@ -1,9 +1,13 @@
 /** 已知 Taskmill 任务类型 → 展示名（新类型未配置时回退为原始 task_type） */
 export const TASK_TYPE_LABELS: Record<string, string> = {
-  'video-subtitle-generate': '字幕生成（编排）',
-  'extract-wav': '提取 WAV',
-  'whisper-vad-srt': '识别字幕',
+  'video-subtitle-generate': '字幕生成',
   'subtitle-translate': '字幕翻译',
+  'media-library-scan': '媒体库扫描',
+  'whisper-model-download': '下载 Whisper 模型',
+  'ffmpeg-setup-download': '下载 FFmpeg',
+  /** 旧三段子任务链，仅历史 SQLite 记录展示 */
+  'extract-wav': '提取 WAV（已废弃）',
+  'whisper-vad-srt': '识别字幕（已废弃）',
 }
 
 export function taskTypeLabel(taskType: string): string {

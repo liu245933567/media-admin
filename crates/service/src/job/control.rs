@@ -3,23 +3,24 @@
 use anyhow::{Context, bail};
 use serde::Serialize;
 use taskmill::{PauseReasons, TaskRecord, TaskStatus};
+use utoipa::ToSchema;
 
-use super::storage::TaskmillRuntime;
+use super::storage::{TaskmillRuntime, normalize_task_record_group};
 
 /// 通用成功响应。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillControlOk {
     pub ok: bool,
 }
 
 /// 取消任务结果。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillCancelRes {
     pub cancelled: bool,
 }
 
 /// 删除历史记录结果。
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TaskmillDeleteHistoryRes {
     pub deleted: bool,
 }
@@ -37,10 +38,7 @@ impl TaskmillRuntime {
 
     /// 取消指定任务（运行中 / 等待 / pending 等）。
     pub async fn cancel_task(&self, task_id: i64) -> anyhow::Result<bool> {
-        self.scheduler
-            .cancel(task_id)
-            .await
-            .context("取消任务失败")
+        self.scheduler.cancel(task_id).await.context("取消任务失败")
     }
 
     /// 暂停 pending / blocked 任务；运行中任务应使用取消。
@@ -103,6 +101,6 @@ impl TaskmillRuntime {
             .await
             .context("读取活跃任务失败")?;
         tasks.truncate(limit);
-        Ok(tasks)
+        Ok(tasks.into_iter().map(normalize_task_record_group).collect())
     }
 }

@@ -20,15 +20,37 @@ pub fn routes() -> StateRouter {
         .route("/ffmpeg/download", post(ffmpeg_download_handler))
 }
 
-async fn list_whisper_models_handler() -> Json<WhisperModelsListRes> {
+#[utoipa::path(
+    get,
+    path = "/api/setup/whisper/models",
+    operation_id = "listWhisperModelsSetup",
+    tag = "setup",
+    responses((status = 200, body = WhisperModelsListRes))
+)]
+pub(crate) async fn list_whisper_models_handler() -> Json<WhisperModelsListRes> {
     Json(list_whisper_models())
 }
 
-async fn ffmpeg_status_handler() -> Json<FfmpegSetupStatusRes> {
+#[utoipa::path(
+    get,
+    path = "/api/setup/ffmpeg/status",
+    operation_id = "ffmpegStatusSetup",
+    tag = "setup",
+    responses((status = 200, body = FfmpegSetupStatusRes))
+)]
+pub(crate) async fn ffmpeg_status_handler() -> Json<FfmpegSetupStatusRes> {
     Json(ffmpeg_setup_status())
 }
 
-async fn whisper_download_handler(
+#[utoipa::path(
+    post,
+    path = "/api/setup/whisper/download",
+    operation_id = "downloadWhisperSetup",
+    tag = "setup",
+    request_body = WhisperDownloadStartReq,
+    responses((status = 200, body = DownloadJobStartRes))
+)]
+pub(crate) async fn whisper_download_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<WhisperDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {
@@ -40,7 +62,15 @@ async fn whisper_download_handler(
     }))
 }
 
-async fn ffmpeg_download_handler(
+#[utoipa::path(
+    post,
+    path = "/api/setup/ffmpeg/download",
+    operation_id = "downloadFfmpegSetup",
+    tag = "setup",
+    request_body = FfmpegDownloadStartReq,
+    responses((status = 200, body = DownloadJobStartRes))
+)]
+pub(crate) async fn ffmpeg_download_handler(
     State(state): State<AppState>,
     WithRejection(Json(body), _): WithRejection<Json<FfmpegDownloadStartReq>, AppError>,
 ) -> Result<Json<DownloadJobStartRes>, AppError> {

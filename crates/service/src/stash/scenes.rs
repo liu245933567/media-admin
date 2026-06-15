@@ -3,8 +3,8 @@ use ma_utils::types::PageResult;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::stash::StashScenePaths;
-use crate::stash::types::{StashConnectConfig, StashSceneListReq};
+use crate::stash::types::{StashConnectConfig, StashSceneCaption, StashSceneListReq};
+use crate::stash::{StashScenePaths, map_stash_file_path};
 
 use super::forward_graphql;
 use super::types::StashSceneRow;
@@ -97,17 +97,77 @@ pub async fn list_scenes(
         data: find_scenes
             .scenes
             .into_iter()
-            .map(|row| row.with_proxy_paths(&stash_host))
+            .map(|row| row.with_local_paths_and_proxy_paths(cfg, &stash_host))
             .collect(),
         total: find_scenes.count,
     })
 }
 
 impl StashSceneRow {
-    /// 将 paths 中的 Stash 绝对 URL 替换为经本服务代理的路径。
-    fn with_proxy_paths(mut self, stash_host: &str) -> Self {
+    /// 补齐本地文件路径，并将 paths 中的 Stash 绝对 URL 替换为经本服务代理的路径。
+    fn with_local_paths_and_proxy_paths(
+        mut self,
+        cfg: &StashConnectConfig,
+        stash_host: &str,
+    ) -> Self {
+        let first_file_path = self.files.first().map(|file| file.path.clone());
+        self.files = self
+            .files
+            .into_iter()
+            .map(|mut file| {
+                file.local_path = map_stash_file_path(&file.path, &cfg.path_mappings);
+                file
+            })
+            .collect();
         self.paths = self.paths.with_proxy_hosts(stash_host);
+        self.captions = self
+            .captions
+            .into_iter()
+            .map(|caption| caption.with_paths(first_file_path.as_deref(), cfg))
+            .collect();
         self
+    }
+}
+
+impl StashSceneCaption {
+    fn with_paths(mut self, video_path: Option<&str>, cfg: &StashConnectConfig) -> Self {
+        let Some(video_path) = video_path else {
+            return self;
+        };
+        let Some(path) = infer_stash_caption_path(video_path, &self) else {
+            return self;
+        };
+        self.local_path = map_stash_file_path(&path, &cfg.path_mappings);
+        self.path = Some(path);
+        self
+    }
+}
+
+fn infer_stash_caption_path(video_path: &str, caption: &StashSceneCaption) -> Option<String> {
+    let extension = caption_extension(caption)?;
+    let lang = caption
+        .language_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let (base, _) = video_path.rsplit_once('.').unwrap_or((video_path, ""));
+
+    Some(match lang {
+        Some(lang) => format!("{base}.{lang}.{extension}"),
+        None => format!("{base}.{extension}"),
+    })
+}
+
+fn caption_extension(caption: &StashSceneCaption) -> Option<String> {
+    let raw = caption
+        .caption_type
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let normalized = raw.trim_start_matches('.').to_ascii_lowercase();
+    match normalized.as_str() {
+        "srt" | "vtt" => Some(normalized),
+        _ => None,
     }
 }
 
@@ -171,6 +231,7 @@ fragment SlimSceneData on Scene {
   resume_time
   play_duration
   play_count
+  last_played_at
   files {
     ...VideoFileData
     __typename
@@ -185,6 +246,11 @@ fragment SlimSceneData on Scene {
     funscript
     interactive_heatmap
     caption
+    __typename
+  }
+  captions {
+    language_code
+    caption_type
     __typename
   }
   scene_markers {

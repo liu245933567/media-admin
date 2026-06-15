@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "@heroui/styles";
+@import "@heroui-pro/react/css";
 
 /* 与 Tailwind select-none 一致：拖动区避免选中文字（属性在 headerContentRender 中挂载） */
 .app-root-layout [data-tauri-drag-region] {
@@ -60,13 +62,16 @@ html[data-theme="dark"] {
   background: transparent;
 }
 
-.ant-pro-layout-container {
-  height: 100dvh !important;
+html,
+body,
+#root {
+  min-height: 100%;
+}
 
-  .ant-pro-layout-content {
-    flex: 1 !important;
-    overflow-y: auto !important;
-  }
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 /* Stash 封面预览：屏蔽浏览器在 video 悬停时注入的画中画 / 翻译等原生控件 */
@@ -80,3 +85,12 @@ html[data-theme="dark"] {
 .stash-scene-cover-video::-webkit-media-controls-toggle-closed-captions-button {
   display: none !important;
 }
+
+/* 播放页：未开播时显示控制栏；开播后仍遵循 video.js 播放中自动隐藏逻辑 */
+.video-js.vjs-always-show-controls:not(.vjs-has-started) .vjs-control-bar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
