@@ -1,6 +1,6 @@
 use axum::Router;
-use ma_service::{AppConfig, apply_whisper_runtime_config};
 use ma_service::job::{TaskmillRuntime, spawn_taskmill_scheduler};
+use ma_service::{AppConfig, apply_whisper_runtime_config};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;

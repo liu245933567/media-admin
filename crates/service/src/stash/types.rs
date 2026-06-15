@@ -115,6 +115,10 @@ pub struct StashSceneCaption {
 pub struct StashSceneRow {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub details: Option<String>,
+    #[serde(default)]
+    pub organized: Option<bool>,
     pub date: Option<String>,
     pub files: Vec<StashSceneFile>,
     pub paths: StashScenePaths,

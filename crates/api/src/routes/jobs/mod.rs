@@ -67,7 +67,6 @@ pub fn routes() -> StateRouter {
         .route("/snapshot", get(snapshot_handler))
         .route("/history", get(history_handler))
         .route("/history/{id}", delete(delete_history_handler))
-
         .route("/exec-log", get(exec_log_handler))
         .route("/active", get(active_tasks_handler))
         .route("/scheduler/pause", post(scheduler_pause_handler))
@@ -350,5 +349,3 @@ pub(crate) async fn delete_history_handler(
         .map_err(AppError::Internal)?;
     Ok(Json(TaskmillDeleteHistoryRes { deleted }))
 }
-
-

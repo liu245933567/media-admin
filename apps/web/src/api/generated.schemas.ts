@@ -983,6 +983,7 @@ export const ListScenesStashResponse = zod.object({
   "path": zod.string().nullish().describe('Stash 视角推导出的字幕文件路径。')
 })).optional(),
   "date": zod.string().nullish(),
+  "details": zod.string().nullish(),
   "files": zod.array(zod.object({
   "basename": zod.string(),
   "duration": zod.number().nullish().describe('影片时长，单位为秒。'),
@@ -991,6 +992,7 @@ export const ListScenesStashResponse = zod.object({
 })),
   "id": zod.string(),
   "last_played_at": zod.string().nullish().describe('最后播放时间'),
+  "organized": zod.boolean().nullish(),
   "paths": zod.object({
   "preview": zod.string(),
   "screenshot": zod.string()
@@ -999,6 +1001,32 @@ export const ListScenesStashResponse = zod.object({
 })),
   "total": zod.number()
 })
+
+
+export const CompleteSceneMetadataStashBody = zod.object({
+  "field_options": zod.array(zod.object({
+  "createMissing": zod.boolean().nullish().describe('演员、标签、工作室等关联对象不存在时是否创建。'),
+  "field": zod.string().describe('字段名，与 Stash `IdentifyFieldOptionsInput.field` 保持一致。'),
+  "strategy": zod.enum(['IGNORE', 'MERGE', 'OVERWRITE']).describe('字段写入策略。')
+}).describe('Stash 元数据补全的单个字段策略。')).optional().describe('字段策略；不传时只补空字段并合并关联实体。'),
+  "scene_ids": zod.array(zod.string()).optional().describe('要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。'),
+  "set_cover_image": zod.boolean().optional().describe('是否设置封面图。'),
+  "set_organized": zod.boolean().optional().describe('是否将场景标记为已整理。'),
+  "skip_multiple_matches": zod.boolean().optional().describe('多个匹配结果时跳过，降低误写入风险。'),
+  "sources": zod.array(zod.object({
+  "scraper_id": zod.string().nullish().describe('本地 scraper ID，例如 ThePornDB scraper 的 ID。'),
+  "stash_box_endpoint": zod.string().nullish().describe('StashBox GraphQL 端点，例如 `https:\/\/stashdb.org\/graphql`。')
+}).describe('Stash 元数据识别来源，可指向 StashBox 端点或本地 scraper。')).optional().describe('识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。')
+}).describe('Stash 场景元数据补全请求。')
+
+export const completeSceneMetadataStashResponseSceneCountMin = 0;
+
+
+
+export const CompleteSceneMetadataStashResponse = zod.object({
+  "job_id": zod.string().nullish().describe('Stash 创建的元数据识别任务 ID；没有命中场景时为空。'),
+  "scene_count": zod.number().min(completeSceneMetadataStashResponseSceneCountMin).describe('本次提交的场景数量。')
+}).describe('Stash 场景元数据补全响应。')
 
 
 export const DownloadSubtitleWebBody = zod.object({

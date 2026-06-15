@@ -3,11 +3,13 @@ import type { StashScenesViewState, StashSort } from '@/features/stash-scenes/st
 import { ActionBar } from '@heroui-pro/react/action-bar'
 import { Button, Checkbox, Chip, Input, Label, ListBox, Select, Separator, Switch, Tooltip } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
+import { completeSceneMetadataStash, getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
+import { useAppToast } from '@/components/app-toast'
 import { BasePagination } from '@/components/base-pagination'
+import { useConfirmDialog } from '@/components/confirm-dialog'
 import { StashFilterDrawer } from '@/features/stash-scenes/stash-filter-drawer'
 import { StashSceneCardGrid } from '@/features/stash-scenes/stash-scene-card-grid'
 import { buildStashSceneFilter, countActiveStashFilters, DEFAULT_STASH_FILTER_VALUES, isMappedStashSceneWithoutSubtitles, loadStashScenesFilterValues, loadStashScenesViewState, saveStashScenesFilterValues, saveStashScenesViewState, STASH_PAGE_SIZE_OPTIONS, STASH_SORT_OPTIONS, stashSceneToBulkSourceRow } from '@/features/stash-scenes/stash-scenes-state'
@@ -19,6 +21,8 @@ export const Route = createFileRoute('/stash-scenes')({
 })
 
 function PageComponent() {
+  const confirm = useConfirmDialog()
+  const message = useAppToast()
   const navigate = useNavigate()
   const [viewState, setViewState] = useState(loadStashScenesViewState)
   const { direction, page, pageSize, q, screenshotShow, sort } = viewState
@@ -117,6 +121,39 @@ function PageComponent() {
   const clearSelection = useCallback(() => {
     setSelectedSceneKeys(new Set())
   }, [])
+
+  const completeMetadataMutation = useMutation({
+    mutationFn: () => completeSceneMetadataStash({ scene_ids: [] }),
+    onSuccess: (res) => {
+      if (res.scene_count === 0) {
+        message.info('没有找到已整理但缺标题的 Stash 场景')
+        return
+      }
+
+      message.success(`已提交 ${res.scene_count} 个场景到 Stash 元数据补全任务：${res.job_id}`)
+      clearSelection()
+      void scenesQuery.refetch()
+    },
+    onError: error => message.error(error.message ?? '元数据补全任务提交失败'),
+  })
+
+  const confirmCompleteMissingTitleMetadata = useCallback(() => {
+    confirm({
+      title: '补全场景元数据',
+      description: (
+        <div className="space-y-2">
+          <p className="m-0">
+            将查询 Stash 中所有已整理但标题为空的场景，并提交给 StashDB 与 ThePornDB 按顺序识别。
+          </p>
+          <p className="m-0 text-muted">
+            默认只补空字段并合并演员、标签、工作室；多个匹配结果会跳过。
+          </p>
+        </div>
+      ),
+      confirmText: '提交任务',
+      onConfirm: () => completeMetadataMutation.mutateAsync(),
+    })
+  }, [completeMetadataMutation, confirm])
 
   const handlePlay = useCallback((videoPath: string) => {
     void navigate({
@@ -256,6 +293,15 @@ function PageComponent() {
                   </Chip>
                 )
               : null}
+          </Button>
+          <Button
+            isPending={completeMetadataMutation.isPending}
+            size="sm"
+            variant="secondary"
+            onPress={confirmCompleteMissingTitleMetadata}
+          >
+            <Icon className="size-4" icon="lucide:wand-sparkles" />
+            补全元数据
           </Button>
         </div>
       </div>

@@ -10,7 +10,8 @@ use axum::{
 use axum_extra::extract::WithRejection;
 use futures_util::StreamExt;
 use ma_service::stash::{
-    StashEntitySearchReq, StashEntitySearchRes, StashSceneListReq, StashSceneRow, list_scenes,
+    StashEntitySearchReq, StashEntitySearchRes, StashSceneListReq, StashSceneMetadataCompleteReq,
+    StashSceneMetadataCompleteRes, StashSceneRow, complete_scene_metadata, list_scenes,
     proxy_media, search_entities,
 };
 use ma_utils::types::PageResult;
@@ -20,6 +21,10 @@ use utoipa::ToSchema;
 pub fn routes() -> StateRouter {
     Router::new()
         .route("/scenes/list", post(scenes_list_handler))
+        .route(
+            "/scenes/metadata/complete",
+            post(scenes_metadata_complete_handler),
+        )
         .route("/entities/search", get(entities_search_handler))
         .route("/media", get(media_proxy_handler))
 }
@@ -38,6 +43,25 @@ pub(crate) async fn scenes_list_handler(
 ) -> Result<Json<PageResult<StashSceneRow>>, AppError> {
     let stash_config = state.app_config.read().await.stash_config.clone();
     let res = list_scenes(&stash_config, body)
+        .await
+        .map_err(map_stash_err)?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/stash/scenes/metadata/complete",
+    operation_id = "completeSceneMetadataStash",
+    tag = "stash",
+    request_body = StashSceneMetadataCompleteReq,
+    responses((status = 200, body = StashSceneMetadataCompleteRes))
+)]
+pub(crate) async fn scenes_metadata_complete_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<Json<StashSceneMetadataCompleteReq>, AppError>,
+) -> Result<Json<StashSceneMetadataCompleteRes>, AppError> {
+    let stash_config = state.app_config.read().await.stash_config.clone();
+    let res = complete_scene_metadata(&stash_config, body)
         .await
         .map_err(map_stash_err)?;
     Ok(Json(res))

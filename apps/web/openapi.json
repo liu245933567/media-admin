@@ -468,6 +468,12 @@
                     "null"
                   ]
                 },
+                "details": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "files": {
                   "items": {
                     "$ref": "#/components/schemas/StashSceneFile"
@@ -481,6 +487,12 @@
                   "description": "最后播放时间",
                   "type": [
                     "string",
+                    "null"
+                  ]
+                },
+                "organized": {
+                  "type": [
+                    "boolean",
                     "null"
                   ]
                 },
@@ -876,6 +888,60 @@
         "required": [
           "modifier"
         ],
+        "type": "object"
+      },
+      "StashIdentifyFieldOption": {
+        "description": "Stash 元数据补全的单个字段策略。",
+        "properties": {
+          "createMissing": {
+            "description": "演员、标签、工作室等关联对象不存在时是否创建。",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "field": {
+            "description": "字段名，与 Stash `IdentifyFieldOptionsInput.field` 保持一致。",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/StashIdentifyFieldStrategy",
+            "description": "字段写入策略。"
+          }
+        },
+        "required": [
+          "field",
+          "strategy"
+        ],
+        "type": "object"
+      },
+      "StashIdentifyFieldStrategy": {
+        "description": "Stash 元数据识别字段写入策略。",
+        "enum": [
+          "IGNORE",
+          "MERGE",
+          "OVERWRITE"
+        ],
+        "type": "string"
+      },
+      "StashIdentifySource": {
+        "description": "Stash 元数据识别来源，可指向 StashBox 端点或本地 scraper。",
+        "properties": {
+          "scraper_id": {
+            "description": "本地 scraper ID，例如 ThePornDB scraper 的 ID。",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stash_box_endpoint": {
+            "description": "StashBox GraphQL 端点，例如 `https://stashdb.org/graphql`。",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "StashIdsCriterion": {
@@ -1679,6 +1745,66 @@
         ],
         "type": "object"
       },
+      "StashSceneMetadataCompleteReq": {
+        "description": "Stash 场景元数据补全请求。",
+        "properties": {
+          "field_options": {
+            "description": "字段策略；不传时只补空字段并合并关联实体。",
+            "items": {
+              "$ref": "#/components/schemas/StashIdentifyFieldOption"
+            },
+            "type": "array"
+          },
+          "scene_ids": {
+            "description": "要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "set_cover_image": {
+            "description": "是否设置封面图。",
+            "type": "boolean"
+          },
+          "set_organized": {
+            "description": "是否将场景标记为已整理。",
+            "type": "boolean"
+          },
+          "skip_multiple_matches": {
+            "description": "多个匹配结果时跳过，降低误写入风险。",
+            "type": "boolean"
+          },
+          "sources": {
+            "description": "识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。",
+            "items": {
+              "$ref": "#/components/schemas/StashIdentifySource"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "StashSceneMetadataCompleteRes": {
+        "description": "Stash 场景元数据补全响应。",
+        "properties": {
+          "job_id": {
+            "description": "Stash 创建的元数据识别任务 ID；没有命中场景时为空。",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scene_count": {
+            "description": "本次提交的场景数量。",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scene_count"
+        ],
+        "type": "object"
+      },
       "StashScenePaths": {
         "properties": {
           "preview": {
@@ -1708,6 +1834,12 @@
               "null"
             ]
           },
+          "details": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "files": {
             "items": {
               "$ref": "#/components/schemas/StashSceneFile"
@@ -1721,6 +1853,12 @@
             "description": "最后播放时间",
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "organized": {
+            "type": [
+              "boolean",
               "null"
             ]
           },
@@ -3404,6 +3542,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PageResult_StashSceneRow"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "stash"
+        ]
+      }
+    },
+    "/api/stash/scenes/metadata/complete": {
+      "post": {
+        "operationId": "completeSceneMetadataStash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StashSceneMetadataCompleteReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StashSceneMetadataCompleteRes"
                 }
               }
             },

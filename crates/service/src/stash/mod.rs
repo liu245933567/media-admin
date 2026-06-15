@@ -1,5 +1,6 @@
 mod entities;
 mod filter;
+mod metadata;
 mod path;
 mod scenes;
 mod types;
@@ -191,3 +192,7 @@ mod tests {
         assert_eq!(resolve_stash_media_url(&test_cfg(), url).unwrap(), url);
     }
 }
+pub use metadata::{
+    StashIdentifyFieldOption, StashIdentifyFieldStrategy, StashIdentifySource,
+    StashSceneMetadataCompleteReq, StashSceneMetadataCompleteRes, complete_scene_metadata,
+};

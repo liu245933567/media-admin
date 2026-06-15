@@ -380,6 +380,8 @@ export type PageResultStashSceneRowDataItem = {
   captions?: StashSceneCaption[];
   /** @nullable */
   date?: string | null;
+  /** @nullable */
+  details?: string | null;
   files: StashSceneFile[];
   id: string;
   /**
@@ -387,6 +389,8 @@ export type PageResultStashSceneRowDataItem = {
      * @nullable
      */
   last_played_at?: string | null;
+  /** @nullable */
+  organized?: boolean | null;
   paths: StashScenePaths;
   title: string;
 };
@@ -552,6 +556,41 @@ export interface StashIdCriterion {
 }
 
 /**
+ * Stash 元数据识别字段写入策略。
+ */
+export type StashIdentifyFieldStrategy = 'IGNORE' | 'MERGE' | 'OVERWRITE';
+/**
+ * Stash 元数据补全的单个字段策略。
+ */
+export interface StashIdentifyFieldOption {
+  /**
+     * 演员、标签、工作室等关联对象不存在时是否创建。
+     * @nullable
+     */
+  createMissing?: boolean | null;
+  /** 字段名，与 Stash `IdentifyFieldOptionsInput.field` 保持一致。 */
+  field: string;
+  /** 字段写入策略。 */
+  strategy: StashIdentifyFieldStrategy;
+}
+
+/**
+ * Stash 元数据识别来源，可指向 StashBox 端点或本地 scraper。
+ */
+export interface StashIdentifySource {
+  /**
+     * 本地 scraper ID，例如 ThePornDB scraper 的 ID。
+     * @nullable
+     */
+  scraper_id?: string | null;
+  /**
+     * StashBox GraphQL 端点，例如 `https://stashdb.org/graphql`。
+     * @nullable
+     */
+  stash_box_endpoint?: string | null;
+}
+
+/**
  * Stash `StashIDsCriterionInput`
  */
 export interface StashIdsCriterion {
@@ -708,10 +747,46 @@ export interface StashSceneListReq {
   scene_ids?: number[] | null;
 }
 
+/**
+ * Stash 场景元数据补全请求。
+ */
+export interface StashSceneMetadataCompleteReq {
+  /** 字段策略；不传时只补空字段并合并关联实体。 */
+  field_options?: StashIdentifyFieldOption[];
+  /** 要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。 */
+  scene_ids?: string[];
+  /** 是否设置封面图。 */
+  set_cover_image?: boolean;
+  /** 是否将场景标记为已整理。 */
+  set_organized?: boolean;
+  /** 多个匹配结果时跳过，降低误写入风险。 */
+  skip_multiple_matches?: boolean;
+  /** 识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。 */
+  sources?: StashIdentifySource[];
+}
+
+/**
+ * Stash 场景元数据补全响应。
+ */
+export interface StashSceneMetadataCompleteRes {
+  /**
+     * Stash 创建的元数据识别任务 ID；没有命中场景时为空。
+     * @nullable
+     */
+  job_id?: string | null;
+  /**
+     * 本次提交的场景数量。
+     * @minimum 0
+     */
+  scene_count: number;
+}
+
 export interface StashSceneRow {
   captions?: StashSceneCaption[];
   /** @nullable */
   date?: string | null;
+  /** @nullable */
+  details?: string | null;
   files: StashSceneFile[];
   id: string;
   /**
@@ -719,6 +794,8 @@ export interface StashSceneRow {
      * @nullable
      */
   last_played_at?: string | null;
+  /** @nullable */
+  organized?: boolean | null;
   paths: StashScenePaths;
   title: string;
 }
@@ -3348,6 +3425,64 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getListScenesStashMutationOptions(options), queryClient);
+    }
+
+export const completeSceneMetadataStash = (
+    stashSceneMetadataCompleteReq: BodyType<StashSceneMetadataCompleteReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<StashSceneMetadataCompleteRes>(
+      {url: `/api/stash/scenes/metadata/complete`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: stashSceneMetadataCompleteReq, signal
+    },
+      options);
+    }
+
+
+
+export const getCompleteSceneMetadataStashMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeSceneMetadataStash>>, TError,{data: BodyType<StashSceneMetadataCompleteReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeSceneMetadataStash>>, TError,{data: BodyType<StashSceneMetadataCompleteReq>}, TContext> => {
+
+const mutationKey = ['completeSceneMetadataStash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeSceneMetadataStash>>, {data: BodyType<StashSceneMetadataCompleteReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeSceneMetadataStash(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteSceneMetadataStashMutationResult = NonNullable<Awaited<ReturnType<typeof completeSceneMetadataStash>>>
+    export type CompleteSceneMetadataStashMutationBody = BodyType<StashSceneMetadataCompleteReq>
+    export type CompleteSceneMetadataStashMutationError = ErrorType<unknown>
+
+    export const useCompleteSceneMetadataStash = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeSceneMetadataStash>>, TError,{data: BodyType<StashSceneMetadataCompleteReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof completeSceneMetadataStash>>,
+        TError,
+        {data: BodyType<StashSceneMetadataCompleteReq>},
+        TContext
+      > => {
+      return useMutation(getCompleteSceneMetadataStashMutationOptions(options), queryClient);
     }
 
 export const downloadSubtitleWeb = (
