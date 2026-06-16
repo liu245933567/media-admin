@@ -9,6 +9,8 @@ use crate::stash::{StashScenePaths, map_stash_file_path};
 use super::forward_graphql;
 use super::types::StashSceneRow;
 
+const MISSING_CAPTIONS_PAGE_SIZE: i32 = 500;
+
 #[derive(Debug, Deserialize)]
 struct FindScenesGraphqlData {
     #[serde(rename = "findScenes")]
@@ -24,6 +26,60 @@ struct FindScenesPayload {
 #[derive(Debug, Deserialize)]
 struct GraphqlError {
     message: String,
+}
+
+/// 查询 Stash 中所有没有字幕、且能映射到本地文件路径的场景视频路径。
+pub async fn list_mapped_video_paths_without_captions(
+    cfg: &StashConnectConfig,
+) -> Result<Vec<String>> {
+    let mut page = 1;
+    let mut video_paths = Vec::new();
+    let mut fetched_count = 0usize;
+
+    loop {
+        let req = StashSceneListReq {
+            filter: super::types::StashFilter {
+                page,
+                page_size: MISSING_CAPTIONS_PAGE_SIZE,
+                q: None,
+                sort: Some("id".to_string()),
+                direction: Some("ASC".to_string()),
+            },
+            scene_filter: Some(crate::stash::StashSceneFilterType {
+                captions: Some(crate::stash::StashStringCriterion {
+                    value: String::new(),
+                    modifier: crate::stash::StashCriterionModifier::IsNull,
+                }),
+                ..Default::default()
+            }),
+            scene_ids: None,
+        };
+
+        let page_res = list_scenes(cfg, req).await?;
+        if page_res.data.is_empty() {
+            break;
+        }
+
+        fetched_count += page_res.data.len();
+        video_paths.extend(page_res.data.into_iter().filter_map(|row| {
+            if !row.captions.is_empty() {
+                return None;
+            }
+            row.files
+                .first()
+                .and_then(|file| file.local_path.as_deref())
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .map(str::to_string)
+        }));
+
+        if fetched_count >= page_res.total.max(0) as usize {
+            break;
+        }
+        page += 1;
+    }
+
+    Ok(video_paths)
 }
 
 /// 调用 Stash `findScenes` 并返回分页列表。

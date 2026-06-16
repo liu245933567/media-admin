@@ -1712,6 +1712,63 @@
         },
         "type": "object"
       },
+      "StashSceneGenerateMissingSubtitlesReq": {
+        "properties": {
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubtitleGenerateConfig",
+                "description": "`None` 表示整包采用全局默认生成配置。"
+              }
+            ]
+          },
+          "skip_if_exists": {
+            "description": "若同 video_path 已有 pending/running 生成任务则跳过（默认 true）。",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "StashSceneGenerateMissingSubtitlesRes": {
+        "properties": {
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleGenerateBulkFailedItem"
+            },
+            "type": "array"
+          },
+          "matched_videos": {
+            "description": "Stash 中无字幕且能映射为本地路径的视频数量。",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "submitted": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "matched_videos",
+          "submitted",
+          "skipped",
+          "failed"
+        ],
+        "type": "object"
+      },
       "StashSceneListReq": {
         "properties": {
           "filter": {
@@ -3572,6 +3629,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StashSceneMetadataCompleteRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "stash"
+        ]
+      }
+    },
+    "/api/stash/scenes/subtitles/generate-missing": {
+      "post": {
+        "operationId": "generateMissingSubtitlesStash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StashSceneGenerateMissingSubtitlesReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StashSceneGenerateMissingSubtitlesRes"
                 }
               }
             },
