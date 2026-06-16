@@ -20,7 +20,7 @@ pub use filter::{
     StashResolutionCriterion, StashSceneFilterType, StashStringCriterion,
 };
 pub use path::{StashPathMapping, map_stash_file_path};
-pub use scenes::list_scenes;
+pub use scenes::{list_mapped_video_paths_without_captions, list_scenes};
 pub use types::{
     StashConnectConfig, StashEntityKind, StashEntitySearchItem, StashEntitySearchReq,
     StashEntitySearchRes, StashFilter, StashSceneFile, StashSceneListReq, StashScenePaths,

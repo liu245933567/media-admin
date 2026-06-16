@@ -737,6 +737,26 @@ export interface StashSceneFilterType {
   video_codec?: null | StashStringCriterion;
 }
 
+export interface StashSceneGenerateMissingSubtitlesReq {
+  config?: null | SubtitleGenerateConfig;
+  /**
+     * 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）。
+     * @nullable
+     */
+  skip_if_exists?: boolean | null;
+}
+
+export interface StashSceneGenerateMissingSubtitlesRes {
+  failed: SubtitleGenerateBulkFailedItem[];
+  /**
+     * Stash 中无字幕且能映射为本地路径的视频数量。
+     * @minimum 0
+     */
+  matched_videos: number;
+  skipped: string[];
+  submitted: string[];
+}
+
 export interface StashSceneListReq {
   filter: StashFilter;
   scene_filter?: null | StashSceneFilterType;
@@ -3483,6 +3503,64 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCompleteSceneMetadataStashMutationOptions(options), queryClient);
+    }
+
+export const generateMissingSubtitlesStash = (
+    stashSceneGenerateMissingSubtitlesReq: BodyType<StashSceneGenerateMissingSubtitlesReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<StashSceneGenerateMissingSubtitlesRes>(
+      {url: `/api/stash/scenes/subtitles/generate-missing`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: stashSceneGenerateMissingSubtitlesReq, signal
+    },
+      options);
+    }
+
+
+
+export const getGenerateMissingSubtitlesStashMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext> => {
+
+const mutationKey = ['generateMissingSubtitlesStash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, {data: BodyType<StashSceneGenerateMissingSubtitlesReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateMissingSubtitlesStash(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateMissingSubtitlesStashMutationResult = NonNullable<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>>
+    export type GenerateMissingSubtitlesStashMutationBody = BodyType<StashSceneGenerateMissingSubtitlesReq>
+    export type GenerateMissingSubtitlesStashMutationError = ErrorType<unknown>
+
+    export const useGenerateMissingSubtitlesStash = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof generateMissingSubtitlesStash>>,
+        TError,
+        {data: BodyType<StashSceneGenerateMissingSubtitlesReq>},
+        TContext
+      > => {
+      return useMutation(getGenerateMissingSubtitlesStashMutationOptions(options), queryClient);
     }
 
 export const downloadSubtitleWeb = (

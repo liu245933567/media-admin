@@ -9,24 +9,52 @@ use axum::{
 };
 use axum_extra::extract::WithRejection;
 use futures_util::StreamExt;
-use ma_service::stash::{
-    StashEntitySearchReq, StashEntitySearchRes, StashSceneListReq, StashSceneMetadataCompleteReq,
-    StashSceneMetadataCompleteRes, StashSceneRow, complete_scene_metadata, list_scenes,
-    proxy_media, search_entities,
+use ma_service::{
+    SubtitleGenerateConfig,
+    job::{
+        SubtitleGenerateBulkFailedItem, SubtitleGenerateBulkReq, bulk_enqueue_subtitle_generate,
+    },
+    stash::{
+        StashEntitySearchReq, StashEntitySearchRes, StashSceneListReq,
+        StashSceneMetadataCompleteReq, StashSceneMetadataCompleteRes, StashSceneRow,
+        complete_scene_metadata, list_mapped_video_paths_without_captions, list_scenes,
+        proxy_media, search_entities,
+    },
 };
 use ma_utils::types::PageResult;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 pub fn routes() -> StateRouter {
     Router::new()
         .route("/scenes/list", post(scenes_list_handler))
         .route(
+            "/scenes/subtitles/generate-missing",
+            post(scenes_generate_missing_subtitles_handler),
+        )
+        .route(
             "/scenes/metadata/complete",
             post(scenes_metadata_complete_handler),
         )
         .route("/entities/search", get(entities_search_handler))
         .route("/media", get(media_proxy_handler))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct StashSceneGenerateMissingSubtitlesReq {
+    /// `None` 表示整包采用全局默认生成配置。
+    pub config: Option<SubtitleGenerateConfig>,
+    /// 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）。
+    pub skip_if_exists: Option<bool>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct StashSceneGenerateMissingSubtitlesRes {
+    /// Stash 中无字幕且能映射为本地路径的视频数量。
+    pub matched_videos: usize,
+    pub submitted: Vec<String>,
+    pub skipped: Vec<String>,
+    pub failed: Vec<SubtitleGenerateBulkFailedItem>,
 }
 
 #[utoipa::path(
@@ -46,6 +74,56 @@ pub(crate) async fn scenes_list_handler(
         .await
         .map_err(map_stash_err)?;
     Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/stash/scenes/subtitles/generate-missing",
+    operation_id = "generateMissingSubtitlesStash",
+    tag = "stash",
+    request_body = StashSceneGenerateMissingSubtitlesReq,
+    responses((status = 200, body = StashSceneGenerateMissingSubtitlesRes))
+)]
+pub(crate) async fn scenes_generate_missing_subtitles_handler(
+    State(state): State<AppState>,
+    WithRejection(Json(body), _): WithRejection<
+        Json<StashSceneGenerateMissingSubtitlesReq>,
+        AppError,
+    >,
+) -> Result<Json<StashSceneGenerateMissingSubtitlesRes>, AppError> {
+    let global = state.app_config.read().await;
+    let video_paths = list_mapped_video_paths_without_captions(&global.stash_config)
+        .await
+        .map_err(map_stash_err)?;
+    let matched_videos = video_paths.len();
+
+    if video_paths.is_empty() {
+        return Ok(Json(StashSceneGenerateMissingSubtitlesRes {
+            matched_videos,
+            submitted: Vec::new(),
+            skipped: Vec::new(),
+            failed: Vec::new(),
+        }));
+    }
+
+    let res = bulk_enqueue_subtitle_generate(
+        &state.taskmill,
+        SubtitleGenerateBulkReq {
+            video_paths,
+            config: body.config,
+            skip_if_exists: body.skip_if_exists,
+        },
+        &global,
+    )
+    .await
+    .map_err(AppError::Internal)?;
+
+    Ok(Json(StashSceneGenerateMissingSubtitlesRes {
+        matched_videos,
+        submitted: res.submitted,
+        skipped: res.skipped,
+        failed: res.failed,
+    }))
 }
 
 #[utoipa::path(
