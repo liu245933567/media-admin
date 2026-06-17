@@ -32,8 +32,14 @@ impl TaskmillRuntime {
     }
 
     /// 全局恢复调度器。
-    pub async fn resume_scheduler(&self) {
+    pub async fn resume_scheduler(&self) -> anyhow::Result<()> {
         self.scheduler.resume_all().await;
+        self.scheduler
+            .store()
+            .clear_pause_bit(PauseReasons::GLOBAL)
+            .await
+            .context("恢复全局暂停任务失败")?;
+        Ok(())
     }
 
     /// 取消指定任务（运行中 / 等待 / pending 等）。

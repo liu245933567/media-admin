@@ -29,8 +29,10 @@ pub fn submit_outcome_task_id(outcome: SubmitOutcome) -> Result<i64> {
 /// 用户从设置页显式触发安装类任务时，若调度器处于启动默认暂停则恢复，否则任务只会入队不执行。
 async fn resume_scheduler_for_setup_download(runtime: &TaskmillRuntime) {
     if runtime.scheduler.is_paused() {
-        runtime.resume_scheduler().await;
-        tracing::info!("设置页安装任务：调度器已从默认暂停恢复");
+        match runtime.resume_scheduler().await {
+            Ok(()) => tracing::info!("设置页安装任务：调度器已从默认暂停恢复"),
+            Err(e) => tracing::warn!(error = %e, "设置页安装任务：恢复调度器失败"),
+        }
     }
 }
 

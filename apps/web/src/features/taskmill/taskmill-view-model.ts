@@ -753,7 +753,10 @@ function activePipelineLaneKeys(pipeline: PipelineView): string[] {
   }
 
   if (keys.size === 0) {
-    keys.add(pipelineLaneKey(pipeline))
+    const fallback = pipelineLaneKey(pipeline)
+    if (fallback !== 'ungrouped') {
+      keys.add(fallback)
+    }
   }
 
   return Array.from(keys)

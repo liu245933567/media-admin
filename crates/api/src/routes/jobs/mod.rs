@@ -265,9 +265,13 @@ pub(crate) async fn scheduler_pause_handler(
 )]
 pub(crate) async fn scheduler_resume_handler(
     State(state): State<AppState>,
-) -> Json<TaskmillControlOk> {
-    state.taskmill.resume_scheduler().await;
-    Json(TaskmillControlOk { ok: true })
+) -> Result<Json<TaskmillControlOk>, AppError> {
+    state
+        .taskmill
+        .resume_scheduler()
+        .await
+        .map_err(AppError::Internal)?;
+    Ok(Json(TaskmillControlOk { ok: true }))
 }
 
 #[utoipa::path(
