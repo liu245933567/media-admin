@@ -1813,7 +1813,7 @@
             "type": "array"
           },
           "scene_ids": {
-            "description": "要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。",
+            "description": "要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。",
             "items": {
               "type": "string"
             },
@@ -1829,6 +1829,10 @@
           },
           "skip_multiple_matches": {
             "description": "多个匹配结果时跳过，降低误写入风险。",
+            "type": "boolean"
+          },
+          "skip_single_name_performers": {
+            "description": "是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。",
             "type": "boolean"
           },
           "sources": {

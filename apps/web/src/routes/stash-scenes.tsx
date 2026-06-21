@@ -177,7 +177,7 @@ function PageComponent() {
       description: (
         <div className="space-y-2">
           <p className="m-0">
-            将查询 Stash 中所有已整理但标题为空的场景，并提交给 StashDB 与 ThePornDB 按顺序识别。
+            将查询 Stash 中所有已整理但缺标题或缺演员的场景，并提交给 StashDB 与 ThePornDB 按顺序识别。
           </p>
           <p className="m-0 text-muted">
             默认只补空字段并合并演员、标签、工作室；多个匹配结果会跳过。

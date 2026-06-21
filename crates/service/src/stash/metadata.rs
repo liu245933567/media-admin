@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use super::forward_graphql;
 use super::types::StashConnectConfig;
 
-const MISSING_TITLE_PAGE_SIZE: i32 = 500;
+const INCOMPLETE_METADATA_PAGE_SIZE: i32 = 500;
 
 fn default_identify_sources() -> Vec<StashIdentifySource> {
     vec![
@@ -98,7 +98,7 @@ impl StashIdentifySource {
 #[typeshare::typeshare]
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct StashSceneMetadataCompleteReq {
-    /// 要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。
+    /// 要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。
     #[serde(default)]
     pub scene_ids: Vec<String>,
     /// 识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。
@@ -116,6 +116,9 @@ pub struct StashSceneMetadataCompleteReq {
     /// 多个匹配结果时跳过，降低误写入风险。
     #[serde(default = "default_true")]
     pub skip_multiple_matches: bool,
+    /// 是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。
+    #[serde(default)]
+    pub skip_single_name_performers: bool,
 }
 
 /// Stash 场景元数据补全响应。
@@ -130,22 +133,24 @@ pub struct StashSceneMetadataCompleteRes {
 }
 
 #[derive(Debug, Deserialize)]
-struct FindMissingTitleScenesGraphqlData {
+struct FindIncompleteMetadataScenesGraphqlData {
     #[serde(rename = "findScenes")]
-    find_scenes: FindMissingTitleScenesPayload,
+    find_scenes: FindIncompleteMetadataScenesPayload,
 }
 
 #[derive(Debug, Deserialize)]
-struct FindMissingTitleScenesPayload {
+struct FindIncompleteMetadataScenesPayload {
     count: i32,
-    scenes: Vec<FindMissingTitleScene>,
+    scenes: Vec<FindIncompleteMetadataScene>,
 }
 
 #[derive(Debug, Deserialize)]
-struct FindMissingTitleScene {
+struct FindIncompleteMetadataScene {
     id: String,
     #[serde(default)]
     title: Option<String>,
+    #[serde(default)]
+    performers: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -193,6 +198,7 @@ pub async fn complete_scene_metadata(
             "setCoverImage": req.set_cover_image,
             "setOrganized": req.set_organized,
             "skipMultipleMatches": req.skip_multiple_matches,
+            "skipSingleNamePerformers": req.skip_single_name_performers,
         },
     });
 
@@ -244,21 +250,23 @@ async fn resolve_scene_ids_for_metadata_completion(
         return Ok(scene_ids);
     }
 
-    find_organized_scene_ids_missing_title(cfg).await
+    find_organized_scene_ids_with_incomplete_metadata(cfg).await
 }
 
-async fn find_organized_scene_ids_missing_title(cfg: &StashConnectConfig) -> Result<Vec<String>> {
+async fn find_organized_scene_ids_with_incomplete_metadata(
+    cfg: &StashConnectConfig,
+) -> Result<Vec<String>> {
     let mut page = 1;
     let mut scene_ids = Vec::new();
     let mut fetched_count = 0usize;
 
     loop {
         let body = json!({
-            "query": FIND_MISSING_TITLE_SCENES_QUERY.trim(),
+            "query": FIND_INCOMPLETE_METADATA_SCENES_QUERY.trim(),
             "variables": {
                 "filter": {
                     "page": page,
-                    "per_page": MISSING_TITLE_PAGE_SIZE,
+                    "per_page": INCOMPLETE_METADATA_PAGE_SIZE,
                     "sort": "id",
                     "direction": "ASC",
                 },
@@ -266,7 +274,7 @@ async fn find_organized_scene_ids_missing_title(cfg: &StashConnectConfig) -> Res
                     "organized": true,
                 },
             },
-            "operationName": "FindMissingTitleScenes",
+            "operationName": "FindIncompleteMetadataScenes",
         });
 
         let text = forward_graphql(cfg, body).await?;
@@ -276,7 +284,8 @@ async fn find_organized_scene_ids_missing_title(cfg: &StashConnectConfig) -> Res
         let data = envelope
             .get("data")
             .ok_or_else(|| anyhow!("stash graphql 响应缺少 data"))?;
-        let payload: FindMissingTitleScenesGraphqlData = serde_json::from_value(data.clone())?;
+        let payload: FindIncompleteMetadataScenesGraphqlData =
+            serde_json::from_value(data.clone())?;
 
         let page_scenes = payload.find_scenes.scenes;
         if page_scenes.is_empty() {
@@ -284,14 +293,12 @@ async fn find_organized_scene_ids_missing_title(cfg: &StashConnectConfig) -> Res
         }
         fetched_count += page_scenes.len();
 
-        scene_ids.extend(page_scenes.into_iter().filter_map(|scene| {
-            let is_missing_title = scene
-                .title
-                .as_deref()
-                .map(str::trim)
-                .is_none_or(str::is_empty);
-            is_missing_title.then_some(scene.id)
-        }));
+        scene_ids.extend(
+            page_scenes
+                .into_iter()
+                .filter(|scene| scene.has_incomplete_metadata())
+                .map(|scene| scene.id),
+        );
 
         if fetched_count >= payload.find_scenes.count.max(0) as usize {
             break;
@@ -300,6 +307,19 @@ async fn find_organized_scene_ids_missing_title(cfg: &StashConnectConfig) -> Res
     }
 
     Ok(scene_ids)
+}
+
+impl FindIncompleteMetadataScene {
+    fn has_incomplete_metadata(&self) -> bool {
+        self.is_missing_title() || self.performers.is_empty()
+    }
+
+    fn is_missing_title(&self) -> bool {
+        self.title
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(str::is_empty)
+    }
 }
 
 fn ensure_no_graphql_errors(envelope: &serde_json::Value) -> Result<()> {
@@ -345,8 +365,8 @@ mutation MetadataIdentify($input: IdentifyMetadataInput!) {
 }
 "#;
 
-const FIND_MISSING_TITLE_SCENES_QUERY: &str = r#"
-query FindMissingTitleScenes(
+const FIND_INCOMPLETE_METADATA_SCENES_QUERY: &str = r#"
+query FindIncompleteMetadataScenes(
   $filter: FindFilterType
   $scene_filter: SceneFilterType
 ) {
@@ -358,6 +378,9 @@ query FindMissingTitleScenes(
     scenes {
       id
       title
+      performers {
+        id
+      }
     }
   }
 }

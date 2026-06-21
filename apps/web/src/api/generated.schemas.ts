@@ -1009,10 +1009,11 @@ export const CompleteSceneMetadataStashBody = zod.object({
   "field": zod.string().describe('字段名，与 Stash `IdentifyFieldOptionsInput.field` 保持一致。'),
   "strategy": zod.enum(['IGNORE', 'MERGE', 'OVERWRITE']).describe('字段写入策略。')
 }).describe('Stash 元数据补全的单个字段策略。')).optional().describe('字段策略；不传时只补空字段并合并关联实体。'),
-  "scene_ids": zod.array(zod.string()).optional().describe('要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。'),
+  "scene_ids": zod.array(zod.string()).optional().describe('要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。'),
   "set_cover_image": zod.boolean().optional().describe('是否设置封面图。'),
   "set_organized": zod.boolean().optional().describe('是否将场景标记为已整理。'),
   "skip_multiple_matches": zod.boolean().optional().describe('多个匹配结果时跳过，降低误写入风险。'),
+  "skip_single_name_performers": zod.boolean().optional().describe('是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。'),
   "sources": zod.array(zod.object({
   "scraper_id": zod.string().nullish().describe('本地 scraper ID，例如 ThePornDB scraper 的 ID。'),
   "stash_box_endpoint": zod.string().nullish().describe('StashBox GraphQL 端点，例如 `https:\/\/stashdb.org\/graphql`。')

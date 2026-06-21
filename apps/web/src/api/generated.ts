@@ -773,7 +773,7 @@ export interface StashSceneListReq {
 export interface StashSceneMetadataCompleteReq {
   /** 字段策略；不传时只补空字段并合并关联实体。 */
   field_options?: StashIdentifyFieldOption[];
-  /** 要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。 */
+  /** 要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。 */
   scene_ids?: string[];
   /** 是否设置封面图。 */
   set_cover_image?: boolean;
@@ -781,6 +781,8 @@ export interface StashSceneMetadataCompleteReq {
   set_organized?: boolean;
   /** 多个匹配结果时跳过，降低误写入风险。 */
   skip_multiple_matches?: boolean;
+  /** 是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。 */
+  skip_single_name_performers?: boolean;
   /** 识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。 */
   sources?: StashIdentifySource[];
 }
