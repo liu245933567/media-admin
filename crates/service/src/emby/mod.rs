@@ -68,7 +68,19 @@ pub struct EmbyLibraryItem {
     #[serde(default)]
     pub image_tag: Option<String>,
     #[serde(default)]
+    pub backdrop_image_tag: Option<String>,
+    #[serde(default)]
     pub child_count: Option<i32>,
+    #[serde(default)]
+    pub index_number: Option<i32>,
+    #[serde(default)]
+    pub parent_index_number: Option<i32>,
+    #[serde(default)]
+    pub premiere_date: Option<String>,
+    #[serde(default)]
+    pub community_rating: Option<f64>,
+    #[serde(default)]
+    pub official_rating: Option<String>,
     pub can_play: bool,
     pub can_browse: bool,
 }
@@ -108,6 +120,10 @@ pub struct EmbyItemsQuery {
     pub q: Option<String>,
     #[serde(default)]
     pub parent_id: Option<String>,
+    #[serde(default)]
+    pub include_item_types: Option<String>,
+    #[serde(default)]
+    pub recursive: Option<bool>,
     #[serde(default = "default_start_index")]
     pub start_index: i32,
     #[serde(default = "default_limit")]
@@ -196,10 +212,22 @@ struct RawEmbyItem {
     parent_id: Option<String>,
     #[serde(rename = "ImageTags")]
     image_tags: Option<std::collections::HashMap<String, String>>,
+    #[serde(rename = "BackdropImageTags")]
+    backdrop_image_tags: Option<Vec<String>>,
     #[serde(rename = "ChildCount")]
     child_count: Option<i32>,
     #[serde(rename = "IsFolder")]
     is_folder: Option<bool>,
+    #[serde(rename = "IndexNumber")]
+    index_number: Option<i32>,
+    #[serde(rename = "ParentIndexNumber")]
+    parent_index_number: Option<i32>,
+    #[serde(rename = "PremiereDate")]
+    premiere_date: Option<String>,
+    #[serde(rename = "CommunityRating")]
+    community_rating: Option<f64>,
+    #[serde(rename = "OfficialRating")]
+    official_rating: Option<String>,
 }
 
 fn default_start_index() -> i32 {
@@ -358,16 +386,22 @@ pub async fn test_connection(cfg: &EmbyConnectConfig) -> Result<EmbyConnectionSt
 pub async fn list_items(cfg: &EmbyConnectConfig, q: EmbyItemsQuery) -> Result<EmbyItemsRes> {
     let base_url = normalized_base_url(cfg)?;
     let (token, user_id, _) = authenticate(cfg).await?;
+    let include_item_types = q
+        .include_item_types
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Movie,Episode,Video");
     let mut req = client()?
         .get(format!("{base_url}/Users/{user_id}/Items"))
         .header(AUTHORIZATION, auth_header(&token))
         .header(ACCEPT, "application/json")
         .query(&[
-            ("Recursive", "true".to_string()),
-            ("IncludeItemTypes", "Movie,Episode,Video".to_string()),
+            ("Recursive", q.recursive.unwrap_or(true).to_string()),
+            ("IncludeItemTypes", include_item_types.to_string()),
             (
                 "Fields",
-                "Overview,PrimaryImageAspectRatio,RunTimeTicks,ChildCount".to_string(),
+                "Overview,PrimaryImageAspectRatio,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags".to_string(),
             ),
             ("SortBy", "SortName".to_string()),
             ("SortOrder", "Ascending".to_string()),
@@ -415,6 +449,8 @@ pub async fn list_sections(
         EmbyItemsQuery {
             q: None,
             parent_id: None,
+            include_item_types: None,
+            recursive: None,
             start_index: 0,
             limit: 100,
         },
@@ -432,6 +468,8 @@ pub async fn list_sections(
             EmbyItemsQuery {
                 q: q.q.clone(),
                 parent_id: None,
+                include_item_types: None,
+                recursive: None,
                 start_index: 0,
                 limit: q.limit,
             },
@@ -512,7 +550,10 @@ pub async fn get_item(cfg: &EmbyConnectConfig, item_id: &str) -> Result<EmbyLibr
         .get(format!("{base_url}/Users/{user_id}/Items/{item_id}"))
         .header(AUTHORIZATION, auth_header(&token))
         .header(ACCEPT, "application/json")
-        .query(&[("Fields", "Overview,RunTimeTicks,ChildCount")])
+        .query(&[(
+            "Fields",
+            "Overview,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags",
+        )])
         .send()
         .await?;
     let status = resp.status();
@@ -526,6 +567,9 @@ pub async fn get_item(cfg: &EmbyConnectConfig, item_id: &str) -> Result<EmbyLibr
 
 fn map_item(item: RawEmbyItem) -> EmbyLibraryItem {
     let image_tag = item.image_tags.and_then(|mut tags| tags.remove("Primary"));
+    let backdrop_image_tag = item
+        .backdrop_image_tags
+        .and_then(|tags| tags.into_iter().next());
     let can_browse = item.is_folder.unwrap_or(false)
         || matches!(
             item.item_type.as_str(),
@@ -543,7 +587,13 @@ fn map_item(item: RawEmbyItem) -> EmbyLibraryItem {
         run_time_ticks: item.run_time_ticks,
         parent_id: item.parent_id,
         image_tag,
+        backdrop_image_tag,
         child_count: item.child_count,
+        index_number: item.index_number,
+        parent_index_number: item.parent_index_number,
+        premiere_date: item.premiere_date,
+        community_rating: item.community_rating,
+        official_rating: item.official_rating,
         can_play,
         can_browse,
     }

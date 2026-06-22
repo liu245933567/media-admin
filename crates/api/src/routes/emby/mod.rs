@@ -84,6 +84,10 @@ pub(crate) struct EmbyItemsApiQuery {
     q: Option<String>,
     #[serde(default)]
     parent_id: Option<String>,
+    #[serde(default)]
+    include_item_types: Option<String>,
+    #[serde(default)]
+    recursive: Option<bool>,
     #[serde(default = "default_start_index")]
     start_index: i32,
     #[serde(default = "default_limit")]
@@ -95,6 +99,8 @@ impl EmbyItemsApiQuery {
         EmbyItemsQuery {
             q: self.q,
             parent_id: self.parent_id,
+            include_item_types: self.include_item_types,
+            recursive: self.recursive,
             start_index: self.start_index,
             limit: self.limit,
         }

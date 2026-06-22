@@ -17,22 +17,30 @@ export const TestConnectionEmbyResponse = zod.object({
 export const ListItemsEmbyQueryParams = zod.object({
   "q": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
+  "include_item_types": zod.string().nullish(),
+  "recursive": zod.boolean().nullish(),
   "start_index": zod.number().optional(),
   "limit": zod.number().optional()
 })
 
 export const ListItemsEmbyResponse = zod.object({
   "items": zod.array(zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
   "can_browse": zod.boolean(),
   "can_play": zod.boolean(),
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
   "item_type": zod.string(),
   "name": zod.string(),
+  "official_rating": zod.string().nullish(),
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
   "run_time_ticks": zod.number().nullish()
 }).describe('Emby 资源类型。')),
@@ -45,16 +53,22 @@ export const GetItemEmbyParams = zod.object({
 })
 
 export const GetItemEmbyResponse = zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
   "can_browse": zod.boolean(),
   "can_play": zod.boolean(),
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
   "item_type": zod.string(),
   "name": zod.string(),
+  "official_rating": zod.string().nullish(),
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
   "run_time_ticks": zod.number().nullish()
 }).describe('Emby 资源类型。')
@@ -70,16 +84,22 @@ export const ListSectionsEmbyResponse = zod.object({
   "collection_type": zod.string().nullish(),
   "id": zod.string(),
   "items": zod.array(zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
   "can_browse": zod.boolean(),
   "can_play": zod.boolean(),
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
   "item_type": zod.string(),
   "name": zod.string(),
+  "official_rating": zod.string().nullish(),
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
   "run_time_ticks": zod.number().nullish()
 }).describe('Emby 资源类型。')),

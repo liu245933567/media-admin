@@ -229,11 +229,15 @@ export interface EmbyImageQuery {
 }
 
 export interface EmbyItemsApiQuery {
+  /** @nullable */
+  include_item_types?: string | null;
   limit?: number;
   /** @nullable */
   parent_id?: string | null;
   /** @nullable */
   q?: string | null;
+  /** @nullable */
+  recursive?: boolean | null;
   start_index?: number;
 }
 
@@ -241,11 +245,15 @@ export interface EmbyItemsApiQuery {
  * Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。
  */
 export interface EmbyItemsQuery {
+  /** @nullable */
+  include_item_types?: string | null;
   limit?: number;
   /** @nullable */
   parent_id?: string | null;
   /** @nullable */
   q?: string | null;
+  /** @nullable */
+  recursive?: boolean | null;
   start_index?: number;
 }
 
@@ -253,21 +261,33 @@ export interface EmbyItemsQuery {
  * Emby 资源类型。
  */
 export interface EmbyLibraryItem {
+  /** @nullable */
+  backdrop_image_tag?: string | null;
   can_browse: boolean;
   can_play: boolean;
   /** @nullable */
   child_count?: number | null;
   /** @nullable */
   collection_type?: string | null;
+  /** @nullable */
+  community_rating?: number | null;
   id: string;
   /** @nullable */
   image_tag?: string | null;
+  /** @nullable */
+  index_number?: number | null;
   item_type: string;
   name: string;
+  /** @nullable */
+  official_rating?: string | null;
   /** @nullable */
   overview?: string | null;
   /** @nullable */
   parent_id?: string | null;
+  /** @nullable */
+  parent_index_number?: number | null;
+  /** @nullable */
+  premiere_date?: string | null;
   /** @nullable */
   production_year?: number | null;
   /** @nullable */
@@ -1105,6 +1125,14 @@ q?: string | null;
  * @nullable
  */
 parent_id?: string | null;
+/**
+ * @nullable
+ */
+include_item_types?: string | null;
+/**
+ * @nullable
+ */
+recursive?: boolean | null;
 start_index?: number;
 limit?: number;
 };

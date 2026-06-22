@@ -14,13 +14,30 @@ export const Route = createFileRoute('/emby-library')({
   validateSearch: (search: Record<string, unknown>) => ({
     sectionId: typeof search.sectionId === 'string' ? search.sectionId : '',
     name: typeof search.name === 'string' ? search.name : '媒体库',
+    collectionType: typeof search.collectionType === 'string' ? search.collectionType : undefined,
   }),
   component: EmbyLibraryPage,
 })
 
-function formatMeta(item: EmbyLibraryItem) {
-  const values = [item.production_year, item.item_type].filter(Boolean)
-  return values.join(' · ')
+function libraryMode(collectionType?: string) {
+  return collectionType === 'tvshows' ? 'series' : 'media'
+}
+
+function includeTypesForLibrary(collectionType?: string) {
+  if (collectionType === 'tvshows')
+    return 'Series'
+  if (collectionType === 'movies')
+    return 'Movie'
+  return 'Movie,Series,Video'
+}
+
+function formatItemMeta(item: EmbyLibraryItem, mode: 'media' | 'series') {
+  if (mode === 'series') {
+    if (item.child_count != null)
+      return `${item.child_count} 季`
+    return item.production_year ? String(item.production_year) : '剧集'
+  }
+  return [item.production_year, item.official_rating].filter(Boolean).join(' · ') || '媒体'
 }
 
 function itemIcon(item: EmbyLibraryItem) {
@@ -33,19 +50,23 @@ function itemIcon(item: EmbyLibraryItem) {
   return map[item.item_type] ?? 'lucide:play-square'
 }
 
-function MediaCard({ item }: { item: EmbyLibraryItem }) {
+function MediaCard({ item, mode }: { item: EmbyLibraryItem, mode: 'media' | 'series' }) {
   const navigate = useNavigate()
   const imageSrc = item.image_tag ? buildEmbyImageSrc(item.id, item.image_tag) : undefined
-  const meta = formatMeta(item)
+  const meta = formatItemMeta(item, mode)
 
   return (
     <button
       type="button"
       className="group min-w-0 text-left outline-none"
       onClick={() => {
-        if (!item.can_play)
-          return
-        void navigate({ to: '/emby-play', search: { itemId: item.id } })
+        void navigate({
+          to: '/emby-detail',
+          search: {
+            itemId: item.id,
+            title: item.name,
+          },
+        })
       }}
     >
       <div className="relative aspect-[2/3] overflow-hidden rounded-md bg-[#2f2f2f] ring-1 ring-white/5 transition group-hover:ring-white/20 group-focus-visible:ring-2 group-focus-visible:ring-white/60">
@@ -63,20 +84,14 @@ function MediaCard({ item }: { item: EmbyLibraryItem }) {
                 <Icon className="size-12" icon={itemIcon(item)} />
               </div>
             )}
-        {item.can_play && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
-            <div className="flex size-11 items-center justify-center rounded-full bg-white/90 text-black">
-              <Icon className="ml-0.5 size-5" icon="lucide:play" />
-            </div>
-          </div>
-        )}
+        <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20" />
       </div>
       <div className="px-1 pt-2 text-center">
         <div className="truncate text-sm font-semibold text-zinc-100" title={item.name}>
           {item.name}
         </div>
         <div className="mt-0.5 truncate text-xs text-zinc-500">
-          {meta || '媒体'}
+          {meta}
         </div>
       </div>
     </button>
@@ -84,18 +99,23 @@ function MediaCard({ item }: { item: EmbyLibraryItem }) {
 }
 
 function EmbyLibraryPage() {
-  const { sectionId, name } = Route.useSearch()
+  const { sectionId, name, collectionType } = Route.useSearch()
   const [q, setQ] = useState('')
+  const mode = libraryMode(collectionType)
 
   const itemsQuery = useQuery({
     queryKey: getListItemsEmbyQueryKey({
       parent_id: sectionId,
       q: q || undefined,
+      include_item_types: includeTypesForLibrary(collectionType),
+      recursive: true,
       limit: 200,
     }),
     queryFn: () => listItemsEmby({
       parent_id: sectionId,
       q: q || undefined,
+      include_item_types: includeTypesForLibrary(collectionType),
+      recursive: true,
       limit: 200,
     }),
     enabled: Boolean(sectionId),
@@ -139,14 +159,14 @@ function EmbyLibraryPage() {
             <p className="mt-1 text-sm text-zinc-500">
               {itemsQuery.data?.total ?? 0}
               {' '}
-              个资源
+              {mode === 'series' ? '部剧集' : '个媒体'}
             </p>
           </div>
           <div className="flex w-full gap-2 md:w-auto">
             <Input
               aria-label="搜索媒体"
               value={q}
-              placeholder="搜索"
+              placeholder={mode === 'series' ? '搜索剧集' : '搜索电影或视频'}
               className="min-w-0 md:w-72"
               variant="secondary"
               onChange={event => setQ(event.target.value)}
@@ -189,7 +209,7 @@ function EmbyLibraryPage() {
               ? (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9">
                     {items.map(item => (
-                      <MediaCard key={item.id} item={item} />
+                      <MediaCard key={item.id} item={item} mode={mode} />
                     ))}
                   </div>
                 )

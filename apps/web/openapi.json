@@ -161,6 +161,12 @@
       },
       "EmbyItemsApiQuery": {
         "properties": {
+          "include_item_types": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "limit": {
             "format": "int32",
             "type": "integer"
@@ -174,6 +180,12 @@
           "q": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "recursive": {
+            "type": [
+              "boolean",
               "null"
             ]
           },
@@ -187,6 +199,12 @@
       "EmbyItemsQuery": {
         "description": "Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。",
         "properties": {
+          "include_item_types": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "limit": {
             "format": "int32",
             "type": "integer"
@@ -200,6 +218,12 @@
           "q": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "recursive": {
+            "type": [
+              "boolean",
               "null"
             ]
           },
@@ -233,6 +257,12 @@
       "EmbyLibraryItem": {
         "description": "Emby 资源类型。",
         "properties": {
+          "backdrop_image_tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "can_browse": {
             "type": "boolean"
           },
@@ -252,6 +282,13 @@
               "null"
             ]
           },
+          "community_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "id": {
             "type": "string"
           },
@@ -261,11 +298,24 @@
               "null"
             ]
           },
+          "index_number": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "item_type": {
             "type": "string"
           },
           "name": {
             "type": "string"
+          },
+          "official_rating": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "overview": {
             "type": [
@@ -274,6 +324,19 @@
             ]
           },
           "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_index_number": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "premiere_date": {
             "type": [
               "string",
               "null"
@@ -2905,6 +2968,28 @@
             "schema": {
               "type": [
                 "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_item_types",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "recursive",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
                 "null"
               ]
             }

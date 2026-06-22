@@ -15,6 +15,7 @@ import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as MediaLibraryRouteImport } from './routes/media-library'
 import { Route as EmbyPlayRouteImport } from './routes/emby-play'
 import { Route as EmbyLibraryRouteImport } from './routes/emby-library'
+import { Route as EmbyDetailRouteImport } from './routes/emby-detail'
 import { Route as EmbyRouteImport } from './routes/emby'
 import { Route as SettingRouteRouteImport } from './routes/setting/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -53,6 +54,11 @@ const EmbyPlayRoute = EmbyPlayRouteImport.update({
 const EmbyLibraryRoute = EmbyLibraryRouteImport.update({
   id: '/emby-library',
   path: '/emby-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbyDetailRoute = EmbyDetailRouteImport.update({
+  id: '/emby-detail',
+  path: '/emby-detail',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmbyRoute = EmbyRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
   '/emby': typeof EmbyRoute
+  '/emby-detail': typeof EmbyDetailRoute
   '/emby-library': typeof EmbyLibraryRoute
   '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
   '/emby': typeof EmbyRoute
+  '/emby-detail': typeof EmbyDetailRoute
   '/emby-library': typeof EmbyLibraryRoute
   '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
   '/emby': typeof EmbyRoute
+  '/emby-detail': typeof EmbyDetailRoute
   '/emby-library': typeof EmbyLibraryRoute
   '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/setting'
     | '/emby'
+    | '/emby-detail'
     | '/emby-library'
     | '/emby-play'
     | '/media-library'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/setting'
     | '/emby'
+    | '/emby-detail'
     | '/emby-library'
     | '/emby-play'
     | '/media-library'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/'
     | '/setting'
     | '/emby'
+    | '/emby-detail'
     | '/emby-library'
     | '/emby-play'
     | '/media-library'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingRouteRoute: typeof SettingRouteRouteWithChildren
   EmbyRoute: typeof EmbyRoute
+  EmbyDetailRoute: typeof EmbyDetailRoute
   EmbyLibraryRoute: typeof EmbyLibraryRoute
   EmbyPlayRoute: typeof EmbyPlayRoute
   MediaLibraryRoute: typeof MediaLibraryRoute
@@ -261,6 +274,13 @@ declare module '@tanstack/react-router' {
       path: '/emby-library'
       fullPath: '/emby-library'
       preLoaderRoute: typeof EmbyLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emby-detail': {
+      id: '/emby-detail'
+      path: '/emby-detail'
+      fullPath: '/emby-detail'
+      preLoaderRoute: typeof EmbyDetailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/emby': {
@@ -355,6 +375,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingRouteRoute: SettingRouteRouteWithChildren,
   EmbyRoute: EmbyRoute,
+  EmbyDetailRoute: EmbyDetailRoute,
   EmbyLibraryRoute: EmbyLibraryRoute,
   EmbyPlayRoute: EmbyPlayRoute,
   MediaLibraryRoute: MediaLibraryRoute,

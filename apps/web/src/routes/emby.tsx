@@ -47,6 +47,7 @@ function LibraryCard({ section }: { section: EmbyLibrarySection }) {
           search: {
             sectionId: section.id,
             name: section.name,
+            collectionType: section.collection_type ?? undefined,
           },
         })
       }}
