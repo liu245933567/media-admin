@@ -16,13 +16,29 @@ export function buildTranscodedVideoSrc(path: string): string {
 }
 
 /** Emby 视频代理流 URL（供 video.js / `<video>` 使用，支持 Range） */
-export function buildEmbyVideoSrc(itemId: string): string {
-  return `/api/emby/stream?item_id=${encodeURIComponent(itemId)}`
+export function buildEmbyVideoSrc(itemId: string, playSessionId?: string): string {
+  const params = new URLSearchParams({ item_id: itemId })
+  if (playSessionId)
+    params.set('play_session_id', playSessionId)
+  return `/api/emby/stream?${params.toString()}`
 }
 
 /** Emby 后台转码代理流 URL（原始流无法播放时回退使用） */
-export function buildEmbyTranscodedVideoSrc(itemId: string): string {
-  return `/api/emby/transcode?item_id=${encodeURIComponent(itemId)}`
+export function buildEmbyTranscodedVideoSrc(itemId: string, playSessionId?: string): string {
+  const params = new URLSearchParams({ item_id: itemId })
+  if (playSessionId)
+    params.set('play_session_id', playSessionId)
+  return `/api/emby/transcode?${params.toString()}`
+}
+
+/** Emby WebVTT 字幕代理 URL（供 video.js 字幕轨使用） */
+export function buildEmbySubtitleSrc(itemId: string, mediaSourceId: string, index: number): string {
+  const params = new URLSearchParams({
+    item_id: itemId,
+    media_source_id: mediaSourceId,
+    index: String(index),
+  })
+  return `/api/emby/subtitle?${params.toString()}`
 }
 
 /** Emby 图片代理 URL */

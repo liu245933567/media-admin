@@ -11,9 +11,11 @@ use futures_util::StreamExt;
 use ma_service::emby::{
     EmbyConnectionStatus, EmbyItemsQuery, EmbyItemsRes, EmbyLibraryItem, EmbyPlaybackInfo,
     EmbyPlaybackProgressReq, EmbyPlaybackSyncRes, EmbySectionsQuery, EmbySectionsRes,
-    EmbyStreamQuery, get_item, get_playback_info, list_items, list_sections, proxy_image,
-    proxy_stream, proxy_transcoded_stream, report_playback_progress, report_playback_start,
-    report_playback_stopped, test_connection,
+    EmbyStreamQuery, EmbySubtitleDownloadReq, EmbySubtitleDownloadRes, EmbySubtitleSearchQuery,
+    EmbySubtitleSearchRes, EmbySubtitleStreamQuery, download_remote_subtitle, get_item,
+    get_playback_info, list_items, list_sections, proxy_image, proxy_stream, proxy_subtitle_stream,
+    proxy_transcoded_stream, report_playback_progress, report_playback_start,
+    report_playback_stopped, search_remote_subtitles, test_connection,
 };
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -31,6 +33,9 @@ pub fn routes() -> StateRouter {
         .route("/playback/stopped", post(playback_stopped_handler))
         .route("/stream", get(stream_proxy_handler))
         .route("/transcode", get(transcode_proxy_handler))
+        .route("/subtitle", get(subtitle_proxy_handler))
+        .route("/subtitles/search", get(subtitle_search_handler))
+        .route("/subtitles/download", post(subtitle_download_handler))
 }
 
 #[utoipa::path(
@@ -89,6 +94,12 @@ pub(crate) struct EmbyItemsApiQuery {
     #[serde(default)]
     q: Option<String>,
     #[serde(default)]
+    person_id: Option<String>,
+    #[serde(default)]
+    genre: Option<String>,
+    #[serde(default)]
+    tag_filter: Option<String>,
+    #[serde(default)]
     parent_id: Option<String>,
     #[serde(default)]
     include_item_types: Option<String>,
@@ -104,6 +115,9 @@ impl EmbyItemsApiQuery {
     fn into_service_query(self) -> EmbyItemsQuery {
         EmbyItemsQuery {
             q: self.q,
+            person_id: self.person_id,
+            genre: self.genre,
+            tag_filter: self.tag_filter,
             parent_id: self.parent_id,
             include_item_types: self.include_item_types,
             recursive: self.recursive,
@@ -241,7 +255,7 @@ async fn stream_proxy_handler(
 ) -> Result<Response, AppError> {
     let range = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok());
     let cfg = state.app_config.read().await.emby_config.clone();
-    let proxied = proxy_stream(&cfg, &q.item_id, range)
+    let proxied = proxy_stream(&cfg, &q.item_id, q.play_session_id.as_deref(), range)
         .await
         .map_err(map_emby_err)?;
     emby_stream_response(proxied, true)
@@ -252,10 +266,67 @@ async fn transcode_proxy_handler(
     Query(q): Query<EmbyStreamQuery>,
 ) -> Result<Response, AppError> {
     let cfg = state.app_config.read().await.emby_config.clone();
-    let proxied = proxy_transcoded_stream(&cfg, &q.item_id)
+    let proxied = proxy_transcoded_stream(&cfg, &q.item_id, q.play_session_id.as_deref())
         .await
         .map_err(map_emby_err)?;
     emby_stream_response(proxied, false)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/emby/subtitle",
+    operation_id = "subtitleEmby",
+    tag = "emby",
+    params(EmbySubtitleStreamQuery),
+    responses((status = 200, content_type = "text/vtt"))
+)]
+pub(crate) async fn subtitle_proxy_handler(
+    State(state): State<AppState>,
+    Query(q): Query<EmbySubtitleStreamQuery>,
+) -> Result<Response, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let proxied = proxy_subtitle_stream(&cfg, &q)
+        .await
+        .map_err(map_emby_err)?;
+    emby_stream_response(proxied, false)
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/emby/subtitles/search",
+    operation_id = "searchSubtitlesEmby",
+    tag = "emby",
+    params(EmbySubtitleSearchQuery),
+    responses((status = 200, body = EmbySubtitleSearchRes))
+)]
+pub(crate) async fn subtitle_search_handler(
+    State(state): State<AppState>,
+    Query(q): Query<EmbySubtitleSearchQuery>,
+) -> Result<Json<EmbySubtitleSearchRes>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let res = search_remote_subtitles(&cfg, q)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/emby/subtitles/download",
+    operation_id = "downloadSubtitleEmby",
+    tag = "emby",
+    request_body = EmbySubtitleDownloadReq,
+    responses((status = 200, body = EmbySubtitleDownloadRes))
+)]
+pub(crate) async fn subtitle_download_handler(
+    State(state): State<AppState>,
+    Json(body): Json<EmbySubtitleDownloadReq>,
+) -> Result<Json<EmbySubtitleDownloadRes>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let res = download_remote_subtitle(&cfg, body)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(res))
 }
 
 fn emby_stream_response(

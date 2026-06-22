@@ -48,11 +48,16 @@ function LibraryCard({ section }: { section: EmbyLibrarySection }) {
             sectionId: section.id,
             name: section.name,
             collectionType: section.collection_type ?? undefined,
+            q: '',
+            personId: '',
+            personName: '',
+            genre: '',
+            tagFilter: '',
           },
         })
       }}
     >
-      <div className="relative aspect-[16/9] overflow-hidden rounded-md bg-[#303030] shadow-sm ring-1 ring-white/5 transition group-hover:ring-white/20 group-focus-visible:ring-2 group-focus-visible:ring-white/60">
+      <div className="relative aspect-[16/9] overflow-hidden rounded-md bg-surface-secondary shadow-sm ring-1 ring-border transition group-hover:ring-accent/35 group-focus-visible:ring-2 group-focus-visible:ring-accent/60">
         {coverSrc
           ? (
               <img
@@ -80,10 +85,10 @@ function LibraryCard({ section }: { section: EmbyLibrarySection }) {
         </div>
       </div>
       <div className="px-1 pt-2 text-center">
-        <div className="truncate text-sm font-semibold text-zinc-100" title={section.name}>
+        <div className="truncate text-sm font-semibold text-foreground" title={section.name}>
           {section.name}
         </div>
-        <div className="mt-0.5 text-xs text-zinc-500">
+        <div className="mt-0.5 text-xs text-muted">
           {section.total}
           {' '}
           个资源 ·
@@ -104,15 +109,15 @@ function EmbyPage() {
   const sections = sectionsQuery.data?.sections ?? []
 
   return (
-    <div className="-mx-4 -my-6 min-h-[calc(100dvh-var(--navbar-height))] bg-[#1f1f1f] px-6 py-7 text-zinc-100 md:px-10">
+    <div className="-mx-4 -my-6 min-h-[calc(100dvh-var(--navbar-height))] bg-background px-6 py-7 text-foreground md:px-10">
       <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-6">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="m-0 text-2xl font-bold tracking-tight text-zinc-100">我的媒体</h1>
+          <h1 className="m-0 text-2xl font-bold tracking-tight text-foreground">我的媒体</h1>
           <Button
             isIconOnly
             aria-label="刷新媒体库"
             variant="ghost"
-            className="text-zinc-300 hover:bg-white/10 hover:text-white"
+            className="text-muted hover:bg-surface-secondary hover:text-foreground"
             onPress={() => sectionsQuery.refetch()}
           >
             <Icon className="size-5" icon="lucide:refresh-cw" />
@@ -121,19 +126,19 @@ function EmbyPage() {
 
         {sectionsQuery.isPending
           ? (
-              <div className="flex h-56 items-center justify-center gap-2 text-sm text-zinc-400">
+              <div className="flex h-56 items-center justify-center gap-2 text-sm text-muted">
                 <Spinner color="current" size="sm" />
                 加载媒体库...
               </div>
             )
           : sectionsQuery.isError
             ? (
-                <Card className="bg-[#2b2b2b] text-zinc-100">
+                <Card className="bg-surface text-foreground">
                   <Card.Content className="flex flex-col items-center gap-3 py-12 text-center">
                     <Icon className="size-10 text-warning" icon="lucide:circle-alert" />
                     <div>
                       <h2 className="m-0 text-base font-semibold">无法加载媒体库</h2>
-                      <p className="mt-1 text-sm text-zinc-400">{sectionsQuery.error.message}</p>
+                      <p className="mt-1 text-sm text-muted">{sectionsQuery.error.message}</p>
                     </div>
                     <Button variant="secondary" onPress={() => sectionsQuery.refetch()}>
                       重试
@@ -150,8 +155,8 @@ function EmbyPage() {
                   </div>
                 )
               : (
-                  <Card className="bg-[#2b2b2b] text-zinc-100">
-                    <Card.Content className="flex flex-col items-center gap-2 py-12 text-center text-zinc-400">
+                  <Card className="bg-surface text-foreground">
+                    <Card.Content className="flex flex-col items-center gap-2 py-12 text-center text-muted">
                       <Icon className="size-10" icon="lucide:inbox" />
                       <span className="text-sm">暂无媒体库</span>
                     </Card.Content>

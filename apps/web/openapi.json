@@ -161,6 +161,12 @@
       },
       "EmbyItemsApiQuery": {
         "properties": {
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "include_item_types": {
             "type": [
               "string",
@@ -172,6 +178,12 @@
             "type": "integer"
           },
           "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
             "type": [
               "string",
               "null"
@@ -192,6 +204,12 @@
           "start_index": {
             "format": "int32",
             "type": "integer"
+          },
+          "tag_filter": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -199,6 +217,12 @@
       "EmbyItemsQuery": {
         "description": "Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。",
         "properties": {
+          "genre": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "include_item_types": {
             "type": [
               "string",
@@ -210,6 +234,12 @@
             "type": "integer"
           },
           "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "person_id": {
             "type": [
               "string",
               "null"
@@ -230,6 +260,12 @@
           "start_index": {
             "format": "int32",
             "type": "integer"
+          },
+          "tag_filter": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -289,6 +325,12 @@
               "null"
             ]
           },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "id": {
             "type": "string"
           },
@@ -336,6 +378,12 @@
               "null"
             ]
           },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/EmbyPerson"
+            },
+            "type": "array"
+          },
           "premiere_date": {
             "type": [
               "string",
@@ -355,6 +403,12 @@
               "integer",
               "null"
             ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -400,6 +454,40 @@
         ],
         "type": "object"
       },
+      "EmbyPerson": {
+        "description": "Emby 媒体人物信息。",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "image_tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "person_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "EmbyPlaybackInfo": {
         "description": "Emby 播放信息，供前端决定直链、原始流或转码流。",
         "properties": {
@@ -441,6 +529,12 @@
               "integer",
               "null"
             ]
+          },
+          "subtitle_tracks": {
+            "items": {
+              "$ref": "#/components/schemas/EmbySubtitleTrack"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -486,6 +580,12 @@
               }
             ]
           },
+          "play_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "position_ticks": {
             "format": "int64",
             "type": "integer"
@@ -513,6 +613,69 @@
         },
         "required": [
           "ok"
+        ],
+        "type": "object"
+      },
+      "EmbyRemoteSubtitle": {
+        "description": "Emby 远程字幕候选。",
+        "properties": {
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "community_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "download_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_hash_match": {
+            "type": "boolean"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -552,10 +715,148 @@
         "properties": {
           "item_id": {
             "type": "string"
+          },
+          "play_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "item_id"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleDownloadReq": {
+        "description": "Emby 远程字幕下载请求。",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "subtitle_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "subtitle_id"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleDownloadRes": {
+        "description": "Emby 远程字幕下载结果。",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleSearchQuery": {
+        "description": "Emby 远程字幕查询参数。",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "media_source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleSearchRes": {
+        "description": "Emby 远程字幕查询结果。",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EmbyRemoteSubtitle"
+            },
+            "type": "array"
+          },
+          "language": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "language",
+          "items"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleStreamQuery": {
+        "description": "Emby 字幕流查询参数。",
+        "properties": {
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "media_source_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "media_source_id",
+          "index"
+        ],
+        "type": "object"
+      },
+      "EmbySubtitleTrack": {
+        "description": "Emby 字幕轨。",
+        "properties": {
+          "codec": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "is_external": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "media_source_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "label",
+          "media_source_id"
         ],
         "type": "object"
       },
@@ -3079,6 +3380,39 @@
           },
           {
             "in": "query",
+            "name": "person_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "genre",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag_filter",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
             "name": "parent_id",
             "required": false,
             "schema": {
@@ -3187,6 +3521,17 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "play_session_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
@@ -3328,6 +3673,128 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmbySectionsRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/subtitle": {
+      "get": {
+        "operationId": "subtitleEmby",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media_source_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/vtt": {}
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/subtitles/download": {
+      "post": {
+        "operationId": "downloadSubtitleEmby",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbySubtitleDownloadReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbySubtitleDownloadRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/subtitles/search": {
+      "get": {
+        "operationId": "searchSubtitlesEmby",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media_source_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbySubtitleSearchRes"
                 }
               }
             },

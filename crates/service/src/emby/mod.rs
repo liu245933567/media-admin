@@ -82,8 +82,28 @@ pub struct EmbyLibraryItem {
     pub community_rating: Option<f64>,
     #[serde(default)]
     pub official_rating: Option<String>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub people: Vec<EmbyPerson>,
     pub can_play: bool,
     pub can_browse: bool,
+}
+
+/// Emby 媒体人物信息。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbyPerson {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub person_type: Option<String>,
+    #[serde(default)]
+    pub image_tag: Option<String>,
 }
 
 /// Emby 资源列表响应。
@@ -120,6 +140,12 @@ pub struct EmbyItemsQuery {
     #[serde(default)]
     pub q: Option<String>,
     #[serde(default)]
+    pub person_id: Option<String>,
+    #[serde(default)]
+    pub genre: Option<String>,
+    #[serde(default)]
+    pub tag_filter: Option<String>,
+    #[serde(default)]
     pub parent_id: Option<String>,
     #[serde(default)]
     pub include_item_types: Option<String>,
@@ -146,6 +172,43 @@ pub struct EmbySectionsQuery {
 #[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
 pub struct EmbyStreamQuery {
     pub item_id: String,
+    #[serde(default)]
+    pub play_session_id: Option<String>,
+}
+
+/// Emby 字幕流查询参数。
+#[typeshare]
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+pub struct EmbySubtitleStreamQuery {
+    pub item_id: String,
+    pub media_source_id: String,
+    pub index: i32,
+}
+
+/// Emby 远程字幕查询参数。
+#[typeshare]
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+pub struct EmbySubtitleSearchQuery {
+    pub item_id: String,
+    #[serde(default)]
+    pub media_source_id: Option<String>,
+    #[serde(default = "default_subtitle_language")]
+    pub language: String,
+}
+
+/// Emby 远程字幕下载请求。
+#[typeshare]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct EmbySubtitleDownloadReq {
+    pub item_id: String,
+    pub subtitle_id: String,
+}
+
+/// Emby 远程字幕下载结果。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbySubtitleDownloadRes {
+    pub ok: bool,
 }
 
 /// Emby 播放方式。
@@ -174,6 +237,58 @@ pub struct EmbyPlaybackInfo {
     pub playback_position_ticks: Option<i64>,
     #[serde(default)]
     pub played_percentage: Option<f64>,
+    #[serde(default)]
+    pub subtitle_tracks: Vec<EmbySubtitleTrack>,
+}
+
+/// Emby 字幕轨。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbySubtitleTrack {
+    pub index: i32,
+    pub label: String,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub codec: Option<String>,
+    #[serde(default)]
+    pub is_default: bool,
+    #[serde(default)]
+    pub is_external: bool,
+    pub media_source_id: String,
+}
+
+/// Emby 远程字幕候选。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbyRemoteSubtitle {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub provider_name: Option<String>,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+    #[serde(default)]
+    pub community_rating: Option<f64>,
+    #[serde(default)]
+    pub download_count: Option<i32>,
+    #[serde(default)]
+    pub is_hash_match: bool,
+}
+
+/// Emby 远程字幕查询结果。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbySubtitleSearchRes {
+    pub item_id: String,
+    pub language: String,
+    pub items: Vec<EmbyRemoteSubtitle>,
 }
 
 /// Emby 播放进度上报请求。
@@ -182,6 +297,8 @@ pub struct EmbyPlaybackInfo {
 pub struct EmbyPlaybackProgressReq {
     pub item_id: String,
     pub position_ticks: i64,
+    #[serde(default)]
+    pub play_session_id: Option<String>,
     #[serde(default)]
     pub is_paused: bool,
     #[serde(default)]
@@ -282,6 +399,12 @@ struct RawEmbyItem {
     community_rating: Option<f64>,
     #[serde(rename = "OfficialRating")]
     official_rating: Option<String>,
+    #[serde(rename = "Genres", default)]
+    genres: Vec<String>,
+    #[serde(rename = "Tags", default)]
+    tags: Vec<String>,
+    #[serde(rename = "People", default)]
+    people: Vec<RawEmbyPerson>,
     #[serde(rename = "Path")]
     path: Option<String>,
     #[serde(rename = "MediaSources", default)]
@@ -291,11 +414,71 @@ struct RawEmbyItem {
 }
 
 #[derive(Debug, Deserialize)]
+struct RawEmbyPerson {
+    #[serde(rename = "Id")]
+    id: Option<String>,
+    #[serde(rename = "Name")]
+    name: Option<String>,
+    #[serde(rename = "Role")]
+    role: Option<String>,
+    #[serde(rename = "Type")]
+    person_type: Option<String>,
+    #[serde(rename = "PrimaryImageTag")]
+    image_tag: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct RawMediaSource {
     #[serde(rename = "Id")]
     id: Option<String>,
     #[serde(rename = "Path")]
     path: Option<String>,
+    #[serde(rename = "MediaStreams", default)]
+    media_streams: Vec<RawMediaStream>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMediaStream {
+    #[serde(rename = "Index")]
+    index: Option<i32>,
+    #[serde(rename = "Type")]
+    stream_type: Option<String>,
+    #[serde(rename = "Language")]
+    language: Option<String>,
+    #[serde(rename = "DisplayTitle")]
+    display_title: Option<String>,
+    #[serde(rename = "Title")]
+    title: Option<String>,
+    #[serde(rename = "Codec")]
+    codec: Option<String>,
+    #[serde(rename = "IsDefault")]
+    is_default: Option<bool>,
+    #[serde(rename = "IsExternal")]
+    is_external: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawRemoteSubtitle {
+    #[serde(rename = "Id")]
+    id: Option<String>,
+    #[serde(rename = "Name")]
+    name: Option<String>,
+    #[serde(rename = "ProviderName")]
+    provider_name: Option<String>,
+    #[serde(rename = "ThreeLetterISOLanguageName")]
+    three_letter_iso_language_name: Option<String>,
+    #[serde(rename = "Format")]
+    format: Option<String>,
+    #[serde(rename = "Author")]
+    author: Option<String>,
+    #[serde(rename = "Comment")]
+    comment: Option<String>,
+    #[serde(rename = "CommunityRating")]
+    community_rating: Option<f64>,
+    #[serde(rename = "DownloadCount")]
+    download_count: Option<i32>,
+    #[serde(rename = "IsHashMatch")]
+    is_hash_match: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -316,6 +499,39 @@ fn default_limit() -> i32 {
 
 fn default_section_limit() -> i32 {
     18
+}
+
+fn default_subtitle_language() -> String {
+    "zh".to_string()
+}
+
+fn append_item_filters(
+    mut req: reqwest::RequestBuilder,
+    q: &EmbyItemsQuery,
+) -> reqwest::RequestBuilder {
+    if let Some(search) = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        req = req.query(&[("SearchTerm", search)]);
+    }
+    if let Some(person_id) = q
+        .person_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        req = req.query(&[("PersonIds", person_id)]);
+    }
+    if let Some(genre) = q.genre.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        req = req.query(&[("Genres", genre)]);
+    }
+    if let Some(tag) = q
+        .tag_filter
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        req = req.query(&[("Tags", tag)]);
+    }
+    req
 }
 
 /// 校验 Emby 连接配置是否可用于请求。
@@ -477,7 +693,7 @@ pub async fn list_items(cfg: &EmbyConnectConfig, q: EmbyItemsQuery) -> Result<Em
             ("IncludeItemTypes", include_item_types.to_string()),
             (
                 "Fields",
-                "Overview,PrimaryImageAspectRatio,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags".to_string(),
+                "Overview,PrimaryImageAspectRatio,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags,Genres,Tags".to_string(),
             ),
             ("SortBy", "SortName".to_string()),
             ("SortOrder", "Ascending".to_string()),
@@ -485,9 +701,7 @@ pub async fn list_items(cfg: &EmbyConnectConfig, q: EmbyItemsQuery) -> Result<Em
             ("Limit", q.limit.clamp(1, 200).to_string()),
         ]);
 
-    if let Some(search) = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        req = req.query(&[("SearchTerm", search)]);
-    }
+    req = append_item_filters(req, &q);
     if let Some(parent_id) = q
         .parent_id
         .as_deref()
@@ -524,6 +738,9 @@ pub async fn list_sections(
         &user_id,
         EmbyItemsQuery {
             q: None,
+            person_id: None,
+            genre: None,
+            tag_filter: None,
             parent_id: None,
             include_item_types: None,
             recursive: None,
@@ -543,6 +760,9 @@ pub async fn list_sections(
             &user_id,
             EmbyItemsQuery {
                 q: q.q.clone(),
+                person_id: None,
+                genre: None,
+                tag_filter: None,
                 parent_id: None,
                 include_item_types: None,
                 recursive: None,
@@ -600,9 +820,7 @@ async fn fetch_child_items(
     if let Some(parent_id) = parent_id.map(str::trim).filter(|s| !s.is_empty()) {
         req = req.query(&[("ParentId", parent_id)]);
     }
-    if let Some(search) = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        req = req.query(&[("SearchTerm", search)]);
-    }
+    req = append_item_filters(req, &q);
 
     let resp = req.send().await?;
     let status = resp.status();
@@ -647,6 +865,7 @@ pub async fn get_playback_info(cfg: &EmbyConnectConfig, item_id: &str) -> Result
         .media_sources
         .iter()
         .find_map(|source| source.id.as_deref().map(str::to_string));
+    let subtitle_tracks = collect_subtitle_tracks(&item.media_sources, item_id);
     let candidate_paths = item
         .media_sources
         .iter()
@@ -667,6 +886,160 @@ pub async fn get_playback_info(cfg: &EmbyConnectConfig, item_id: &str) -> Result
             .as_ref()
             .and_then(|data| data.playback_position_ticks),
         played_percentage: user_data.and_then(|data| data.played_percentage),
+        subtitle_tracks,
+    })
+}
+
+fn collect_subtitle_tracks(
+    media_sources: &[RawMediaSource],
+    fallback_media_source_id: &str,
+) -> Vec<EmbySubtitleTrack> {
+    media_sources
+        .iter()
+        .flat_map(|source| {
+            let media_source_id = source
+                .id
+                .as_deref()
+                .unwrap_or(fallback_media_source_id)
+                .to_string();
+            source
+                .media_streams
+                .iter()
+                .filter(move |stream| {
+                    stream
+                        .stream_type
+                        .as_deref()
+                        .is_some_and(|value| value.eq_ignore_ascii_case("Subtitle"))
+                })
+                .filter_map(move |stream| {
+                    let index = stream.index?;
+                    Some(EmbySubtitleTrack {
+                        index,
+                        label: emby_subtitle_label(stream, index),
+                        language: stream.language.clone(),
+                        codec: stream.codec.clone(),
+                        is_default: stream.is_default.unwrap_or(false),
+                        is_external: stream.is_external.unwrap_or(false),
+                        media_source_id: media_source_id.clone(),
+                    })
+                })
+        })
+        .collect()
+}
+
+fn emby_subtitle_label(stream: &RawMediaStream, index: i32) -> String {
+    stream
+        .display_title
+        .as_deref()
+        .or(stream.title.as_deref())
+        .or(stream.language.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("字幕 {}", index + 1))
+}
+
+fn emby_subtitle_language_candidates(language: &str) -> Vec<String> {
+    let normalized = language.trim().to_lowercase();
+    let candidates: &[&str] = match normalized.as_str() {
+        "" | "zh" | "zho" | "chi" | "chs" | "cht" | "cn" => &["zh", "chi", "zho", "chs", "cht"],
+        "en" | "eng" => &["en", "eng"],
+        "ja" | "jp" | "jpn" => &["ja", "jpn"],
+        "ko" | "kr" | "kor" => &["ko", "kor"],
+        value => return vec![value.to_string()],
+    };
+
+    candidates.iter().map(|value| value.to_string()).collect()
+}
+
+fn selected_emby_media_source_id(q: &EmbySubtitleSearchQuery) -> &str {
+    q.media_source_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&q.item_id)
+}
+
+fn parse_remote_subtitles(text: &str) -> Result<Vec<EmbyRemoteSubtitle>> {
+    let rows: Vec<RawRemoteSubtitle> =
+        serde_json::from_str(text).context("解析 Emby 远程字幕列表失败")?;
+    Ok(rows
+        .into_iter()
+        .filter_map(map_remote_subtitle)
+        .collect::<Vec<_>>())
+}
+
+fn is_retryable_subtitle_search_status(status: reqwest::StatusCode) -> bool {
+    matches!(
+        status,
+        reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::NOT_FOUND
+    )
+}
+
+async fn search_remote_subtitles_by_language(
+    base_url: &str,
+    token: &str,
+    q: &EmbySubtitleSearchQuery,
+    language: &str,
+) -> Result<Vec<EmbyRemoteSubtitle>> {
+    let mut url = reqwest::Url::parse(&format!(
+        "{base_url}/Items/{}/RemoteSearch/Subtitles/{language}",
+        q.item_id
+    ))
+    .context("构建 Emby 远程字幕搜索地址失败")?;
+    {
+        let mut query = url.query_pairs_mut();
+        query.append_pair("api_key", token);
+        query.append_pair("MediaSourceId", selected_emby_media_source_id(q));
+    }
+
+    let resp = client()?
+        .get(url)
+        .header(AUTHORIZATION, auth_header(token))
+        .header(ACCEPT, "application/json")
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await?;
+    if !status.is_success() {
+        if is_retryable_subtitle_search_status(status) {
+            return Ok(Vec::new());
+        }
+
+        return Err(anyhow!(
+            "emby subtitle search http {}: {}",
+            status.as_u16(),
+            text
+        ));
+    }
+
+    parse_remote_subtitles(&text)
+}
+
+fn map_remote_subtitle(row: RawRemoteSubtitle) -> Option<EmbyRemoteSubtitle> {
+    let id = row.id?.trim().to_string();
+    if id.is_empty() {
+        return None;
+    }
+    let name = row
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("字幕")
+        .to_string();
+
+    Some(EmbyRemoteSubtitle {
+        id,
+        name,
+        provider_name: row.provider_name,
+        language: row.three_letter_iso_language_name,
+        format: row.format,
+        author: row.author,
+        comment: row.comment,
+        community_rating: row.community_rating,
+        download_count: row.download_count,
+        is_hash_match: row.is_hash_match.unwrap_or(false),
     })
 }
 
@@ -692,7 +1065,7 @@ async fn fetch_raw_item(
 }
 
 fn emby_item_detail_fields() -> &'static str {
-    "Overview,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags,Path,MediaSources,UserData"
+    "Overview,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags,Genres,Tags,People,Path,MediaSources,UserData"
 }
 
 fn is_http_url(value: &str) -> bool {
@@ -773,7 +1146,7 @@ pub async fn report_playback_start(
     cfg: &EmbyConnectConfig,
     req: EmbyPlaybackProgressReq,
 ) -> Result<EmbyPlaybackSyncRes> {
-    report_playback_event(cfg, "Playing", req).await
+    report_playback_event(cfg, "Playing", req, None).await
 }
 
 /// 向 Emby 上报播放进度。
@@ -781,7 +1154,8 @@ pub async fn report_playback_progress(
     cfg: &EmbyConnectConfig,
     req: EmbyPlaybackProgressReq,
 ) -> Result<EmbyPlaybackSyncRes> {
-    report_playback_event(cfg, "Playing/Progress", req).await
+    let event_name = if req.is_paused { "Pause" } else { "TimeUpdate" };
+    report_playback_event(cfg, "Playing/Progress", req, Some(event_name)).await
 }
 
 /// 向 Emby 上报播放停止。
@@ -789,26 +1163,32 @@ pub async fn report_playback_stopped(
     cfg: &EmbyConnectConfig,
     req: EmbyPlaybackProgressReq,
 ) -> Result<EmbyPlaybackSyncRes> {
-    report_playback_event(cfg, "Playing/Stopped", req).await
+    report_playback_event(cfg, "Playing/Stopped", req, None).await
 }
 
 async fn report_playback_event(
     cfg: &EmbyConnectConfig,
     endpoint: &str,
     req: EmbyPlaybackProgressReq,
+    event_name: Option<&str>,
 ) -> Result<EmbyPlaybackSyncRes> {
     let base_url = normalized_base_url(cfg)?;
     let (token, _, _) = authenticate(cfg).await?;
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "ItemId": req.item_id,
         "MediaSourceId": req.media_source_id.unwrap_or_else(|| req.item_id.clone()),
         "PositionTicks": req.position_ticks.max(0),
+        "PlaySessionId": req.play_session_id.as_deref().unwrap_or("media-admin"),
         "IsPaused": req.is_paused,
         "IsMuted": req.is_muted,
         "VolumeLevel": req.volume_level.unwrap_or(100).clamp(0, 100),
         "CanSeek": true,
+        "QueueableMediaTypes": ["Video"],
         "PlayMethod": emby_play_method_name(req.play_method.unwrap_or(EmbyPlaybackMethod::DirectStream)),
     });
+    if let Some(event_name) = event_name {
+        body["EventName"] = serde_json::json!(event_name);
+    }
     let resp = client()?
         .post(format!("{base_url}/Sessions/{endpoint}"))
         .header(AUTHORIZATION, auth_header(&token))
@@ -837,11 +1217,43 @@ fn emby_play_method_name(method: EmbyPlaybackMethod) -> &'static str {
     }
 }
 
+fn clean_string_list(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn map_person(person: RawEmbyPerson) -> Option<EmbyPerson> {
+    let name = person.name?.trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+
+    Some(EmbyPerson {
+        id: person.id.unwrap_or_else(|| name.clone()),
+        name,
+        role: person
+            .role
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        person_type: person
+            .person_type
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        image_tag: person.image_tag,
+    })
+}
+
 fn map_item(item: RawEmbyItem) -> EmbyLibraryItem {
     let image_tag = item.image_tags.and_then(|mut tags| tags.remove("Primary"));
     let backdrop_image_tag = item
         .backdrop_image_tags
         .and_then(|tags| tags.into_iter().next());
+    let genres = clean_string_list(item.genres);
+    let tags = clean_string_list(item.tags);
+    let people = item.people.into_iter().filter_map(map_person).collect();
     let can_browse = item.is_folder.unwrap_or(false)
         || matches!(
             item.item_type.as_str(),
@@ -866,6 +1278,9 @@ fn map_item(item: RawEmbyItem) -> EmbyLibraryItem {
         premiere_date: item.premiere_date,
         community_rating: item.community_rating,
         official_rating: item.official_rating,
+        genres,
+        tags,
+        people,
         can_play,
         can_browse,
     }
@@ -921,25 +1336,94 @@ pub async fn proxy_image(
     proxy_url(&token, url, None).await
 }
 
+/// 搜索 Emby 可下载的远程字幕。
+pub async fn search_remote_subtitles(
+    cfg: &EmbyConnectConfig,
+    q: EmbySubtitleSearchQuery,
+) -> Result<EmbySubtitleSearchRes> {
+    let base_url = normalized_base_url(cfg)?;
+    let (token, _, _) = authenticate(cfg).await?;
+    let languages = emby_subtitle_language_candidates(&q.language);
+    let mut selected_language = languages
+        .first()
+        .cloned()
+        .unwrap_or_else(default_subtitle_language);
+    let mut selected_items = Vec::new();
+
+    for language in languages {
+        let items = search_remote_subtitles_by_language(&base_url, &token, &q, &language).await?;
+        selected_language = language;
+        if !items.is_empty() {
+            selected_items = items;
+            break;
+        }
+    }
+
+    Ok(EmbySubtitleSearchRes {
+        item_id: q.item_id,
+        language: selected_language,
+        items: selected_items,
+    })
+}
+
+/// 下载 Emby 远程字幕到当前媒体项。
+pub async fn download_remote_subtitle(
+    cfg: &EmbyConnectConfig,
+    req: EmbySubtitleDownloadReq,
+) -> Result<EmbySubtitleDownloadRes> {
+    let base_url = normalized_base_url(cfg)?;
+    let (token, _, _) = authenticate(cfg).await?;
+    let mut url = reqwest::Url::parse(&format!(
+        "{base_url}/Items/{}/RemoteSearch/Subtitles/{}",
+        req.item_id, req.subtitle_id
+    ))
+    .context("构建 Emby 远程字幕下载地址失败")?;
+    url.query_pairs_mut().append_pair("api_key", &token);
+    let resp = client()?
+        .post(url)
+        .header(AUTHORIZATION, auth_header(&token))
+        .header(ACCEPT, "application/json")
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(anyhow!(
+            "emby subtitle download http {}: {}",
+            status.as_u16(),
+            text
+        ));
+    }
+
+    Ok(EmbySubtitleDownloadRes { ok: true })
+}
+
 /// 流式代理 Emby 视频，转发客户端 `Range` 以支持 seek。
 pub async fn proxy_stream(
     cfg: &EmbyConnectConfig,
     item_id: &str,
+    play_session_id: Option<&str>,
     request_range: Option<&str>,
 ) -> Result<ProxiedEmbyMedia> {
     let base_url = normalized_base_url(cfg)?;
     let (token, _, _) = authenticate(cfg).await?;
-    let url = format!(
-        "{base_url}/Videos/{item_id}/stream?static=true&api_key={}",
-        urlencoding::encode(&token)
-    );
-    proxy_url(&token, url, request_range).await
+    let mut url = reqwest::Url::parse(&format!("{base_url}/Videos/{item_id}/stream"))
+        .context("构建 Emby 原始流地址失败")?;
+    url.query_pairs_mut()
+        .append_pair("static", "true")
+        .append_pair("api_key", &token);
+    if let Some(play_session_id) = play_session_id.filter(|value| !value.trim().is_empty()) {
+        url.query_pairs_mut()
+            .append_pair("PlaySessionId", play_session_id.trim());
+    }
+    proxy_url(&token, url.to_string(), request_range).await
 }
 
 /// 代理 Emby 转码后的 MP4 视频流，用于浏览器无法直接播放原始流时回退。
 pub async fn proxy_transcoded_stream(
     cfg: &EmbyConnectConfig,
     item_id: &str,
+    play_session_id: Option<&str>,
 ) -> Result<ProxiedEmbyMedia> {
     let base_url = normalized_base_url(cfg)?;
     let (token, user_id, _) = authenticate(cfg).await?;
@@ -961,6 +1445,26 @@ pub async fn proxy_transcoded_stream(
         .append_pair("MaxAudioChannels", "2")
         .append_pair("EnableSubtitlesInManifest", "false")
         .append_pair("EnableAudioVbrEncoding", "false");
+    if let Some(play_session_id) = play_session_id.filter(|value| !value.trim().is_empty()) {
+        url.query_pairs_mut()
+            .append_pair("PlaySessionId", play_session_id.trim());
+    }
+    proxy_url(&token, url.to_string(), None).await
+}
+
+/// 代理 Emby 字幕为 WebVTT，供浏览器字幕轨使用。
+pub async fn proxy_subtitle_stream(
+    cfg: &EmbyConnectConfig,
+    q: &EmbySubtitleStreamQuery,
+) -> Result<ProxiedEmbyMedia> {
+    let base_url = normalized_base_url(cfg)?;
+    let (token, _, _) = authenticate(cfg).await?;
+    let mut url = reqwest::Url::parse(&format!(
+        "{base_url}/Videos/{}/{}/Subtitles/{}/Stream.vtt",
+        q.item_id, q.media_source_id, q.index
+    ))
+    .context("构建 Emby 字幕流地址失败")?;
+    url.query_pairs_mut().append_pair("api_key", &token);
     proxy_url(&token, url.to_string(), None).await
 }
 

@@ -16,6 +16,9 @@ export const TestConnectionEmbyResponse = zod.object({
 
 export const ListItemsEmbyQueryParams = zod.object({
   "q": zod.string().nullish(),
+  "person_id": zod.string().nullish(),
+  "genre": zod.string().nullish(),
+  "tag_filter": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
   "include_item_types": zod.string().nullish(),
   "recursive": zod.boolean().nullish(),
@@ -31,6 +34,7 @@ export const ListItemsEmbyResponse = zod.object({
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
   "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
   "index_number": zod.number().nullish(),
@@ -40,9 +44,17 @@ export const ListItemsEmbyResponse = zod.object({
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
   "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
   "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
-  "run_time_ticks": zod.number().nullish()
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
 }).describe('Emby 资源类型。')),
   "total": zod.number()
 }).describe('Emby 资源列表响应。')
@@ -59,6 +71,7 @@ export const GetItemEmbyResponse = zod.object({
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
   "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
   "index_number": zod.number().nullish(),
@@ -68,14 +81,23 @@ export const GetItemEmbyResponse = zod.object({
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
   "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
   "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
-  "run_time_ticks": zod.number().nullish()
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
 }).describe('Emby 资源类型。')
 
 
 export const GetPlaybackInfoEmbyQueryParams = zod.object({
-  "item_id": zod.string()
+  "item_id": zod.string(),
+  "play_session_id": zod.string().nullish()
 })
 
 export const GetPlaybackInfoEmbyResponse = zod.object({
@@ -85,7 +107,16 @@ export const GetPlaybackInfoEmbyResponse = zod.object({
   "media_source_id": zod.string().nullish(),
   "playback_position_ticks": zod.number().nullish(),
   "played_percentage": zod.number().nullish(),
-  "run_time_ticks": zod.number().nullish()
+  "run_time_ticks": zod.number().nullish(),
+  "subtitle_tracks": zod.array(zod.object({
+  "codec": zod.string().nullish(),
+  "index": zod.number(),
+  "is_default": zod.boolean().optional(),
+  "is_external": zod.boolean().optional(),
+  "label": zod.string(),
+  "language": zod.string().nullish(),
+  "media_source_id": zod.string()
+}).describe('Emby 字幕轨。')).optional()
 }).describe('Emby 播放信息，供前端决定直链、原始流或转码流。')
 
 
@@ -95,6 +126,7 @@ export const ProgressPlaybackEmbyBody = zod.object({
   "item_id": zod.string(),
   "media_source_id": zod.string().nullish(),
   "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
   "position_ticks": zod.number(),
   "volume_level": zod.number().nullish()
 }).describe('Emby 播放进度上报请求。')
@@ -110,6 +142,7 @@ export const StartPlaybackEmbyBody = zod.object({
   "item_id": zod.string(),
   "media_source_id": zod.string().nullish(),
   "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
   "position_ticks": zod.number(),
   "volume_level": zod.number().nullish()
 }).describe('Emby 播放进度上报请求。')
@@ -125,6 +158,7 @@ export const StoppedPlaybackEmbyBody = zod.object({
   "item_id": zod.string(),
   "media_source_id": zod.string().nullish(),
   "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
   "position_ticks": zod.number(),
   "volume_level": zod.number().nullish()
 }).describe('Emby 播放进度上报请求。')
@@ -150,6 +184,7 @@ export const ListSectionsEmbyResponse = zod.object({
   "child_count": zod.number().nullish(),
   "collection_type": zod.string().nullish(),
   "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
   "id": zod.string(),
   "image_tag": zod.string().nullish(),
   "index_number": zod.number().nullish(),
@@ -159,14 +194,63 @@ export const ListSectionsEmbyResponse = zod.object({
   "overview": zod.string().nullish(),
   "parent_id": zod.string().nullish(),
   "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
   "premiere_date": zod.string().nullish(),
   "production_year": zod.number().nullish(),
-  "run_time_ticks": zod.number().nullish()
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
 }).describe('Emby 资源类型。')),
   "name": zod.string(),
   "total": zod.number()
 }).describe('Emby 单个媒体库分组及其资源。'))
 }).describe('Emby 媒体库分组响应。')
+
+
+export const SubtitleEmbyQueryParams = zod.object({
+  "item_id": zod.string(),
+  "media_source_id": zod.string(),
+  "index": zod.number()
+})
+
+
+export const DownloadSubtitleEmbyBody = zod.object({
+  "item_id": zod.string(),
+  "subtitle_id": zod.string()
+}).describe('Emby 远程字幕下载请求。')
+
+export const DownloadSubtitleEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 远程字幕下载结果。')
+
+
+export const SearchSubtitlesEmbyQueryParams = zod.object({
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "language": zod.string().optional()
+})
+
+export const SearchSubtitlesEmbyResponse = zod.object({
+  "item_id": zod.string(),
+  "items": zod.array(zod.object({
+  "author": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
+  "download_count": zod.number().nullish(),
+  "format": zod.string().nullish(),
+  "id": zod.string(),
+  "is_hash_match": zod.boolean().optional(),
+  "language": zod.string().nullish(),
+  "name": zod.string(),
+  "provider_name": zod.string().nullish()
+}).describe('Emby 远程字幕候选。')),
+  "language": zod.string()
+}).describe('Emby 远程字幕查询结果。')
 
 
 export const DeleteSubtitleFsBody = zod.object({
