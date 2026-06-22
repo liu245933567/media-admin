@@ -3,6 +3,7 @@ use bytes::Bytes;
 use futures::Stream;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, RANGE};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use std::pin::Pin;
 use typeshare::typeshare;
 use utoipa::{IntoParams, ToSchema};
@@ -147,6 +148,59 @@ pub struct EmbyStreamQuery {
     pub item_id: String,
 }
 
+/// Emby 播放方式。
+#[typeshare]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbyPlaybackMethod {
+    DirectPlay,
+    DirectStream,
+    Transcode,
+}
+
+/// Emby 播放信息，供前端决定直链、原始流或转码流。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbyPlaybackInfo {
+    pub item_id: String,
+    pub is_strm: bool,
+    #[serde(default)]
+    pub direct_url: Option<String>,
+    #[serde(default)]
+    pub media_source_id: Option<String>,
+    #[serde(default)]
+    pub run_time_ticks: Option<i64>,
+    #[serde(default)]
+    pub playback_position_ticks: Option<i64>,
+    #[serde(default)]
+    pub played_percentage: Option<f64>,
+}
+
+/// Emby 播放进度上报请求。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbyPlaybackProgressReq {
+    pub item_id: String,
+    pub position_ticks: i64,
+    #[serde(default)]
+    pub is_paused: bool,
+    #[serde(default)]
+    pub is_muted: bool,
+    #[serde(default)]
+    pub volume_level: Option<i32>,
+    #[serde(default)]
+    pub media_source_id: Option<String>,
+    #[serde(default)]
+    pub play_method: Option<EmbyPlaybackMethod>,
+}
+
+/// Emby 播放进度上报结果。
+#[typeshare]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmbyPlaybackSyncRes {
+    pub ok: bool,
+}
+
 /// 被代理的 Emby 媒体流。
 pub struct ProxiedEmbyMedia {
     pub status: reqwest::StatusCode,
@@ -228,6 +282,28 @@ struct RawEmbyItem {
     community_rating: Option<f64>,
     #[serde(rename = "OfficialRating")]
     official_rating: Option<String>,
+    #[serde(rename = "Path")]
+    path: Option<String>,
+    #[serde(rename = "MediaSources", default)]
+    media_sources: Vec<RawMediaSource>,
+    #[serde(rename = "UserData")]
+    user_data: Option<RawUserData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMediaSource {
+    #[serde(rename = "Id")]
+    id: Option<String>,
+    #[serde(rename = "Path")]
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawUserData {
+    #[serde(rename = "PlaybackPositionTicks")]
+    playback_position_ticks: Option<i64>,
+    #[serde(rename = "PlayedPercentage")]
+    played_percentage: Option<f64>,
 }
 
 fn default_start_index() -> i32 {
@@ -550,10 +626,7 @@ pub async fn get_item(cfg: &EmbyConnectConfig, item_id: &str) -> Result<EmbyLibr
         .get(format!("{base_url}/Users/{user_id}/Items/{item_id}"))
         .header(AUTHORIZATION, auth_header(&token))
         .header(ACCEPT, "application/json")
-        .query(&[(
-            "Fields",
-            "Overview,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags",
-        )])
+        .query(&[("Fields", emby_item_detail_fields())])
         .send()
         .await?;
     let status = resp.status();
@@ -563,6 +636,205 @@ pub async fn get_item(cfg: &EmbyConnectConfig, item_id: &str) -> Result<EmbyLibr
     }
     let item: RawEmbyItem = serde_json::from_str(&text).context("解析 Emby 资源详情失败")?;
     Ok(map_item(item))
+}
+
+/// 查询 Emby 播放信息，识别 `.strm` 并解析其真实 URL。
+pub async fn get_playback_info(cfg: &EmbyConnectConfig, item_id: &str) -> Result<EmbyPlaybackInfo> {
+    let base_url = normalized_base_url(cfg)?;
+    let (token, user_id, _) = authenticate(cfg).await?;
+    let item = fetch_raw_item(&base_url, &token, &user_id, item_id).await?;
+    let media_source_id = item
+        .media_sources
+        .iter()
+        .find_map(|source| source.id.as_deref().map(str::to_string));
+    let candidate_paths = item
+        .media_sources
+        .iter()
+        .filter_map(|source| source.path.as_deref())
+        .chain(item.path.as_deref())
+        .collect::<Vec<_>>();
+    let is_strm = candidate_paths.iter().any(|path| is_strm_path(path));
+    let direct_url = resolve_direct_strm_url(&base_url, &token, item_id, &candidate_paths).await?;
+    let user_data = item.user_data;
+
+    Ok(EmbyPlaybackInfo {
+        item_id: item.id,
+        is_strm,
+        direct_url,
+        media_source_id,
+        run_time_ticks: item.run_time_ticks,
+        playback_position_ticks: user_data
+            .as_ref()
+            .and_then(|data| data.playback_position_ticks),
+        played_percentage: user_data.and_then(|data| data.played_percentage),
+    })
+}
+
+async fn fetch_raw_item(
+    base_url: &str,
+    token: &str,
+    user_id: &str,
+    item_id: &str,
+) -> Result<RawEmbyItem> {
+    let resp = client()?
+        .get(format!("{base_url}/Users/{user_id}/Items/{item_id}"))
+        .header(AUTHORIZATION, auth_header(token))
+        .header(ACCEPT, "application/json")
+        .query(&[("Fields", emby_item_detail_fields())])
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await?;
+    if !status.is_success() {
+        return Err(anyhow!("emby item http {}: {}", status.as_u16(), text));
+    }
+    serde_json::from_str(&text).context("解析 Emby 资源详情失败")
+}
+
+fn emby_item_detail_fields() -> &'static str {
+    "Overview,RunTimeTicks,ChildCount,PremiereDate,CommunityRating,OfficialRating,IndexNumber,ParentIndexNumber,BackdropImageTags,Path,MediaSources,UserData"
+}
+
+fn is_http_url(value: &str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://")
+}
+
+fn is_strm_path(value: &str) -> bool {
+    Path::new(value)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("strm"))
+}
+
+async fn resolve_direct_strm_url(
+    base_url: &str,
+    token: &str,
+    item_id: &str,
+    candidate_paths: &[&str],
+) -> Result<Option<String>> {
+    for path in candidate_paths {
+        let trimmed = path.trim();
+        if is_http_url(trimmed) {
+            return Ok(Some(trimmed.to_string()));
+        }
+    }
+
+    if !candidate_paths.iter().any(|path| is_strm_path(path)) {
+        return Ok(None);
+    }
+
+    for path in candidate_paths {
+        let trimmed = path.trim();
+        if !is_strm_path(trimmed) {
+            continue;
+        }
+        if let Ok(content) = tokio::fs::read_to_string(trimmed).await {
+            if let Some(url) = first_url_from_strm_content(&content) {
+                return Ok(Some(url));
+            }
+        }
+    }
+
+    fetch_strm_file_url_from_emby(base_url, token, item_id).await
+}
+
+fn first_url_from_strm_content(content: &str) -> Option<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .find(|line| is_http_url(line))
+        .map(str::to_string)
+}
+
+async fn fetch_strm_file_url_from_emby(
+    base_url: &str,
+    token: &str,
+    item_id: &str,
+) -> Result<Option<String>> {
+    let mut url = reqwest::Url::parse(&format!("{base_url}/Items/{item_id}/File"))
+        .context("构建 Emby strm 文件地址失败")?;
+    url.query_pairs_mut().append_pair("api_key", token);
+
+    let resp = client()?
+        .get(url)
+        .header(AUTHORIZATION, auth_header(token))
+        .header(ACCEPT, "text/plain")
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Ok(None);
+    }
+    let text = resp.text().await.unwrap_or_default();
+    Ok(first_url_from_strm_content(&text))
+}
+
+/// 向 Emby 上报播放开始。
+pub async fn report_playback_start(
+    cfg: &EmbyConnectConfig,
+    req: EmbyPlaybackProgressReq,
+) -> Result<EmbyPlaybackSyncRes> {
+    report_playback_event(cfg, "Playing", req).await
+}
+
+/// 向 Emby 上报播放进度。
+pub async fn report_playback_progress(
+    cfg: &EmbyConnectConfig,
+    req: EmbyPlaybackProgressReq,
+) -> Result<EmbyPlaybackSyncRes> {
+    report_playback_event(cfg, "Playing/Progress", req).await
+}
+
+/// 向 Emby 上报播放停止。
+pub async fn report_playback_stopped(
+    cfg: &EmbyConnectConfig,
+    req: EmbyPlaybackProgressReq,
+) -> Result<EmbyPlaybackSyncRes> {
+    report_playback_event(cfg, "Playing/Stopped", req).await
+}
+
+async fn report_playback_event(
+    cfg: &EmbyConnectConfig,
+    endpoint: &str,
+    req: EmbyPlaybackProgressReq,
+) -> Result<EmbyPlaybackSyncRes> {
+    let base_url = normalized_base_url(cfg)?;
+    let (token, _, _) = authenticate(cfg).await?;
+    let body = serde_json::json!({
+        "ItemId": req.item_id,
+        "MediaSourceId": req.media_source_id.unwrap_or_else(|| req.item_id.clone()),
+        "PositionTicks": req.position_ticks.max(0),
+        "IsPaused": req.is_paused,
+        "IsMuted": req.is_muted,
+        "VolumeLevel": req.volume_level.unwrap_or(100).clamp(0, 100),
+        "CanSeek": true,
+        "PlayMethod": emby_play_method_name(req.play_method.unwrap_or(EmbyPlaybackMethod::DirectStream)),
+    });
+    let resp = client()?
+        .post(format!("{base_url}/Sessions/{endpoint}"))
+        .header(AUTHORIZATION, auth_header(&token))
+        .header(ACCEPT, "application/json")
+        .json(&body)
+        .send()
+        .await?;
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(anyhow!(
+            "emby playback {} http {}: {}",
+            endpoint,
+            status.as_u16(),
+            text
+        ));
+    }
+    Ok(EmbyPlaybackSyncRes { ok: true })
+}
+
+fn emby_play_method_name(method: EmbyPlaybackMethod) -> &'static str {
+    match method {
+        EmbyPlaybackMethod::DirectPlay => "DirectPlay",
+        EmbyPlaybackMethod::DirectStream => "DirectStream",
+        EmbyPlaybackMethod::Transcode => "Transcode",
+    }
 }
 
 fn map_item(item: RawEmbyItem) -> EmbyLibraryItem {

@@ -29,6 +29,12 @@ export interface LocalSubtitleTrack {
   path: string
 }
 
+export interface RemotePlaybackProgressEvent {
+  currentTime: number
+  isPaused: boolean
+  duration?: number
+}
+
 export interface LocalVideoPlayerProps {
   videoPath: string
   subtitleTracks: LocalSubtitleTrack[]
@@ -36,6 +42,14 @@ export interface LocalVideoPlayerProps {
   remoteMimeType?: string
   fallbackRemoteSrc?: string
   fallbackRemoteMimeType?: string
+  remoteInitialTime?: number
+  remoteProgressIntervalMs?: number
+  remoteLoadingLabel?: string
+  remoteFallbackLoadingLabel?: string
+  onRemotePlaybackStart?: (event: RemotePlaybackProgressEvent) => void
+  onRemotePlaybackProgress?: (event: RemotePlaybackProgressEvent) => void
+  onRemotePlaybackStopped?: (event: RemotePlaybackProgressEvent) => void
+  onRemoteFallbackChange?: (usingFallback: boolean) => void
   /** 默认选中的字幕文件名（非完整路径） */
   defaultSubtitleLabel?: string
   /** 铺满父容器（播放页全屏） */
@@ -73,6 +87,14 @@ export function LocalVideoPlayer({
   remoteMimeType,
   fallbackRemoteSrc,
   fallbackRemoteMimeType,
+  remoteInitialTime,
+  remoteProgressIntervalMs = 10000,
+  remoteLoadingLabel = '正在加载 Emby 原始流...',
+  remoteFallbackLoadingLabel = '正在加载 Emby 转码流...',
+  onRemotePlaybackStart,
+  onRemotePlaybackProgress,
+  onRemotePlaybackStopped,
+  onRemoteFallbackChange,
   defaultSubtitleLabel,
   fillViewport = false,
   playlistNav,
@@ -84,6 +106,15 @@ export function LocalVideoPlayer({
   const attachedSubtitleTracksRef = useRef<Map<string, RemoteTextTrackHandle>>(new Map())
   const transcodeStartRequested = useRef(false)
   const fallbackRequestedRef = useRef(false)
+  const remoteStartedRef = useRef(false)
+  const remoteStoppedRef = useRef(false)
+  const remoteInitialSeekAppliedRef = useRef(false)
+  const lastRemoteProgressAtRef = useRef(0)
+  const latestRemoteProgressRef = useRef<RemotePlaybackProgressEvent>({
+    currentTime: 0,
+    isPaused: true,
+  })
+  const onRemotePlaybackStoppedRef = useRef(onRemotePlaybackStopped)
 
   const initialTrackPath = useMemo(
     () => resolveDefaultChineseSubtitlePath(videoPath, subtitleTracks, defaultSubtitleLabel),
@@ -101,12 +132,24 @@ export function LocalVideoPlayer({
   }, [initialTrackPath])
 
   useEffect(() => {
+    onRemotePlaybackStoppedRef.current = onRemotePlaybackStopped
+  }, [onRemotePlaybackStopped])
+
+  useEffect(() => {
     transcodeStartRequested.current = false
     fallbackRequestedRef.current = false
+    remoteStartedRef.current = false
+    remoteStoppedRef.current = false
+    remoteInitialSeekAppliedRef.current = false
+    lastRemoteProgressAtRef.current = 0
     setUseFallbackRemote(false)
     setRemotePlaybackError(undefined)
     setRemoteLoading(Boolean(remoteSrc))
   }, [remoteSrc, videoPath])
+
+  useEffect(() => {
+    onRemoteFallbackChange?.(useFallbackRemote)
+  }, [onRemoteFallbackChange, useFallbackRemote])
 
   const probeQuery = useQuery({
     queryKey: getProbeVideoFsQueryKey({ path: videoPath }),
@@ -188,6 +231,88 @@ export function LocalVideoPlayer({
     setRemoteLoading(false)
     setRemotePlaybackError(mediaError?.message || '浏览器无法播放当前视频流')
   }, [fallbackRemoteSrc, isRemotePlayback, useFallbackRemote])
+
+  const buildRemoteProgressEvent = useCallback((video: HTMLVideoElement): RemotePlaybackProgressEvent => ({
+    currentTime: Number.isFinite(video.currentTime) ? video.currentTime : 0,
+    isPaused: video.paused,
+    duration: Number.isFinite(video.duration) ? video.duration : undefined,
+  }), [])
+
+  const emitRemoteProgress = useCallback((video: HTMLVideoElement, force = false) => {
+    const event = buildRemoteProgressEvent(video)
+    latestRemoteProgressRef.current = event
+    const now = Date.now()
+    if (!force && now - lastRemoteProgressAtRef.current < remoteProgressIntervalMs)
+      return
+    lastRemoteProgressAtRef.current = now
+    onRemotePlaybackProgress?.(event)
+  }, [buildRemoteProgressEvent, onRemotePlaybackProgress, remoteProgressIntervalMs])
+
+  const handleRemoteLoadedMetadata = useCallback(() => {
+    const video = nativeVideoRef.current
+    if (!video)
+      return
+    if (!remoteInitialSeekAppliedRef.current && remoteInitialTime && remoteInitialTime > 0) {
+      const safeTime = video.duration && Number.isFinite(video.duration)
+        ? Math.min(remoteInitialTime, Math.max(video.duration - 3, 0))
+        : remoteInitialTime
+      video.currentTime = safeTime
+      remoteInitialSeekAppliedRef.current = true
+    }
+    latestRemoteProgressRef.current = buildRemoteProgressEvent(video)
+    setRemoteLoading(false)
+  }, [buildRemoteProgressEvent, remoteInitialTime])
+
+  const handleRemotePlaying = useCallback(() => {
+    const video = nativeVideoRef.current
+    if (!video)
+      return
+    setRemoteLoading(false)
+    const event = buildRemoteProgressEvent(video)
+    latestRemoteProgressRef.current = event
+    if (!remoteStartedRef.current) {
+      remoteStartedRef.current = true
+      remoteStoppedRef.current = false
+      onRemotePlaybackStart?.(event)
+    }
+    emitRemoteProgress(video, true)
+  }, [buildRemoteProgressEvent, emitRemoteProgress, onRemotePlaybackStart])
+
+  const handleRemoteProgressTick = useCallback(() => {
+    const video = nativeVideoRef.current
+    if (video)
+      emitRemoteProgress(video)
+  }, [emitRemoteProgress])
+
+  const handleRemotePaused = useCallback(() => {
+    const video = nativeVideoRef.current
+    if (!video || video.ended)
+      return
+    emitRemoteProgress(video, true)
+  }, [emitRemoteProgress])
+
+  const handleRemoteStopped = useCallback(() => {
+    const video = nativeVideoRef.current
+    if (!video)
+      return
+    const event = buildRemoteProgressEvent(video)
+    latestRemoteProgressRef.current = event
+    if (remoteStoppedRef.current)
+      return
+    remoteStoppedRef.current = true
+    onRemotePlaybackStoppedRef.current?.(event)
+  }, [buildRemoteProgressEvent])
+
+  useEffect(() => {
+    if (!isRemotePlayback)
+      return
+    return () => {
+      if (remoteStoppedRef.current || !remoteStartedRef.current)
+        return
+      remoteStoppedRef.current = true
+      onRemotePlaybackStoppedRef.current?.(latestRemoteProgressRef.current)
+    }
+  }, [isRemotePlayback])
 
   /** 预加载同目录全部字幕，供 video.js 原生 CC 菜单切换 */
   const subtitleBlobQueries = useQueries({
@@ -488,7 +613,7 @@ export function LocalVideoPlayer({
                     <div className="flex flex-col items-center gap-2 text-white/70">
                       <Spinner color="current" />
                       <span className="text-sm">
-                        {useFallbackRemote ? '正在加载 Emby 转码流...' : '正在加载 Emby 原始流...'}
+                        {useFallbackRemote ? remoteFallbackLoadingLabel : remoteLoadingLabel}
                       </span>
                     </div>
                   </div>
@@ -505,9 +630,12 @@ export function LocalVideoPlayer({
                     setRemoteLoading(false)
                     setRemotePlaybackError(undefined)
                   }}
-                  onLoadedMetadata={() => setRemoteLoading(false)}
+                  onLoadedMetadata={handleRemoteLoadedMetadata}
                   onWaiting={() => setRemoteLoading(true)}
-                  onPlaying={() => setRemoteLoading(false)}
+                  onPlaying={handleRemotePlaying}
+                  onTimeUpdate={handleRemoteProgressTick}
+                  onPause={handleRemotePaused}
+                  onEnded={handleRemoteStopped}
                   onError={handleRemoteVideoError}
                 />
               </>

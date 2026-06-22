@@ -74,6 +74,66 @@ export const GetItemEmbyResponse = zod.object({
 }).describe('Emby 资源类型。')
 
 
+export const GetPlaybackInfoEmbyQueryParams = zod.object({
+  "item_id": zod.string()
+})
+
+export const GetPlaybackInfoEmbyResponse = zod.object({
+  "direct_url": zod.string().nullish(),
+  "is_strm": zod.boolean(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "playback_position_ticks": zod.number().nullish(),
+  "played_percentage": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish()
+}).describe('Emby 播放信息，供前端决定直链、原始流或转码流。')
+
+
+export const ProgressPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const ProgressPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
+export const StartPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const StartPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
+export const StoppedPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const StoppedPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
 export const ListSectionsEmbyQueryParams = zod.object({
   "q": zod.string().nullish(),
   "limit": zod.number().optional()

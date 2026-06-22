@@ -315,6 +315,50 @@ export interface EmbyLibrarySection {
 }
 
 /**
+ * Emby 播放信息，供前端决定直链、原始流或转码流。
+ */
+export interface EmbyPlaybackInfo {
+  /** @nullable */
+  direct_url?: string | null;
+  is_strm: boolean;
+  item_id: string;
+  /** @nullable */
+  media_source_id?: string | null;
+  /** @nullable */
+  playback_position_ticks?: number | null;
+  /** @nullable */
+  played_percentage?: number | null;
+  /** @nullable */
+  run_time_ticks?: number | null;
+}
+
+/**
+ * Emby 播放方式。
+ */
+export type EmbyPlaybackMethod = 'direct_play' | 'direct_stream' | 'transcode';
+/**
+ * Emby 播放进度上报请求。
+ */
+export interface EmbyPlaybackProgressReq {
+  is_muted?: boolean;
+  is_paused?: boolean;
+  item_id: string;
+  /** @nullable */
+  media_source_id?: string | null;
+  play_method?: null | EmbyPlaybackMethod;
+  position_ticks: number;
+  /** @nullable */
+  volume_level?: number | null;
+}
+
+/**
+ * Emby 播放进度上报结果。
+ */
+export interface EmbyPlaybackSyncRes {
+  ok: boolean;
+}
+
+/**
  * Emby 媒体库分组查询参数。
  */
 export interface EmbySectionsQuery {
@@ -1137,6 +1181,10 @@ start_index?: number;
 limit?: number;
 };
 
+export type GetPlaybackInfoEmbyParams = {
+item_id: string;
+};
+
 export type ListSectionsEmbyParams = {
 /**
  * @nullable
@@ -1446,6 +1494,268 @@ export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, 
 
 
 
+
+export const getPlaybackInfoEmby = (
+    params: GetPlaybackInfoEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackInfo>(
+      {url: `/api/emby/playback-info`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getGetPlaybackInfoEmbyQueryKey = (params?: GetPlaybackInfoEmbyParams,) => {
+    return [
+    `/api/emby/playback-info`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPlaybackInfoEmbyQueryOptions = <TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlaybackInfoEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlaybackInfoEmby>>> = ({ signal }) => getPlaybackInfoEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlaybackInfoEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof getPlaybackInfoEmby>>>
+export type GetPlaybackInfoEmbyQueryError = ErrorType<unknown>
+
+
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlaybackInfoEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const progressPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/progress`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getProgressPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['progressPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof progressPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  progressPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProgressPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof progressPlaybackEmby>>>
+    export type ProgressPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type ProgressPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useProgressPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof progressPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getProgressPlaybackEmbyMutationOptions(options), queryClient);
+    }
+
+export const startPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/start`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getStartPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['startPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof startPlaybackEmby>>>
+    export type StartPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type StartPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useStartPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof startPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getStartPlaybackEmbyMutationOptions(options), queryClient);
+    }
+
+export const stoppedPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/stopped`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getStoppedPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['stoppedPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  stoppedPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StoppedPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof stoppedPlaybackEmby>>>
+    export type StoppedPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type StoppedPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useStoppedPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof stoppedPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getStoppedPlaybackEmbyMutationOptions(options), queryClient);
+    }
 
 export const listSectionsEmby = (
     params?: ListSectionsEmbyParams,

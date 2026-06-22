@@ -1,12 +1,20 @@
+import type { EmbyPlaybackMethod, EmbyPlaybackProgressReq } from '@/api'
+import type { RemotePlaybackProgressEvent } from '@/components/local-video-player'
 import { Button, Spinner } from '@heroui/react'
 import { Icon } from '@iconify/react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useCallback, useMemo, useState } from 'react'
 import {
   buildEmbyTranscodedVideoSrc,
   buildEmbyVideoSrc,
   getGetItemEmbyQueryKey,
+  getGetPlaybackInfoEmbyQueryKey,
   getItemEmby,
+  getPlaybackInfoEmby,
+  progressPlaybackEmby,
+  startPlaybackEmby,
+  stoppedPlaybackEmby,
 } from '@/api'
 import { LocalVideoPlayer } from '@/components/local-video-player'
 
@@ -19,12 +27,50 @@ export const Route = createFileRoute('/emby-play')({
 
 function EmbyPlayPage() {
   const { itemId } = Route.useSearch()
+  const [usingFallback, setUsingFallback] = useState(false)
 
   const itemQuery = useQuery({
     queryKey: itemId ? getGetItemEmbyQueryKey(itemId) : ['emby-item', 'missing'],
     queryFn: () => getItemEmby(itemId),
     enabled: Boolean(itemId),
   })
+
+  const playbackInfoQuery = useQuery({
+    queryKey: itemId ? getGetPlaybackInfoEmbyQueryKey({ item_id: itemId }) : ['emby-playback-info', 'missing'],
+    queryFn: () => getPlaybackInfoEmby({ item_id: itemId }),
+    enabled: Boolean(itemId),
+  })
+
+  const playbackStartMutation = useMutation({
+    mutationFn: (req: EmbyPlaybackProgressReq) => startPlaybackEmby(req),
+  })
+  const playbackProgressMutation = useMutation({
+    mutationFn: (req: EmbyPlaybackProgressReq) => progressPlaybackEmby(req),
+  })
+  const playbackStoppedMutation = useMutation({
+    mutationFn: (req: EmbyPlaybackProgressReq) => stoppedPlaybackEmby(req),
+  })
+
+  const isDirectStrm = playbackInfoQuery.data?.is_strm === true && Boolean(playbackInfoQuery.data.direct_url)
+  const playbackMethod: EmbyPlaybackMethod = isDirectStrm
+    ? 'direct_play'
+    : usingFallback
+      ? 'transcode'
+      : 'direct_stream'
+
+  const playbackRequest = useCallback((event: RemotePlaybackProgressEvent) => ({
+    item_id: itemId,
+    position_ticks: secondsToTicks(event.currentTime),
+    is_paused: event.isPaused,
+    media_source_id: playbackInfoQuery.data?.media_source_id ?? itemId,
+    play_method: playbackMethod,
+  }), [itemId, playbackInfoQuery.data?.media_source_id, playbackMethod])
+
+  const remoteSrc = useMemo(() => {
+    if (isDirectStrm && playbackInfoQuery.data?.direct_url)
+      return playbackInfoQuery.data.direct_url
+    return buildEmbyVideoSrc(itemId)
+  }, [isDirectStrm, itemId, playbackInfoQuery.data?.direct_url])
 
   if (!itemId) {
     return (
@@ -83,19 +129,60 @@ function EmbyPlayPage() {
                   </div>
                 </div>
               )
-            : (
-                <LocalVideoPlayer
-                  key={itemId}
-                  videoPath={itemId}
-                  remoteSrc={buildEmbyVideoSrc(itemId)}
-                  remoteMimeType="video/mp4"
-                  fallbackRemoteSrc={buildEmbyTranscodedVideoSrc(itemId)}
-                  fallbackRemoteMimeType="video/mp4"
-                  subtitleTracks={[]}
-                  fillViewport
-                />
-              )}
+            : playbackInfoQuery.isPending
+              ? (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+                    <div className="flex flex-col items-center gap-2 text-white/70">
+                      <Spinner color="current" />
+                      <span className="text-sm">准备 Emby 播放信息...</span>
+                    </div>
+                  </div>
+                )
+              : playbackInfoQuery.isError
+                ? (
+                    <div className="flex h-full items-center justify-center bg-black p-6 text-center text-white">
+                      <div className="flex max-w-md flex-col items-center gap-3">
+                        <Icon className="size-10 text-warning" icon="lucide:circle-alert" />
+                        <h1 className="m-0 text-lg font-semibold">无法准备 Emby 播放</h1>
+                        <p className="m-0 text-sm text-white/60">{playbackInfoQuery.error.message}</p>
+                      </div>
+                    </div>
+                  )
+                : (
+                    <LocalVideoPlayer
+                      key={itemId}
+                      videoPath={itemId}
+                      remoteSrc={remoteSrc}
+                      remoteMimeType={isDirectStrm ? undefined : 'video/mp4'}
+                      fallbackRemoteSrc={isDirectStrm ? undefined : buildEmbyTranscodedVideoSrc(itemId)}
+                      fallbackRemoteMimeType={isDirectStrm ? undefined : 'video/mp4'}
+                      remoteInitialTime={ticksToSeconds(playbackInfoQuery.data?.playback_position_ticks)}
+                      remoteLoadingLabel={isDirectStrm ? '正在加载 strm 直链...' : '正在加载 Emby 原始流...'}
+                      onRemoteFallbackChange={setUsingFallback}
+                      onRemotePlaybackStart={(event) => {
+                        playbackStartMutation.mutate(playbackRequest(event))
+                      }}
+                      onRemotePlaybackProgress={(event) => {
+                        playbackProgressMutation.mutate(playbackRequest(event))
+                      }}
+                      onRemotePlaybackStopped={(event) => {
+                        playbackStoppedMutation.mutate(playbackRequest(event))
+                      }}
+                      subtitleTracks={[]}
+                      fillViewport
+                    />
+                  )}
       </main>
     </div>
   )
+}
+
+function secondsToTicks(seconds: number): number {
+  return Math.max(0, Math.round(seconds * 10_000_000))
+}
+
+function ticksToSeconds(ticks: number | null | undefined): number | undefined {
+  if (!ticks || ticks <= 0)
+    return undefined
+  return ticks / 10_000_000
 }

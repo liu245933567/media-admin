@@ -400,6 +400,122 @@
         ],
         "type": "object"
       },
+      "EmbyPlaybackInfo": {
+        "description": "Emby 播放信息，供前端决定直链、原始流或转码流。",
+        "properties": {
+          "direct_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_strm": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "media_source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "playback_position_ticks": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "played_percentage": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "run_time_ticks": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "item_id",
+          "is_strm"
+        ],
+        "type": "object"
+      },
+      "EmbyPlaybackMethod": {
+        "description": "Emby 播放方式。",
+        "enum": [
+          "direct_play",
+          "direct_stream",
+          "transcode"
+        ],
+        "type": "string"
+      },
+      "EmbyPlaybackProgressReq": {
+        "description": "Emby 播放进度上报请求。",
+        "properties": {
+          "is_muted": {
+            "type": "boolean"
+          },
+          "is_paused": {
+            "type": "boolean"
+          },
+          "item_id": {
+            "type": "string"
+          },
+          "media_source_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "play_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EmbyPlaybackMethod"
+              }
+            ]
+          },
+          "position_ticks": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "volume_level": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "item_id",
+          "position_ticks"
+        ],
+        "type": "object"
+      },
+      "EmbyPlaybackSyncRes": {
+        "description": "Emby 播放进度上报结果。",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
       "EmbySectionsQuery": {
         "description": "Emby 媒体库分组查询参数。",
         "properties": {
@@ -3050,6 +3166,126 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmbyLibraryItem"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/playback-info": {
+      "get": {
+        "operationId": "getPlaybackInfoEmby",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyPlaybackInfo"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/playback/progress": {
+      "post": {
+        "operationId": "progressPlaybackEmby",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbyPlaybackProgressReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyPlaybackSyncRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/playback/start": {
+      "post": {
+        "operationId": "startPlaybackEmby",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbyPlaybackProgressReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyPlaybackSyncRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/playback/stopped": {
+      "post": {
+        "operationId": "stoppedPlaybackEmby",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmbyPlaybackProgressReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyPlaybackSyncRes"
                 }
               }
             },

@@ -9,9 +9,11 @@ use axum::{
 };
 use futures_util::StreamExt;
 use ma_service::emby::{
-    EmbyConnectionStatus, EmbyItemsQuery, EmbyItemsRes, EmbyLibraryItem, EmbySectionsQuery,
-    EmbySectionsRes, EmbyStreamQuery, get_item, list_items, list_sections, proxy_image,
-    proxy_stream, proxy_transcoded_stream, test_connection,
+    EmbyConnectionStatus, EmbyItemsQuery, EmbyItemsRes, EmbyLibraryItem, EmbyPlaybackInfo,
+    EmbyPlaybackProgressReq, EmbyPlaybackSyncRes, EmbySectionsQuery, EmbySectionsRes,
+    EmbyStreamQuery, get_item, get_playback_info, list_items, list_sections, proxy_image,
+    proxy_stream, proxy_transcoded_stream, report_playback_progress, report_playback_start,
+    report_playback_stopped, test_connection,
 };
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -23,6 +25,10 @@ pub fn routes() -> StateRouter {
         .route("/items", get(list_items_handler))
         .route("/items/{id}", get(get_item_handler))
         .route("/items/{id}/image", get(image_proxy_handler))
+        .route("/playback-info", get(playback_info_handler))
+        .route("/playback/start", post(playback_start_handler))
+        .route("/playback/progress", post(playback_progress_handler))
+        .route("/playback/stopped", post(playback_stopped_handler))
         .route("/stream", get(stream_proxy_handler))
         .route("/transcode", get(transcode_proxy_handler))
 }
@@ -130,6 +136,82 @@ pub(crate) async fn get_item_handler(
     let cfg = state.app_config.read().await.emby_config.clone();
     let item = get_item(&cfg, &id).await.map_err(map_emby_err)?;
     Ok(Json(item))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/emby/playback-info",
+    operation_id = "getPlaybackInfoEmby",
+    tag = "emby",
+    params(EmbyStreamQuery),
+    responses((status = 200, body = EmbyPlaybackInfo))
+)]
+pub(crate) async fn playback_info_handler(
+    State(state): State<AppState>,
+    Query(q): Query<EmbyStreamQuery>,
+) -> Result<Json<EmbyPlaybackInfo>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let info = get_playback_info(&cfg, &q.item_id)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(info))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/emby/playback/start",
+    operation_id = "startPlaybackEmby",
+    tag = "emby",
+    request_body = EmbyPlaybackProgressReq,
+    responses((status = 200, body = EmbyPlaybackSyncRes))
+)]
+pub(crate) async fn playback_start_handler(
+    State(state): State<AppState>,
+    Json(body): Json<EmbyPlaybackProgressReq>,
+) -> Result<Json<EmbyPlaybackSyncRes>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let res = report_playback_start(&cfg, body)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/emby/playback/progress",
+    operation_id = "progressPlaybackEmby",
+    tag = "emby",
+    request_body = EmbyPlaybackProgressReq,
+    responses((status = 200, body = EmbyPlaybackSyncRes))
+)]
+pub(crate) async fn playback_progress_handler(
+    State(state): State<AppState>,
+    Json(body): Json<EmbyPlaybackProgressReq>,
+) -> Result<Json<EmbyPlaybackSyncRes>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let res = report_playback_progress(&cfg, body)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(res))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/emby/playback/stopped",
+    operation_id = "stoppedPlaybackEmby",
+    tag = "emby",
+    request_body = EmbyPlaybackProgressReq,
+    responses((status = 200, body = EmbyPlaybackSyncRes))
+)]
+pub(crate) async fn playback_stopped_handler(
+    State(state): State<AppState>,
+    Json(body): Json<EmbyPlaybackProgressReq>,
+) -> Result<Json<EmbyPlaybackSyncRes>, AppError> {
+    let cfg = state.app_config.read().await.emby_config.clone();
+    let res = report_playback_stopped(&cfg, body)
+        .await
+        .map_err(map_emby_err)?;
+    Ok(Json(res))
 }
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
