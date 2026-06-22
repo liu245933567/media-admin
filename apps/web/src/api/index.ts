@@ -14,3 +14,24 @@ export function buildLocalVideoSrc(path: string): string {
 export function buildTranscodedVideoSrc(path: string): string {
   return `/api/fs/video/transcoded?path=${encodeURIComponent(path)}`
 }
+
+/** Emby 视频代理流 URL（供 video.js / `<video>` 使用，支持 Range） */
+export function buildEmbyVideoSrc(itemId: string): string {
+  return `/api/emby/stream?item_id=${encodeURIComponent(itemId)}`
+}
+
+/** Emby 后台转码代理流 URL（原始流无法播放时回退使用） */
+export function buildEmbyTranscodedVideoSrc(itemId: string): string {
+  return `/api/emby/transcode?item_id=${encodeURIComponent(itemId)}`
+}
+
+/** Emby 图片代理 URL */
+export function buildEmbyImageSrc(itemId: string, tag?: string | null, imageType?: string): string {
+  const params = new URLSearchParams()
+  if (tag)
+    params.set('tag', tag)
+  if (imageType)
+    params.set('image_type', imageType)
+  const qs = params.toString()
+  return `/api/emby/items/${encodeURIComponent(itemId)}/image${qs ? `?${qs}` : ''}`
+}

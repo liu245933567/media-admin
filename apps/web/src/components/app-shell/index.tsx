@@ -107,7 +107,7 @@ function AppNavbar() {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = useRouterState({ select: s => s.location.pathname })
-  const immersivePlay = pathname === '/video-play'
+  const immersivePlay = pathname === '/video-play' || pathname === '/emby-play'
 
   if (immersivePlay) {
     return (

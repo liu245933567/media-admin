@@ -2,8 +2,12 @@
   "components": {
     "schemas": {
       "AppConfig": {
-        "description": "应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。",
+        "description": "应用设置：识别流水线默认参数 + 翻译默认参数 + Stash / Emby 连接。",
         "properties": {
+          "emby_config": {
+            "$ref": "#/components/schemas/EmbyConnectConfig",
+            "description": "旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。"
+          },
           "stash_config": {
             "$ref": "#/components/schemas/StashConnectConfig",
             "description": "旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。"
@@ -73,6 +77,306 @@
         "required": [
           "subtitle_path",
           "record_id"
+        ],
+        "type": "object"
+      },
+      "EmbyConnectConfig": {
+        "description": "Emby 服务器连接配置（持久化于应用 `AppConfig`）。",
+        "properties": {
+          "api_key": {
+            "description": "Emby API Key。填写后优先使用 API Key 访问。",
+            "type": "string"
+          },
+          "base_url": {
+            "description": "Emby 实例根地址，如 `http://127.0.0.1:8096`",
+            "type": "string"
+          },
+          "password": {
+            "description": "Emby 用户密码。设置页保存时留空不覆盖旧值。",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "已缓存的用户 ID。用户名密码登录成功后自动写入配置。",
+            "type": "string"
+          },
+          "username": {
+            "description": "Emby 用户名。未配置 API Key 时用于用户名密码登录。",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url",
+          "username",
+          "password",
+          "api_key"
+        ],
+        "type": "object"
+      },
+      "EmbyConnectionStatus": {
+        "description": "Emby 连接测试结果。",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "EmbyImageQuery": {
+        "properties": {
+          "image_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "EmbyItemsApiQuery": {
+        "properties": {
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "EmbyItemsQuery": {
+        "description": "Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。",
+        "properties": {
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "EmbyItemsRes": {
+        "description": "Emby 资源列表响应。",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EmbyLibraryItem"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "EmbyLibraryItem": {
+        "description": "Emby 资源类型。",
+        "properties": {
+          "can_browse": {
+            "type": "boolean"
+          },
+          "can_play": {
+            "type": "boolean"
+          },
+          "child_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "collection_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "image_tag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "item_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overview": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "production_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "run_time_ticks": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "item_type",
+          "can_play",
+          "can_browse"
+        ],
+        "type": "object"
+      },
+      "EmbyLibrarySection": {
+        "description": "Emby 单个媒体库分组及其资源。",
+        "properties": {
+          "collection_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EmbyLibraryItem"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "total": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "EmbySectionsQuery": {
+        "description": "Emby 媒体库分组查询参数。",
+        "properties": {
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "EmbySectionsRes": {
+        "description": "Emby 媒体库分组响应。",
+        "properties": {
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/EmbyLibrarySection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sections"
+        ],
+        "type": "object"
+      },
+      "EmbyStreamQuery": {
+        "description": "Emby 视频流查询参数。",
+        "properties": {
+          "item_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id"
         ],
         "type": "object"
       },
@@ -2559,6 +2863,161 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/emby/connection/test": {
+      "post": {
+        "operationId": "testConnectionEmby",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyConnectionStatus"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/items": {
+      "get": {
+        "operationId": "listItemsEmby",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "parent_id",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "start_index",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyItemsRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/items/{id}": {
+      "get": {
+        "operationId": "getItemEmby",
+        "parameters": [
+          {
+            "description": "Emby Item ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbyLibraryItem"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
+    "/api/emby/sections": {
+      "get": {
+        "operationId": "listSectionsEmby",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbySectionsRes"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "emby"
+        ]
+      }
+    },
     "/api/fs/delete-subtitle": {
       "post": {
         "operationId": "deleteSubtitleFs",
@@ -3739,6 +4198,10 @@
     {
       "description": "本地文件与视频播放",
       "name": "fs"
+    },
+    {
+      "description": "Emby 服务器资源浏览与播放",
+      "name": "emby"
     },
     {
       "description": "字幕任务与队列控制",

@@ -26,6 +26,22 @@ import type {
 import { axiosInstance } from './axios-instance';
 import type { ErrorType , BodyType } from './axios-instance';
 /**
+ * Emby 服务器连接配置（持久化于应用 `AppConfig`）。
+ */
+export interface EmbyConnectConfig {
+  /** Emby API Key。填写后优先使用 API Key 访问。 */
+  api_key: string;
+  /** Emby 实例根地址，如 `http://127.0.0.1:8096` */
+  base_url: string;
+  /** Emby 用户密码。设置页保存时留空不覆盖旧值。 */
+  password: string;
+  /** 已缓存的用户 ID。用户名密码登录成功后自动写入配置。 */
+  user_id?: string;
+  /** Emby 用户名。未配置 API Key 时用于用户名密码登录。 */
+  username: string;
+}
+
+/**
  * Stash 文件路径到本服务本地路径的前缀映射。
  */
 export interface StashPathMapping {
@@ -160,9 +176,11 @@ export interface WhisperTranscribeConfig {
 }
 
 /**
- * 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。
+ * 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash / Emby 连接。
  */
 export interface AppConfig {
+  /** 旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。 */
+  emby_config?: EmbyConnectConfig;
   /** 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。 */
   stash_config?: StashConnectConfig;
   translate_config: SubtitleTranslateConfig;
@@ -188,6 +206,115 @@ export interface DownloadJobStartRes {
 export interface DownloadResponse {
   record_id: number;
   subtitle_path: string;
+}
+
+/**
+ * Emby 连接测试结果。
+ */
+export interface EmbyConnectionStatus {
+  ok: boolean;
+  /** @nullable */
+  server_name?: string | null;
+  /** @nullable */
+  user_id?: string | null;
+  /** @nullable */
+  user_name?: string | null;
+}
+
+export interface EmbyImageQuery {
+  /** @nullable */
+  image_type?: string | null;
+  /** @nullable */
+  tag?: string | null;
+}
+
+export interface EmbyItemsApiQuery {
+  limit?: number;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  q?: string | null;
+  start_index?: number;
+}
+
+/**
+ * Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。
+ */
+export interface EmbyItemsQuery {
+  limit?: number;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  q?: string | null;
+  start_index?: number;
+}
+
+/**
+ * Emby 资源类型。
+ */
+export interface EmbyLibraryItem {
+  can_browse: boolean;
+  can_play: boolean;
+  /** @nullable */
+  child_count?: number | null;
+  /** @nullable */
+  collection_type?: string | null;
+  id: string;
+  /** @nullable */
+  image_tag?: string | null;
+  item_type: string;
+  name: string;
+  /** @nullable */
+  overview?: string | null;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  production_year?: number | null;
+  /** @nullable */
+  run_time_ticks?: number | null;
+}
+
+/**
+ * Emby 资源列表响应。
+ */
+export interface EmbyItemsRes {
+  items: EmbyLibraryItem[];
+  total: number;
+}
+
+/**
+ * Emby 单个媒体库分组及其资源。
+ */
+export interface EmbyLibrarySection {
+  /** @nullable */
+  collection_type?: string | null;
+  id: string;
+  items: EmbyLibraryItem[];
+  name: string;
+  total: number;
+}
+
+/**
+ * Emby 媒体库分组查询参数。
+ */
+export interface EmbySectionsQuery {
+  limit?: number;
+  /** @nullable */
+  q?: string | null;
+}
+
+/**
+ * Emby 媒体库分组响应。
+ */
+export interface EmbySectionsRes {
+  sections: EmbyLibrarySection[];
+}
+
+/**
+ * Emby 视频流查询参数。
+ */
+export interface EmbyStreamQuery {
+  item_id: string;
 }
 
 export interface FfmpegDownloadStartReq { [key: string]: unknown }
@@ -969,6 +1096,27 @@ export interface WhisperModelsListRes {
   items: WhisperModelItem[];
 }
 
+export type ListItemsEmbyParams = {
+/**
+ * @nullable
+ */
+q?: string | null;
+/**
+ * @nullable
+ */
+parent_id?: string | null;
+start_index?: number;
+limit?: number;
+};
+
+export type ListSectionsEmbyParams = {
+/**
+ * @nullable
+ */
+q?: string | null;
+limit?: number;
+};
+
 export type ProbeVideoFsParams = {
 path: string;
 };
@@ -1037,6 +1185,325 @@ page_size?: number;
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+export const testConnectionEmby = (
+
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyConnectionStatus>(
+      {url: `/api/emby/connection/test`, method: 'POST', signal
+    },
+      options);
+    }
+
+
+
+export const getTestConnectionEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext> => {
+
+const mutationKey = ['testConnectionEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testConnectionEmby>>, void> = () => {
+
+
+          return  testConnectionEmby(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestConnectionEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof testConnectionEmby>>>
+
+    export type TestConnectionEmbyMutationError = ErrorType<unknown>
+
+    export const useTestConnectionEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof testConnectionEmby>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestConnectionEmbyMutationOptions(options), queryClient);
+    }
+
+export const listItemsEmby = (
+    params?: ListItemsEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyItemsRes>(
+      {url: `/api/emby/items`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getListItemsEmbyQueryKey = (params?: ListItemsEmbyParams,) => {
+    return [
+    `/api/emby/items`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListItemsEmbyQueryOptions = <TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListItemsEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listItemsEmby>>> = ({ signal }) => listItemsEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListItemsEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof listItemsEmby>>>
+export type ListItemsEmbyQueryError = ErrorType<unknown>
+
+
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListItemsEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listItemsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listItemsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listItemsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listItemsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListItemsEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getItemEmby = (
+    id: string,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyLibraryItem>(
+      {url: `/api/emby/items/${id}`, method: 'GET', signal
+    },
+      options);
+    }
+
+
+
+
+export const getGetItemEmbyQueryKey = (id: string,) => {
+    return [
+    `/api/emby/items/${id}`
+    ] as const;
+    }
+
+
+export const getGetItemEmbyQueryOptions = <TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetItemEmbyQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getItemEmby>>> = ({ signal }) => getItemEmby(id, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetItemEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof getItemEmby>>>
+export type GetItemEmbyQueryError = ErrorType<unknown>
+
+
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getItemEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getItemEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getItemEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getItemEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetItemEmbyQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const listSectionsEmby = (
+    params?: ListSectionsEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbySectionsRes>(
+      {url: `/api/emby/sections`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getListSectionsEmbyQueryKey = (params?: ListSectionsEmbyParams,) => {
+    return [
+    `/api/emby/sections`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSectionsEmbyQueryOptions = <TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSectionsEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSectionsEmby>>> = ({ signal }) => listSectionsEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSectionsEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof listSectionsEmby>>>
+export type ListSectionsEmbyQueryError = ErrorType<unknown>
+
+
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListSectionsEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSectionsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listSectionsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSectionsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listSectionsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSectionsEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
 
 
 

@@ -13,12 +13,16 @@ import { Route as VideoPlayRouteImport } from './routes/video-play'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as StashScenesRouteImport } from './routes/stash-scenes'
 import { Route as MediaLibraryRouteImport } from './routes/media-library'
+import { Route as EmbyPlayRouteImport } from './routes/emby-play'
+import { Route as EmbyLibraryRouteImport } from './routes/emby-library'
+import { Route as EmbyRouteImport } from './routes/emby'
 import { Route as SettingRouteRouteImport } from './routes/setting/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingStashRouteImport } from './routes/setting/stash'
 import { Route as SettingModelsRouteImport } from './routes/setting/models'
 import { Route as SettingLibraryRouteImport } from './routes/setting/library'
 import { Route as SettingFfmpegRouteImport } from './routes/setting/ffmpeg'
+import { Route as SettingEmbyRouteImport } from './routes/setting/emby'
 import { Route as SettingDefaultsRouteImport } from './routes/setting/defaults'
 
 const VideoPlayRoute = VideoPlayRouteImport.update({
@@ -39,6 +43,21 @@ const StashScenesRoute = StashScenesRouteImport.update({
 const MediaLibraryRoute = MediaLibraryRouteImport.update({
   id: '/media-library',
   path: '/media-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbyPlayRoute = EmbyPlayRouteImport.update({
+  id: '/emby-play',
+  path: '/emby-play',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbyLibraryRoute = EmbyLibraryRouteImport.update({
+  id: '/emby-library',
+  path: '/emby-library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbyRoute = EmbyRouteImport.update({
+  id: '/emby',
+  path: '/emby',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingRouteRoute = SettingRouteRouteImport.update({
@@ -71,6 +90,11 @@ const SettingFfmpegRoute = SettingFfmpegRouteImport.update({
   path: '/ffmpeg',
   getParentRoute: () => SettingRouteRoute,
 } as any)
+const SettingEmbyRoute = SettingEmbyRouteImport.update({
+  id: '/emby',
+  path: '/emby',
+  getParentRoute: () => SettingRouteRoute,
+} as any)
 const SettingDefaultsRoute = SettingDefaultsRouteImport.update({
   id: '/defaults',
   path: '/defaults',
@@ -80,11 +104,15 @@ const SettingDefaultsRoute = SettingDefaultsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
+  '/emby': typeof EmbyRoute
+  '/emby-library': typeof EmbyLibraryRoute
+  '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
   '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/emby': typeof SettingEmbyRoute
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
@@ -93,11 +121,15 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
+  '/emby': typeof EmbyRoute
+  '/emby-library': typeof EmbyLibraryRoute
+  '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
   '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/emby': typeof SettingEmbyRoute
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
@@ -107,11 +139,15 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/setting': typeof SettingRouteRouteWithChildren
+  '/emby': typeof EmbyRoute
+  '/emby-library': typeof EmbyLibraryRoute
+  '/emby-play': typeof EmbyPlayRoute
   '/media-library': typeof MediaLibraryRoute
   '/stash-scenes': typeof StashScenesRoute
   '/tasks': typeof TasksRoute
   '/video-play': typeof VideoPlayRoute
   '/setting/defaults': typeof SettingDefaultsRoute
+  '/setting/emby': typeof SettingEmbyRoute
   '/setting/ffmpeg': typeof SettingFfmpegRoute
   '/setting/library': typeof SettingLibraryRoute
   '/setting/models': typeof SettingModelsRoute
@@ -122,11 +158,15 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/setting'
+    | '/emby'
+    | '/emby-library'
+    | '/emby-play'
     | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
     | '/setting/defaults'
+    | '/setting/emby'
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
@@ -135,11 +175,15 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/setting'
+    | '/emby'
+    | '/emby-library'
+    | '/emby-play'
     | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
     | '/setting/defaults'
+    | '/setting/emby'
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
@@ -148,11 +192,15 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/setting'
+    | '/emby'
+    | '/emby-library'
+    | '/emby-play'
     | '/media-library'
     | '/stash-scenes'
     | '/tasks'
     | '/video-play'
     | '/setting/defaults'
+    | '/setting/emby'
     | '/setting/ffmpeg'
     | '/setting/library'
     | '/setting/models'
@@ -162,6 +210,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingRouteRoute: typeof SettingRouteRouteWithChildren
+  EmbyRoute: typeof EmbyRoute
+  EmbyLibraryRoute: typeof EmbyLibraryRoute
+  EmbyPlayRoute: typeof EmbyPlayRoute
   MediaLibraryRoute: typeof MediaLibraryRoute
   StashScenesRoute: typeof StashScenesRoute
   TasksRoute: typeof TasksRoute
@@ -196,6 +247,27 @@ declare module '@tanstack/react-router' {
       path: '/media-library'
       fullPath: '/media-library'
       preLoaderRoute: typeof MediaLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emby-play': {
+      id: '/emby-play'
+      path: '/emby-play'
+      fullPath: '/emby-play'
+      preLoaderRoute: typeof EmbyPlayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emby-library': {
+      id: '/emby-library'
+      path: '/emby-library'
+      fullPath: '/emby-library'
+      preLoaderRoute: typeof EmbyLibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emby': {
+      id: '/emby'
+      path: '/emby'
+      fullPath: '/emby'
+      preLoaderRoute: typeof EmbyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setting': {
@@ -240,6 +312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingFfmpegRouteImport
       parentRoute: typeof SettingRouteRoute
     }
+    '/setting/emby': {
+      id: '/setting/emby'
+      path: '/emby'
+      fullPath: '/setting/emby'
+      preLoaderRoute: typeof SettingEmbyRouteImport
+      parentRoute: typeof SettingRouteRoute
+    }
     '/setting/defaults': {
       id: '/setting/defaults'
       path: '/defaults'
@@ -252,6 +331,7 @@ declare module '@tanstack/react-router' {
 
 interface SettingRouteRouteChildren {
   SettingDefaultsRoute: typeof SettingDefaultsRoute
+  SettingEmbyRoute: typeof SettingEmbyRoute
   SettingFfmpegRoute: typeof SettingFfmpegRoute
   SettingLibraryRoute: typeof SettingLibraryRoute
   SettingModelsRoute: typeof SettingModelsRoute
@@ -260,6 +340,7 @@ interface SettingRouteRouteChildren {
 
 const SettingRouteRouteChildren: SettingRouteRouteChildren = {
   SettingDefaultsRoute: SettingDefaultsRoute,
+  SettingEmbyRoute: SettingEmbyRoute,
   SettingFfmpegRoute: SettingFfmpegRoute,
   SettingLibraryRoute: SettingLibraryRoute,
   SettingModelsRoute: SettingModelsRoute,
@@ -273,6 +354,9 @@ const SettingRouteRouteWithChildren = SettingRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingRouteRoute: SettingRouteRouteWithChildren,
+  EmbyRoute: EmbyRoute,
+  EmbyLibraryRoute: EmbyLibraryRoute,
+  EmbyPlayRoute: EmbyPlayRoute,
   MediaLibraryRoute: MediaLibraryRoute,
   StashScenesRoute: StashScenesRoute,
   TasksRoute: TasksRoute,

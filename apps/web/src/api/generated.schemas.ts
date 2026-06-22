@@ -6,6 +6,89 @@
  */
 import * as zod from 'zod';
 
+export const TestConnectionEmbyResponse = zod.object({
+  "ok": zod.boolean(),
+  "server_name": zod.string().nullish(),
+  "user_id": zod.string().nullish(),
+  "user_name": zod.string().nullish()
+}).describe('Emby 连接测试结果。')
+
+
+export const ListItemsEmbyQueryParams = zod.object({
+  "q": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "start_index": zod.number().optional(),
+  "limit": zod.number().optional()
+})
+
+export const ListItemsEmbyResponse = zod.object({
+  "items": zod.array(zod.object({
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish()
+}).describe('Emby 资源类型。')),
+  "total": zod.number()
+}).describe('Emby 资源列表响应。')
+
+
+export const GetItemEmbyParams = zod.object({
+  "id": zod.string().describe('Emby Item ID')
+})
+
+export const GetItemEmbyResponse = zod.object({
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish()
+}).describe('Emby 资源类型。')
+
+
+export const ListSectionsEmbyQueryParams = zod.object({
+  "q": zod.string().nullish(),
+  "limit": zod.number().optional()
+})
+
+export const ListSectionsEmbyResponse = zod.object({
+  "sections": zod.array(zod.object({
+  "collection_type": zod.string().nullish(),
+  "id": zod.string(),
+  "items": zod.array(zod.object({
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish()
+}).describe('Emby 资源类型。')),
+  "name": zod.string(),
+  "total": zod.number()
+}).describe('Emby 单个媒体库分组及其资源。'))
+}).describe('Emby 媒体库分组响应。')
+
+
 export const DeleteSubtitleFsBody = zod.object({
   "path": zod.string()
 })
@@ -521,6 +604,13 @@ export const getAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
 
 
 export const GetAppConfigSettingsResponse = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -560,7 +650,7 @@ export const GetAppConfigSettingsResponse = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 
 /**
@@ -581,6 +671,13 @@ export const putAppConfigSettingsBodyWhisperEnginePoolSizeMin = 0;
 
 
 export const PutAppConfigSettingsBody = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -620,7 +717,7 @@ export const PutAppConfigSettingsBody = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 export const putAppConfigSettingsResponseVadConfigFrameMsMin = 0;
 
@@ -637,6 +734,13 @@ export const putAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
 
 
 export const PutAppConfigSettingsResponse = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -676,7 +780,7 @@ export const PutAppConfigSettingsResponse = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 
 export const DownloadFfmpegSetupBody = zod.looseObject({

@@ -3,7 +3,7 @@ import type VjsHtmlTrackElement from 'video.js/dist/types/tracks/html-track-elem
 import type { VideoJsPlaylistNavOptions } from '@/lib/videojs-playlist-controls'
 import { Alert, Button, ProgressBar, Spinner } from '@heroui/react'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import videojs from 'video.js'
 import {
   buildLocalVideoSrc,
@@ -32,6 +32,10 @@ export interface LocalSubtitleTrack {
 export interface LocalVideoPlayerProps {
   videoPath: string
   subtitleTracks: LocalSubtitleTrack[]
+  remoteSrc?: string
+  remoteMimeType?: string
+  fallbackRemoteSrc?: string
+  fallbackRemoteMimeType?: string
   /** 默认选中的字幕文件名（非完整路径） */
   defaultSubtitleLabel?: string
   /** 铺满父容器（播放页全屏） */
@@ -65,15 +69,21 @@ function clearAttachedSubtitleTracks(
 export function LocalVideoPlayer({
   videoPath,
   subtitleTracks,
+  remoteSrc,
+  remoteMimeType,
+  fallbackRemoteSrc,
+  fallbackRemoteMimeType,
   defaultSubtitleLabel,
   fillViewport = false,
   playlistNav,
 }: LocalVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const nativeVideoRef = useRef<HTMLVideoElement | null>(null)
   const playerRef = useRef<Player | null>(null)
   const subtitleBlobUrlsRef = useRef<Map<string, string>>(new Map())
   const attachedSubtitleTracksRef = useRef<Map<string, RemoteTextTrackHandle>>(new Map())
   const transcodeStartRequested = useRef(false)
+  const fallbackRequestedRef = useRef(false)
 
   const initialTrackPath = useMemo(
     () => resolveDefaultChineseSubtitlePath(videoPath, subtitleTracks, defaultSubtitleLabel),
@@ -81,6 +91,10 @@ export function LocalVideoPlayer({
   )
 
   const [activeTrackPath, setActiveTrackPath] = useState<string | undefined>(initialTrackPath)
+  const [useFallbackRemote, setUseFallbackRemote] = useState(false)
+  const [remotePlaybackError, setRemotePlaybackError] = useState<string | undefined>()
+  const [remoteLoading, setRemoteLoading] = useState(Boolean(remoteSrc))
+  const isRemotePlayback = Boolean(remoteSrc)
 
   useEffect(() => {
     setActiveTrackPath(initialTrackPath)
@@ -88,11 +102,16 @@ export function LocalVideoPlayer({
 
   useEffect(() => {
     transcodeStartRequested.current = false
-  }, [videoPath])
+    fallbackRequestedRef.current = false
+    setUseFallbackRemote(false)
+    setRemotePlaybackError(undefined)
+    setRemoteLoading(Boolean(remoteSrc))
+  }, [remoteSrc, videoPath])
 
   const probeQuery = useQuery({
     queryKey: getProbeVideoFsQueryKey({ path: videoPath }),
     queryFn: () => probeVideoFs({ path: videoPath }),
+    enabled: !remoteSrc,
   })
 
   const needsTranscode = probeQuery.data?.needs_transcode === true
@@ -121,7 +140,23 @@ export function LocalVideoPlayer({
     }
   }, [needsTranscode, transcodeStatusQuery.data?.phase, videoPath, transcodeStatusQuery])
 
+  const activeRemoteSrc = useMemo(() => {
+    if (!remoteSrc)
+      return undefined
+    if (useFallbackRemote && fallbackRemoteSrc)
+      return fallbackRemoteSrc
+    return remoteSrc
+  }, [remoteSrc, fallbackRemoteSrc, useFallbackRemote])
+
+  const activeRemoteMimeType = useMemo(() => {
+    if (useFallbackRemote && fallbackRemoteSrc)
+      return fallbackRemoteMimeType
+    return remoteMimeType
+  }, [remoteMimeType, fallbackRemoteMimeType, fallbackRemoteSrc, useFallbackRemote])
+
   const playbackSrc = useMemo(() => {
+    if (activeRemoteSrc)
+      return activeRemoteSrc
     if (!probeQuery.isSuccess)
       return undefined
     if (!needsTranscode)
@@ -129,7 +164,30 @@ export function LocalVideoPlayer({
     if (transcodeStatusQuery.data?.phase === 'ready')
       return buildTranscodedVideoSrc(videoPath)
     return undefined
-  }, [probeQuery.isSuccess, needsTranscode, videoPath, transcodeStatusQuery.data?.phase])
+  }, [probeQuery.isSuccess, needsTranscode, videoPath, transcodeStatusQuery.data?.phase, activeRemoteSrc])
+
+  useEffect(() => {
+    if (!isRemotePlayback)
+      return
+    setRemoteLoading(Boolean(activeRemoteSrc))
+    setRemotePlaybackError(undefined)
+  }, [activeRemoteSrc, isRemotePlayback])
+
+  const handleRemoteVideoError = useCallback(() => {
+    if (!isRemotePlayback)
+      return
+    if (!useFallbackRemote && fallbackRemoteSrc && !fallbackRequestedRef.current) {
+      fallbackRequestedRef.current = true
+      setRemotePlaybackError(undefined)
+      setRemoteLoading(true)
+      setUseFallbackRemote(true)
+      return
+    }
+
+    const mediaError = nativeVideoRef.current?.error
+    setRemoteLoading(false)
+    setRemotePlaybackError(mediaError?.message || '浏览器无法播放当前视频流')
+  }, [fallbackRemoteSrc, isRemotePlayback, useFallbackRemote])
 
   /** 预加载同目录全部字幕，供 video.js 原生 CC 菜单切换 */
   const subtitleBlobQueries = useQueries({
@@ -173,23 +231,50 @@ export function LocalVideoPlayer({
       return
 
     let player = playerRef.current
+    const shouldWatchRemoteError = Boolean(remoteSrc && fallbackRemoteSrc && !useFallbackRemote)
+    const source = activeRemoteMimeType
+      ? { src: playbackSrc, type: activeRemoteMimeType }
+      : { src: playbackSrc }
+
     if (!player) {
       player = videojs(el, {
         fluid: !fillViewport,
         fill: fillViewport,
         controls: true,
         preload: 'auto',
-        sources: [{ src: playbackSrc, type: 'video/mp4' }],
       })
       if (fillViewport) {
         player.addClass('vjs-always-show-controls')
       }
       playerRef.current = player
     }
-    else {
-      player.src({ src: playbackSrc, type: 'video/mp4' })
+    const activePlayer = player
+    const onError = () => {
+      if (!shouldWatchRemoteError || fallbackRequestedRef.current) {
+        setRemotePlaybackError(activePlayer.error()?.message ?? '浏览器无法播放当前视频流')
+        return
+      }
+      fallbackRequestedRef.current = true
+      setRemotePlaybackError(undefined)
+      setUseFallbackRemote(true)
     }
-  }, [playbackSrc, fillViewport, playlistNav])
+
+    activePlayer.on('error', onError)
+    activePlayer.src(source)
+    activePlayer.load()
+
+    return () => {
+      activePlayer.off('error', onError)
+    }
+  }, [
+    playbackSrc,
+    fillViewport,
+    playlistNav,
+    activeRemoteMimeType,
+    remoteSrc,
+    fallbackRemoteSrc,
+    useFallbackRemote,
+  ])
 
   useEffect(() => {
     const player = playerRef.current
@@ -298,11 +383,11 @@ export function LocalVideoPlayer({
     <div
       className={
         fillViewport
-          ? 'flex h-full min-h-0 w-full flex-col'
+          ? 'relative flex h-full min-h-0 w-full flex-col'
           : 'w-full max-w-5xl'
       }
     >
-      {(probeQuery.isError || (needsTranscode && transcodePhase === 'failed') || showTranscodeProgress) && (
+      {(remotePlaybackError || useFallbackRemote || probeQuery.isError || (needsTranscode && transcodePhase === 'failed') || showTranscodeProgress) && (
         <div
           className={
             fillViewport
@@ -316,6 +401,24 @@ export function LocalVideoPlayer({
               <Alert.Content>
                 <Alert.Title>无法分析视频</Alert.Title>
                 <Alert.Description>{probeQuery.error.message}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+          {useFallbackRemote && (
+            <Alert status="warning" className={fillViewport ? 'border-white/10 bg-zinc-900/90 text-white' : ''}>
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>正在使用 Emby 转码播放</Alert.Title>
+                <Alert.Description>原始流无法直接播放，已切换到后台转码流。</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+          {remotePlaybackError && (
+            <Alert status="danger" className={fillViewport ? 'border-white/10 bg-zinc-900/90 text-white' : ''}>
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>{useFallbackRemote ? 'Emby 转码流无法播放' : '视频流无法播放'}</Alert.Title>
+                <Alert.Description>{remotePlaybackError}</Alert.Description>
               </Alert.Content>
             </Alert>
           )}
@@ -377,23 +480,59 @@ export function LocalVideoPlayer({
             : 'relative aspect-video w-full'
         }
       >
-        {!playbackSrc && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
-            <div className="flex flex-col items-center gap-2 text-white/70">
-              <Spinner color="current" />
-              <span className="text-sm">{needsTranscode ? '等待转码完成...' : '加载视频...'}</span>
-            </div>
-          </div>
-        )}
-        <video
-          ref={videoRef}
-          className={
-            fillViewport
-              ? 'video-js vjs-big-play-centered h-full w-full'
-              : 'video-js vjs-big-play-centered vjs-fluid'
-          }
-          playsInline
-        />
+        {isRemotePlayback
+          ? (
+              <>
+                {remoteLoading && !remotePlaybackError && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+                    <div className="flex flex-col items-center gap-2 text-white/70">
+                      <Spinner color="current" />
+                      <span className="text-sm">
+                        {useFallbackRemote ? '正在加载 Emby 转码流...' : '正在加载 Emby 原始流...'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <video
+                  ref={nativeVideoRef}
+                  key={playbackSrc}
+                  className="h-full w-full bg-black"
+                  src={playbackSrc}
+                  controls
+                  preload="auto"
+                  playsInline
+                  onCanPlay={() => {
+                    setRemoteLoading(false)
+                    setRemotePlaybackError(undefined)
+                  }}
+                  onLoadedMetadata={() => setRemoteLoading(false)}
+                  onWaiting={() => setRemoteLoading(true)}
+                  onPlaying={() => setRemoteLoading(false)}
+                  onError={handleRemoteVideoError}
+                />
+              </>
+            )
+          : (
+              <>
+                {!playbackSrc && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black">
+                    <div className="flex flex-col items-center gap-2 text-white/70">
+                      <Spinner color="current" />
+                      <span className="text-sm">{needsTranscode ? '等待转码完成...' : '加载视频...'}</span>
+                    </div>
+                  </div>
+                )}
+                <video
+                  ref={videoRef}
+                  className={
+                    fillViewport
+                      ? 'video-js vjs-big-play-centered h-full w-full'
+                      : 'video-js vjs-big-play-centered vjs-fluid'
+                  }
+                  playsInline
+                />
+              </>
+            )}
       </div>
     </div>
   )
