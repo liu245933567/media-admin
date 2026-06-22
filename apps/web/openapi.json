@@ -713,6 +713,12 @@
       "EmbyStreamQuery": {
         "description": "Emby 视频流查询参数。",
         "properties": {
+          "direct": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "item_id": {
             "type": "string"
           },
@@ -3530,6 +3536,17 @@
             "schema": {
               "type": [
                 "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "direct",
+            "required": false,
+            "schema": {
+              "type": [
+                "boolean",
                 "null"
               ]
             }

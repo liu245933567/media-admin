@@ -174,6 +174,8 @@ pub struct EmbyStreamQuery {
     pub item_id: String,
     #[serde(default)]
     pub play_session_id: Option<String>,
+    #[serde(default)]
+    pub direct: Option<bool>,
 }
 
 /// Emby 字幕流查询参数。
@@ -1403,10 +1405,26 @@ pub async fn proxy_stream(
     cfg: &EmbyConnectConfig,
     item_id: &str,
     play_session_id: Option<&str>,
+    direct: bool,
     request_range: Option<&str>,
 ) -> Result<ProxiedEmbyMedia> {
     let base_url = normalized_base_url(cfg)?;
-    let (token, _, _) = authenticate(cfg).await?;
+    let (token, user_id, _) = authenticate(cfg).await?;
+    if direct {
+        let item = fetch_raw_item(&base_url, &token, &user_id, item_id).await?;
+        let candidate_paths = item
+            .media_sources
+            .iter()
+            .filter_map(|source| source.path.as_deref())
+            .chain(item.path.as_deref())
+            .collect::<Vec<_>>();
+        if let Some(direct_url) =
+            resolve_direct_strm_url(&base_url, &token, item_id, &candidate_paths).await?
+        {
+            return proxy_public_url(direct_url, request_range).await;
+        }
+    }
+
     let mut url = reqwest::Url::parse(&format!("{base_url}/Videos/{item_id}/stream"))
         .context("构建 Emby 原始流地址失败")?;
     url.query_pairs_mut()
@@ -1481,6 +1499,20 @@ async fn proxy_url(
     }
 
     let resp = req.send().await?;
+    proxied_media_response(url, resp).await
+}
+
+async fn proxy_public_url(url: String, request_range: Option<&str>) -> Result<ProxiedEmbyMedia> {
+    let mut req = media_client()?.get(&url);
+    if let Some(range) = request_range {
+        req = req.header(RANGE, range);
+    }
+
+    let resp = req.send().await?;
+    proxied_media_response(url, resp).await
+}
+
+async fn proxied_media_response(url: String, resp: reqwest::Response) -> Result<ProxiedEmbyMedia> {
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();

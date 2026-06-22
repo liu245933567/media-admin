@@ -255,9 +255,15 @@ async fn stream_proxy_handler(
 ) -> Result<Response, AppError> {
     let range = req_headers.get(header::RANGE).and_then(|v| v.to_str().ok());
     let cfg = state.app_config.read().await.emby_config.clone();
-    let proxied = proxy_stream(&cfg, &q.item_id, q.play_session_id.as_deref(), range)
-        .await
-        .map_err(map_emby_err)?;
+    let proxied = proxy_stream(
+        &cfg,
+        &q.item_id,
+        q.play_session_id.as_deref(),
+        q.direct.unwrap_or(false),
+        range,
+    )
+    .await
+    .map_err(map_emby_err)?;
     emby_stream_response(proxied, true)
 }
 

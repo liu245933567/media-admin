@@ -448,6 +448,8 @@ export interface EmbySectionsRes {
  * Emby 视频流查询参数。
  */
 export interface EmbyStreamQuery {
+  /** @nullable */
+  direct?: boolean | null;
   item_id: string;
   /** @nullable */
   play_session_id?: string | null;
@@ -1314,6 +1316,10 @@ item_id: string;
  * @nullable
  */
 play_session_id?: string | null;
+/**
+ * @nullable
+ */
+direct?: boolean | null;
 };
 
 export type ListSectionsEmbyParams = {

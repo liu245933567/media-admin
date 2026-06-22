@@ -97,7 +97,8 @@ export const GetItemEmbyResponse = zod.object({
 
 export const GetPlaybackInfoEmbyQueryParams = zod.object({
   "item_id": zod.string(),
-  "play_session_id": zod.string().nullish()
+  "play_session_id": zod.string().nullish(),
+  "direct": zod.boolean().nullish()
 })
 
 export const GetPlaybackInfoEmbyResponse = zod.object({

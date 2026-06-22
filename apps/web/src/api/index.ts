@@ -16,10 +16,12 @@ export function buildTranscodedVideoSrc(path: string): string {
 }
 
 /** Emby 视频代理流 URL（供 video.js / `<video>` 使用，支持 Range） */
-export function buildEmbyVideoSrc(itemId: string, playSessionId?: string): string {
+export function buildEmbyVideoSrc(itemId: string, playSessionId?: string, direct = false): string {
   const params = new URLSearchParams({ item_id: itemId })
   if (playSessionId)
     params.set('play_session_id', playSessionId)
+  if (direct)
+    params.set('direct', 'true')
   return `/api/emby/stream?${params.toString()}`
 }
 

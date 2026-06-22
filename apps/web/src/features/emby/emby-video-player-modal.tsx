@@ -162,6 +162,7 @@ export function EmbyVideoPlayerModal({
   })
 
   const isDirectStrm = playbackInfoQuery.data?.is_strm === true && Boolean(playbackInfoQuery.data.direct_url)
+  const directStrmUrl = playbackInfoQuery.data?.direct_url
   const playbackMethod: EmbyPlaybackMethod = isDirectStrm
     ? 'direct_play'
     : usingFallback
@@ -181,9 +182,9 @@ export function EmbyVideoPlayerModal({
     if (!resolvedItemId || !playbackInfoQuery.data)
       return undefined
 
-    if (isDirectStrm && playbackInfoQuery.data.direct_url) {
+    if (isDirectStrm && directStrmUrl) {
       return {
-        src: playbackInfoQuery.data.direct_url,
+        src: directStrmUrl,
         type: undefined,
       }
     }
@@ -199,7 +200,7 @@ export function EmbyVideoPlayerModal({
       src: buildEmbyVideoSrc(resolvedItemId, playSessionId),
       type: 'video/mp4',
     }
-  }, [isDirectStrm, playSessionId, playbackInfoQuery.data, resolvedItemId, usingFallback])
+  }, [directStrmUrl, isDirectStrm, playSessionId, playbackInfoQuery.data, resolvedItemId, usingFallback])
 
   const textTracks = useMemo(() => {
     if (!resolvedItemId)
