@@ -137,7 +137,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            let listen = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:4200".to_string());
+            let listen = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:14200".to_string());
 
             let addr = tauri::async_runtime::block_on(ma_api::spawn_server(&listen))
                 .map_err(|e| format!("failed to start API server: {e:#}"))?;
