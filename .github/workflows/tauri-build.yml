@@ -2,7 +2,7 @@ name: Tauri 桌面端打包
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags:
       - "v*"
       - "latest"
@@ -70,9 +70,6 @@ jobs:
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
             libclang-dev clang
 
-      - name: 安装依赖 pnpm workspace
-        run: pnpm install --frozen-lockfile
-      
       - name: 安装 HeroUI Pro 授权
         shell: bash
         env:
@@ -80,6 +77,9 @@ jobs:
         run: |
           test -n "$HEROUI_PRO_TOKEN"
           pnpm dlx hpsetup@latest "$HEROUI_PRO_TOKEN"
+
+      - name: 安装依赖 pnpm workspace
+        run: pnpm install --frozen-lockfile
 
       # Linux AppImage：linuxdeploy 对带 .relr.dyn 的库执行 strip 易失败（见 tauri-apps/tauri#14796）。
       # NO_STRIP 跳过该 strip；APPIMAGE_EXTRACT_AND_RUN 在无 FUSE 的 CI 上解压运行 linuxdeploy 等 AppImage。
