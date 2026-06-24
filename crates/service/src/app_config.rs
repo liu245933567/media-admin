@@ -1,5 +1,5 @@
 //! 应用级默认配置（VAD / Whisper / 翻译 / Stash），与 [`ma_subtitle::types::SubtitleGenerateConfig`] 对应但各块为必填，便于持久化与表单「全局默认值」。
-use crate::stash::StashConnectConfig;
+use crate::{emby::EmbyConnectConfig, stash::StashConnectConfig};
 use ma_subtitle::types::{SubtitleGenerateConfig, SubtitleTranslateConfig};
 use ma_whisper::engine_cache::{clear_engine_cache, engine_pool_size, set_engine_pool_size};
 use ma_whisper::types::{VadConfig, WhisperEngineConfig, WhisperTranscribeConfig};
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 use utoipa::ToSchema;
 
-/// 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。
+/// 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash / Emby 连接。
 #[typeshare]
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 
@@ -22,6 +22,9 @@ pub struct AppConfig {
     /// 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。
     #[serde(default)]
     pub stash_config: StashConnectConfig,
+    /// 旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。
+    #[serde(default)]
+    pub emby_config: EmbyConnectConfig,
 }
 
 impl Default for AppConfig {
@@ -42,6 +45,7 @@ impl AppConfig {
             whisper_transcribe_config: g.whisper_transcribe_config.unwrap_or_default(),
             translate_config: g.translate_config.unwrap_or_default(),
             stash_config: StashConnectConfig::default(),
+            emby_config: EmbyConnectConfig::default(),
         }
     }
 }
@@ -145,7 +149,7 @@ pub fn merge_subtitle_translate_job_config(
     }
 }
 
-/// 设置页保存：翻译 / Stash 的 `api_key` 为空时不覆盖已保存密钥。
+/// 设置页保存：翻译 / Stash / Emby 的密钥字段为空时不覆盖已保存密钥。
 pub fn merge_app_config_on_put_translate_api_key(
     previous: &AppConfig,
     mut incoming: AppConfig,
@@ -155,6 +159,12 @@ pub fn merge_app_config_on_put_translate_api_key(
     }
     if incoming.stash_config.api_key.trim().is_empty() {
         incoming.stash_config.api_key = previous.stash_config.api_key.clone();
+    }
+    if incoming.emby_config.password.trim().is_empty() {
+        incoming.emby_config.password = previous.emby_config.password.clone();
+    }
+    if incoming.emby_config.api_key.trim().is_empty() {
+        incoming.emby_config.api_key = previous.emby_config.api_key.clone();
     }
     incoming
 }

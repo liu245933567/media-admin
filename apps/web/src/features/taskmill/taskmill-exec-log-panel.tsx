@@ -525,7 +525,8 @@ function GroupLaneCard({
   lane: TaskmillGroupLane
   onOpen: (pipeline: PipelineView) => void
 }) {
-  const slots = lane.allocatedSlots ?? lane.cap ?? Math.max(lane.running + lane.pending, 1)
+  const allocatedSlots = lane.allocatedSlots != null && lane.allocatedSlots > 0 ? lane.allocatedSlots : null
+  const slots = allocatedSlots ?? lane.cap ?? Math.max(lane.running + lane.pending, 1)
   const slotPercent = slots > 0 ? Math.min(100, (lane.running / slots) * 100) : 0
 
   return (

@@ -6,6 +6,254 @@
  */
 import * as zod from 'zod';
 
+export const TestConnectionEmbyResponse = zod.object({
+  "ok": zod.boolean(),
+  "server_name": zod.string().nullish(),
+  "user_id": zod.string().nullish(),
+  "user_name": zod.string().nullish()
+}).describe('Emby 连接测试结果。')
+
+
+export const ListItemsEmbyQueryParams = zod.object({
+  "q": zod.string().nullish(),
+  "person_id": zod.string().nullish(),
+  "genre": zod.string().nullish(),
+  "tag_filter": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "include_item_types": zod.string().nullish(),
+  "recursive": zod.boolean().nullish(),
+  "start_index": zod.number().optional(),
+  "limit": zod.number().optional()
+})
+
+export const ListItemsEmbyResponse = zod.object({
+  "items": zod.array(zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "official_rating": zod.string().nullish(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
+  "premiere_date": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
+}).describe('Emby 资源类型。')),
+  "total": zod.number()
+}).describe('Emby 资源列表响应。')
+
+
+export const GetItemEmbyParams = zod.object({
+  "id": zod.string().describe('Emby Item ID')
+})
+
+export const GetItemEmbyResponse = zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "official_rating": zod.string().nullish(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
+  "premiere_date": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
+}).describe('Emby 资源类型。')
+
+
+export const GetPlaybackInfoEmbyQueryParams = zod.object({
+  "item_id": zod.string(),
+  "play_session_id": zod.string().nullish(),
+  "direct": zod.boolean().nullish()
+})
+
+export const GetPlaybackInfoEmbyResponse = zod.object({
+  "direct_url": zod.string().nullish(),
+  "is_strm": zod.boolean(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "playback_position_ticks": zod.number().nullish(),
+  "played_percentage": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish(),
+  "subtitle_tracks": zod.array(zod.object({
+  "codec": zod.string().nullish(),
+  "index": zod.number(),
+  "is_default": zod.boolean().optional(),
+  "is_external": zod.boolean().optional(),
+  "label": zod.string(),
+  "language": zod.string().nullish(),
+  "media_source_id": zod.string()
+}).describe('Emby 字幕轨。')).optional()
+}).describe('Emby 播放信息，供前端决定直链、原始流或转码流。')
+
+
+export const ProgressPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const ProgressPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
+export const StartPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const StartPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
+export const StoppedPlaybackEmbyBody = zod.object({
+  "is_muted": zod.boolean().optional(),
+  "is_paused": zod.boolean().optional(),
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "play_method": zod.union([zod.null(),zod.enum(['direct_play', 'direct_stream', 'transcode']).describe('Emby 播放方式。')]).optional(),
+  "play_session_id": zod.string().nullish(),
+  "position_ticks": zod.number(),
+  "volume_level": zod.number().nullish()
+}).describe('Emby 播放进度上报请求。')
+
+export const StoppedPlaybackEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 播放进度上报结果。')
+
+
+export const ListSectionsEmbyQueryParams = zod.object({
+  "q": zod.string().nullish(),
+  "limit": zod.number().optional()
+})
+
+export const ListSectionsEmbyResponse = zod.object({
+  "sections": zod.array(zod.object({
+  "collection_type": zod.string().nullish(),
+  "id": zod.string(),
+  "items": zod.array(zod.object({
+  "backdrop_image_tag": zod.string().nullish(),
+  "can_browse": zod.boolean(),
+  "can_play": zod.boolean(),
+  "child_count": zod.number().nullish(),
+  "collection_type": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
+  "genres": zod.array(zod.string()).optional(),
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "index_number": zod.number().nullish(),
+  "item_type": zod.string(),
+  "name": zod.string(),
+  "official_rating": zod.string().nullish(),
+  "overview": zod.string().nullish(),
+  "parent_id": zod.string().nullish(),
+  "parent_index_number": zod.number().nullish(),
+  "people": zod.array(zod.object({
+  "id": zod.string(),
+  "image_tag": zod.string().nullish(),
+  "name": zod.string(),
+  "person_type": zod.string().nullish(),
+  "role": zod.string().nullish()
+}).describe('Emby 媒体人物信息。')).optional(),
+  "premiere_date": zod.string().nullish(),
+  "production_year": zod.number().nullish(),
+  "run_time_ticks": zod.number().nullish(),
+  "tags": zod.array(zod.string()).optional()
+}).describe('Emby 资源类型。')),
+  "name": zod.string(),
+  "total": zod.number()
+}).describe('Emby 单个媒体库分组及其资源。'))
+}).describe('Emby 媒体库分组响应。')
+
+
+export const SubtitleEmbyQueryParams = zod.object({
+  "item_id": zod.string(),
+  "media_source_id": zod.string(),
+  "index": zod.number()
+})
+
+
+export const DownloadSubtitleEmbyBody = zod.object({
+  "item_id": zod.string(),
+  "subtitle_id": zod.string()
+}).describe('Emby 远程字幕下载请求。')
+
+export const DownloadSubtitleEmbyResponse = zod.object({
+  "ok": zod.boolean()
+}).describe('Emby 远程字幕下载结果。')
+
+
+export const SearchSubtitlesEmbyQueryParams = zod.object({
+  "item_id": zod.string(),
+  "media_source_id": zod.string().nullish(),
+  "language": zod.string().optional()
+})
+
+export const SearchSubtitlesEmbyResponse = zod.object({
+  "item_id": zod.string(),
+  "items": zod.array(zod.object({
+  "author": zod.string().nullish(),
+  "comment": zod.string().nullish(),
+  "community_rating": zod.number().nullish(),
+  "download_count": zod.number().nullish(),
+  "format": zod.string().nullish(),
+  "id": zod.string(),
+  "is_hash_match": zod.boolean().optional(),
+  "language": zod.string().nullish(),
+  "name": zod.string(),
+  "provider_name": zod.string().nullish()
+}).describe('Emby 远程字幕候选。')),
+  "language": zod.string()
+}).describe('Emby 远程字幕查询结果。')
+
+
 export const DeleteSubtitleFsBody = zod.object({
   "path": zod.string()
 })
@@ -521,6 +769,13 @@ export const getAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
 
 
 export const GetAppConfigSettingsResponse = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -560,7 +815,7 @@ export const GetAppConfigSettingsResponse = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 
 /**
@@ -581,6 +836,13 @@ export const putAppConfigSettingsBodyWhisperEnginePoolSizeMin = 0;
 
 
 export const PutAppConfigSettingsBody = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -620,7 +882,7 @@ export const PutAppConfigSettingsBody = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 export const putAppConfigSettingsResponseVadConfigFrameMsMin = 0;
 
@@ -637,6 +899,13 @@ export const putAppConfigSettingsResponseWhisperEnginePoolSizeMin = 0;
 
 
 export const PutAppConfigSettingsResponse = zod.object({
+  "emby_config": zod.object({
+  "api_key": zod.string().describe('Emby API Key。填写后优先使用 API Key 访问。'),
+  "base_url": zod.string().describe('Emby 实例根地址，如 `http:\/\/127.0.0.1:8096`'),
+  "password": zod.string().describe('Emby 用户密码。设置页保存时留空不覆盖旧值。'),
+  "user_id": zod.string().optional().describe('已缓存的用户 ID。用户名密码登录成功后自动写入配置。'),
+  "username": zod.string().describe('Emby 用户名。未配置 API Key 时用于用户名密码登录。')
+}).optional().describe('旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。'),
   "stash_config": zod.object({
   "api_key": zod.string().describe('GraphQL \/ 媒体请求使用的 ApiKey；无鉴权时可留空'),
   "base_url": zod.string().describe('实例根地址，如 `http:\/\/127.0.0.1:9999`'),
@@ -676,7 +945,7 @@ export const PutAppConfigSettingsResponse = zod.object({
   "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
   "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
 }).describe('whisper 解码可调参数（影响每次 transcribe 行为）')
-}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。')
+}).describe('应用设置：识别流水线默认参数 + 翻译默认参数 + Stash \/ Emby 连接。')
 
 
 export const DownloadFfmpegSetupBody = zod.looseObject({
@@ -1009,10 +1278,11 @@ export const CompleteSceneMetadataStashBody = zod.object({
   "field": zod.string().describe('字段名，与 Stash `IdentifyFieldOptionsInput.field` 保持一致。'),
   "strategy": zod.enum(['IGNORE', 'MERGE', 'OVERWRITE']).describe('字段写入策略。')
 }).describe('Stash 元数据补全的单个字段策略。')).optional().describe('字段策略；不传时只补空字段并合并关联实体。'),
-  "scene_ids": zod.array(zod.string()).optional().describe('要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。'),
+  "scene_ids": zod.array(zod.string()).optional().describe('要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。'),
   "set_cover_image": zod.boolean().optional().describe('是否设置封面图。'),
   "set_organized": zod.boolean().optional().describe('是否将场景标记为已整理。'),
   "skip_multiple_matches": zod.boolean().optional().describe('多个匹配结果时跳过，降低误写入风险。'),
+  "skip_single_name_performers": zod.boolean().optional().describe('是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。'),
   "sources": zod.array(zod.object({
   "scraper_id": zod.string().nullish().describe('本地 scraper ID，例如 ThePornDB scraper 的 ID。'),
   "stash_box_endpoint": zod.string().nullish().describe('StashBox GraphQL 端点，例如 `https:\/\/stashdb.org\/graphql`。')
@@ -1027,6 +1297,69 @@ export const CompleteSceneMetadataStashResponse = zod.object({
   "job_id": zod.string().nullish().describe('Stash 创建的元数据识别任务 ID；没有命中场景时为空。'),
   "scene_count": zod.number().min(completeSceneMetadataStashResponseSceneCountMin).describe('本次提交的场景数量。')
 }).describe('Stash 场景元数据补全响应。')
+
+
+export const generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoFrameMsMin = 0;
+
+export const generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoMaxSegmentMsMin = 0;
+
+export const generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoMinSpeechMsMin = 0;
+
+export const generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoModeMin = 0;
+
+export const generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoPaddingMsMin = 0;
+
+
+
+export const GenerateMissingSubtitlesStashBody = zod.object({
+  "config": zod.union([zod.null(),zod.object({
+  "translate_config": zod.union([zod.null(),zod.object({
+  "api_key": zod.string().describe('调用模型的 API 密钥'),
+  "base_url": zod.string().describe('调用模型的基础 URL'),
+  "batch_size": zod.number().describe('单批字幕条数。`>1` 时启用批量上下文翻译，`=1` 走逐条翻译。 默认 8'),
+  "concurrency": zod.number().describe('并发数（同时在飞的请求数） 默认 4'),
+  "model": zod.string().describe('模型名，默认 `tencent\/Hunyuan-MT-7B`'),
+  "remove_source_srt": zod.boolean().describe('是否在翻译完成后删除原文 SRT。默认 `false`，两份文件并存便于核对。'),
+  "target_language": zod.string().describe('目标语言，例如 \"Chinese\"、\"English\"、\"Japanese\"')
+}).describe('翻译选项')]).optional(),
+  "vad_config": zod.union([zod.null(),zod.object({
+  "frame_ms": zod.number().min(generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoFrameMsMin).describe('帧长 10\/20\/30（默认 30）'),
+  "max_segment_ms": zod.number().min(generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoMaxSegmentMsMin).describe('单段最大长度（ms），超过会被硬切。`0` 表示不限制。\n默认 30000（30s）：whisper 内部以 30s 滑窗解码，限到 30s 速度与上下文都更稳。'),
+  "min_speech_ms": zod.number().min(generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoMinSpeechMsMin).describe('丢弃短于该值的语音段（ms）（默认 200）'),
+  "mode": zod.number().min(generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoModeMin).describe('模式 0..=3（越大越激进，默认 2）'),
+  "padding_ms": zod.number().min(generateMissingSubtitlesStashBodyConfigTwoVadConfigTwoPaddingMsMin).describe('语音段两侧 padding（ms）（默认 500）')
+}).describe('VAD 配置')]).optional(),
+  "whisper_engine_config": zod.union([zod.null(),zod.object({
+  "flash_attn": zod.boolean().describe('是否启用 flash attention。\n\n注意：whisper.cpp 在 `BeamSearch + CUDA + flash_attn` 组合下会静默失败\n（forward pass 被跳过、瞬间返回 0 段）。本配置默认开启 flash_attn 是因为\n默认解码策略是 Greedy，与 flash_attn 兼容。如果手动调到 BeamSearch\n但发现段数总是 0，请把这里关掉。'),
+  "model_filename": zod.string().describe('模型文件名'),
+  "use_gpu": zod.boolean().describe('是否使用 GPU')
+}).describe('whisper 引擎运行时配置（影响模型加载，启动期决定）')]).optional(),
+  "whisper_transcribe_config": zod.union([zod.null(),zod.object({
+  "anti_hallucination": zod.boolean().describe('启用抗幻觉\/重复参数组合\n（`temperature_inc` \/ `entropy_thold` \/ `logprob_thold` \/ `no_speech_thold` \/ ...）。\n\n\*\*默认 `false`\*\*。这些参数虽然多数与 whisper.cpp 默认值相同，但\*\*显式调用\nset_xxx\*\* 在某些 CUDA build 上会让 forward pass 异常瞬退、整段返回 0。\n本机确认能正常出字幕后再开启可获得更稳定的\"不识别 → 跳过\"行为。'),
+  "auto_gain": zod.boolean().describe('是否在低音量片段做自动增益（peak<0.02 时拉到 0.8，封顶 20x）'),
+  "beam_size": zod.number().describe('beam search 束宽：> 1 走 BeamSearch；<= 1 走 Greedy。\n\n默认 1（Greedy）。BeamSearch 理论上更准，但部分 whisper.cpp CUDA 编译版本\n会\"静默失败\"——forward pass 被跳过、瞬间返回 0 段。本机验证 OK 后再调高。'),
+  "greedy_best_of": zod.number().describe('Greedy 模式下的候选数 best_of，仅当 `beam_size <= 1` 时生效。\n\n默认 1：与旧版 best_of 行为一致，确保 GPU 后端不会走异常 kernel 路径。\n验证当前 build 兼容后可调到 5（whisper.cpp 默认值），轻微降低重复幻觉。'),
+  "initial_prompt": zod.string().nullish().describe('初始 prompt：可放专有名词、人名、风格示例（如 \"以下是普通话简体中文字幕。\"）。\n为 `None` 时不调用 `set_initial_prompt`。'),
+  "language": zod.string().nullish().describe('语言代码：\n- `None`：完全用 whisper.cpp 编译默认（通常是 \"en\"），不调用 `set_xxx`。\n  最稳，与本机验证可工作的旧版兼容。\n- `Some(\"auto\")`：调用 `set_detect_language(true)` 自动检测。\*\*警告\*\*：\n  某些 CUDA build 下检测路径会让 forward pass 异常瞬退，遇到 0 段时回 `None`。\n- `Some(\"zh\"\/\"en\"\/...)`：显式锁定语言代码。'),
+  "n_threads": zod.number().describe('CPU 解码线程数。0 表示 `whisper.cpp` 自动（min(4, hw_concurrency)）。')
+}).describe('whisper 解码可调参数（影响每次 transcribe 行为）')]).optional()
+}).describe('`None` 表示整包采用全局默认生成配置。')]).optional(),
+  "skip_if_exists": zod.boolean().nullish().describe('若同 video_path 已有 pending\/running 生成任务则跳过（默认 true）。')
+})
+
+export const generateMissingSubtitlesStashResponseMatchedVideosMin = 0;
+
+
+
+export const GenerateMissingSubtitlesStashResponse = zod.object({
+  "failed": zod.array(zod.object({
+  "error": zod.string(),
+  "video_path": zod.string()
+})),
+  "matched_videos": zod.number().min(generateMissingSubtitlesStashResponseMatchedVideosMin).describe('Stash 中无字幕且能映射为本地路径的视频数量。'),
+  "skipped": zod.array(zod.string()),
+  "submitted": zod.array(zod.string())
+})
 
 
 export const DownloadSubtitleWebBody = zod.object({

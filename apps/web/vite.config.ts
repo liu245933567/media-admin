@@ -39,7 +39,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4200',
+        target: 'http://127.0.0.1:14200',
         changeOrigin: true,
       },
     },

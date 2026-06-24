@@ -94,3 +94,11 @@ body {
   pointer-events: auto !important;
 }
 
+/* 弹窗播放器：video.js 初始化时父级尺寸可能尚未稳定，显式撑满可避免黑屏无控件 */
+.video-js-player-shell,
+.video-js-player-shell .video-js,
+.video-js-player-shell .vjs-tech {
+  width: 100%;
+  height: 100%;
+}
+

@@ -199,6 +199,7 @@ impl TaskmillRuntime {
             .group_concurrency(GROUP_TRANSLATE, limits.translate)
             .group_concurrency(GROUP_SETUP_DOWNLOAD, limits.setup_download)
             .group_concurrency(GROUP_MEDIA_SCAN, limits.media_scan)
+            .group_minimum_slots(GROUP_WHISPER, 1)
             .group_minimum_slots(GROUP_TRANSLATE, 1)
             .poll_interval(Duration::from_millis(250))
             .progress_interval(Duration::from_millis(250))

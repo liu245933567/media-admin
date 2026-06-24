@@ -26,6 +26,22 @@ import type {
 import { axiosInstance } from './axios-instance';
 import type { ErrorType , BodyType } from './axios-instance';
 /**
+ * Emby 服务器连接配置（持久化于应用 `AppConfig`）。
+ */
+export interface EmbyConnectConfig {
+  /** Emby API Key。填写后优先使用 API Key 访问。 */
+  api_key: string;
+  /** Emby 实例根地址，如 `http://127.0.0.1:8096` */
+  base_url: string;
+  /** Emby 用户密码。设置页保存时留空不覆盖旧值。 */
+  password: string;
+  /** 已缓存的用户 ID。用户名密码登录成功后自动写入配置。 */
+  user_id?: string;
+  /** Emby 用户名。未配置 API Key 时用于用户名密码登录。 */
+  username: string;
+}
+
+/**
  * Stash 文件路径到本服务本地路径的前缀映射。
  */
 export interface StashPathMapping {
@@ -160,9 +176,11 @@ export interface WhisperTranscribeConfig {
 }
 
 /**
- * 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash 连接。
+ * 应用设置：识别流水线默认参数 + 翻译默认参数 + Stash / Emby 连接。
  */
 export interface AppConfig {
+  /** 旧版 `app_config.json` 无此字段时反序列化为 [`EmbyConnectConfig::default`]。 */
+  emby_config?: EmbyConnectConfig;
   /** 旧版 `app_config.json` 无此字段时反序列化为 [`StashConnectConfig::default`]。 */
   stash_config?: StashConnectConfig;
   translate_config: SubtitleTranslateConfig;
@@ -188,6 +206,296 @@ export interface DownloadJobStartRes {
 export interface DownloadResponse {
   record_id: number;
   subtitle_path: string;
+}
+
+/**
+ * Emby 连接测试结果。
+ */
+export interface EmbyConnectionStatus {
+  ok: boolean;
+  /** @nullable */
+  server_name?: string | null;
+  /** @nullable */
+  user_id?: string | null;
+  /** @nullable */
+  user_name?: string | null;
+}
+
+export interface EmbyImageQuery {
+  /** @nullable */
+  image_type?: string | null;
+  /** @nullable */
+  tag?: string | null;
+}
+
+export interface EmbyItemsApiQuery {
+  /** @nullable */
+  genre?: string | null;
+  /** @nullable */
+  include_item_types?: string | null;
+  limit?: number;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  person_id?: string | null;
+  /** @nullable */
+  q?: string | null;
+  /** @nullable */
+  recursive?: boolean | null;
+  start_index?: number;
+  /** @nullable */
+  tag_filter?: string | null;
+}
+
+/**
+ * Emby 资源列表查询参数（递归返回可播放资源，不按文件夹层级展示）。
+ */
+export interface EmbyItemsQuery {
+  /** @nullable */
+  genre?: string | null;
+  /** @nullable */
+  include_item_types?: string | null;
+  limit?: number;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  person_id?: string | null;
+  /** @nullable */
+  q?: string | null;
+  /** @nullable */
+  recursive?: boolean | null;
+  start_index?: number;
+  /** @nullable */
+  tag_filter?: string | null;
+}
+
+/**
+ * Emby 媒体人物信息。
+ */
+export interface EmbyPerson {
+  id: string;
+  /** @nullable */
+  image_tag?: string | null;
+  name: string;
+  /** @nullable */
+  person_type?: string | null;
+  /** @nullable */
+  role?: string | null;
+}
+
+/**
+ * Emby 资源类型。
+ */
+export interface EmbyLibraryItem {
+  /** @nullable */
+  backdrop_image_tag?: string | null;
+  can_browse: boolean;
+  can_play: boolean;
+  /** @nullable */
+  child_count?: number | null;
+  /** @nullable */
+  collection_type?: string | null;
+  /** @nullable */
+  community_rating?: number | null;
+  genres?: string[];
+  id: string;
+  /** @nullable */
+  image_tag?: string | null;
+  /** @nullable */
+  index_number?: number | null;
+  item_type: string;
+  name: string;
+  /** @nullable */
+  official_rating?: string | null;
+  /** @nullable */
+  overview?: string | null;
+  /** @nullable */
+  parent_id?: string | null;
+  /** @nullable */
+  parent_index_number?: number | null;
+  people?: EmbyPerson[];
+  /** @nullable */
+  premiere_date?: string | null;
+  /** @nullable */
+  production_year?: number | null;
+  /** @nullable */
+  run_time_ticks?: number | null;
+  tags?: string[];
+}
+
+/**
+ * Emby 资源列表响应。
+ */
+export interface EmbyItemsRes {
+  items: EmbyLibraryItem[];
+  total: number;
+}
+
+/**
+ * Emby 单个媒体库分组及其资源。
+ */
+export interface EmbyLibrarySection {
+  /** @nullable */
+  collection_type?: string | null;
+  id: string;
+  items: EmbyLibraryItem[];
+  name: string;
+  total: number;
+}
+
+/**
+ * Emby 字幕轨。
+ */
+export interface EmbySubtitleTrack {
+  /** @nullable */
+  codec?: string | null;
+  index: number;
+  is_default?: boolean;
+  is_external?: boolean;
+  label: string;
+  /** @nullable */
+  language?: string | null;
+  media_source_id: string;
+}
+
+/**
+ * Emby 播放信息，供前端决定直链、原始流或转码流。
+ */
+export interface EmbyPlaybackInfo {
+  /** @nullable */
+  direct_url?: string | null;
+  is_strm: boolean;
+  item_id: string;
+  /** @nullable */
+  media_source_id?: string | null;
+  /** @nullable */
+  playback_position_ticks?: number | null;
+  /** @nullable */
+  played_percentage?: number | null;
+  /** @nullable */
+  run_time_ticks?: number | null;
+  subtitle_tracks?: EmbySubtitleTrack[];
+}
+
+/**
+ * Emby 播放方式。
+ */
+export type EmbyPlaybackMethod = 'direct_play' | 'direct_stream' | 'transcode';
+/**
+ * Emby 播放进度上报请求。
+ */
+export interface EmbyPlaybackProgressReq {
+  is_muted?: boolean;
+  is_paused?: boolean;
+  item_id: string;
+  /** @nullable */
+  media_source_id?: string | null;
+  play_method?: null | EmbyPlaybackMethod;
+  /** @nullable */
+  play_session_id?: string | null;
+  position_ticks: number;
+  /** @nullable */
+  volume_level?: number | null;
+}
+
+/**
+ * Emby 播放进度上报结果。
+ */
+export interface EmbyPlaybackSyncRes {
+  ok: boolean;
+}
+
+/**
+ * Emby 远程字幕候选。
+ */
+export interface EmbyRemoteSubtitle {
+  /** @nullable */
+  author?: string | null;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  community_rating?: number | null;
+  /** @nullable */
+  download_count?: number | null;
+  /** @nullable */
+  format?: string | null;
+  id: string;
+  is_hash_match?: boolean;
+  /** @nullable */
+  language?: string | null;
+  name: string;
+  /** @nullable */
+  provider_name?: string | null;
+}
+
+/**
+ * Emby 媒体库分组查询参数。
+ */
+export interface EmbySectionsQuery {
+  limit?: number;
+  /** @nullable */
+  q?: string | null;
+}
+
+/**
+ * Emby 媒体库分组响应。
+ */
+export interface EmbySectionsRes {
+  sections: EmbyLibrarySection[];
+}
+
+/**
+ * Emby 视频流查询参数。
+ */
+export interface EmbyStreamQuery {
+  /** @nullable */
+  direct?: boolean | null;
+  item_id: string;
+  /** @nullable */
+  play_session_id?: string | null;
+}
+
+/**
+ * Emby 远程字幕下载请求。
+ */
+export interface EmbySubtitleDownloadReq {
+  item_id: string;
+  subtitle_id: string;
+}
+
+/**
+ * Emby 远程字幕下载结果。
+ */
+export interface EmbySubtitleDownloadRes {
+  ok: boolean;
+}
+
+/**
+ * Emby 远程字幕查询参数。
+ */
+export interface EmbySubtitleSearchQuery {
+  item_id: string;
+  language?: string;
+  /** @nullable */
+  media_source_id?: string | null;
+}
+
+/**
+ * Emby 远程字幕查询结果。
+ */
+export interface EmbySubtitleSearchRes {
+  item_id: string;
+  items: EmbyRemoteSubtitle[];
+  language: string;
+}
+
+/**
+ * Emby 字幕流查询参数。
+ */
+export interface EmbySubtitleStreamQuery {
+  index: number;
+  item_id: string;
+  media_source_id: string;
 }
 
 export interface FfmpegDownloadStartReq { [key: string]: unknown }
@@ -737,6 +1045,26 @@ export interface StashSceneFilterType {
   video_codec?: null | StashStringCriterion;
 }
 
+export interface StashSceneGenerateMissingSubtitlesReq {
+  config?: null | SubtitleGenerateConfig;
+  /**
+     * 若同 video_path 已有 pending/running 生成任务则跳过（默认 true）。
+     * @nullable
+     */
+  skip_if_exists?: boolean | null;
+}
+
+export interface StashSceneGenerateMissingSubtitlesRes {
+  failed: SubtitleGenerateBulkFailedItem[];
+  /**
+     * Stash 中无字幕且能映射为本地路径的视频数量。
+     * @minimum 0
+     */
+  matched_videos: number;
+  skipped: string[];
+  submitted: string[];
+}
+
 export interface StashSceneListReq {
   filter: StashFilter;
   scene_filter?: null | StashSceneFilterType;
@@ -753,7 +1081,7 @@ export interface StashSceneListReq {
 export interface StashSceneMetadataCompleteReq {
   /** 字段策略；不传时只补空字段并合并关联实体。 */
   field_options?: StashIdentifyFieldOption[];
-  /** 要补全的 Stash 场景 ID；不传时自动查询所有已整理但标题为空的场景。 */
+  /** 要补全的 Stash 场景 ID；不传时自动查询所有已整理但缺标题或缺演员的场景。 */
   scene_ids?: string[];
   /** 是否设置封面图。 */
   set_cover_image?: boolean;
@@ -761,6 +1089,8 @@ export interface StashSceneMetadataCompleteReq {
   set_organized?: boolean;
   /** 多个匹配结果时跳过，降低误写入风险。 */
   skip_multiple_matches?: boolean;
+  /** 是否跳过单名演员；Stash 默认会跳过，自动补全时关闭以贴近手动刮削结果。 */
+  skip_single_name_performers?: boolean;
   /** 识别来源，按顺序尝试；不传时默认 StashDB -> ThePornDB。 */
   sources?: StashIdentifySource[];
 }
@@ -947,6 +1277,74 @@ export interface WhisperModelsListRes {
   items: WhisperModelItem[];
 }
 
+export type ListItemsEmbyParams = {
+/**
+ * @nullable
+ */
+q?: string | null;
+/**
+ * @nullable
+ */
+person_id?: string | null;
+/**
+ * @nullable
+ */
+genre?: string | null;
+/**
+ * @nullable
+ */
+tag_filter?: string | null;
+/**
+ * @nullable
+ */
+parent_id?: string | null;
+/**
+ * @nullable
+ */
+include_item_types?: string | null;
+/**
+ * @nullable
+ */
+recursive?: boolean | null;
+start_index?: number;
+limit?: number;
+};
+
+export type GetPlaybackInfoEmbyParams = {
+item_id: string;
+/**
+ * @nullable
+ */
+play_session_id?: string | null;
+/**
+ * @nullable
+ */
+direct?: boolean | null;
+};
+
+export type ListSectionsEmbyParams = {
+/**
+ * @nullable
+ */
+q?: string | null;
+limit?: number;
+};
+
+export type SubtitleEmbyParams = {
+item_id: string;
+media_source_id: string;
+index: number;
+};
+
+export type SearchSubtitlesEmbyParams = {
+item_id: string;
+/**
+ * @nullable
+ */
+media_source_id?: string | null;
+language?: string;
+};
+
 export type ProbeVideoFsParams = {
 path: string;
 };
@@ -1015,6 +1413,821 @@ page_size?: number;
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+export const testConnectionEmby = (
+
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyConnectionStatus>(
+      {url: `/api/emby/connection/test`, method: 'POST', signal
+    },
+      options);
+    }
+
+
+
+export const getTestConnectionEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext> => {
+
+const mutationKey = ['testConnectionEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testConnectionEmby>>, void> = () => {
+
+
+          return  testConnectionEmby(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestConnectionEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof testConnectionEmby>>>
+
+    export type TestConnectionEmbyMutationError = ErrorType<unknown>
+
+    export const useTestConnectionEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testConnectionEmby>>, TError,void, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof testConnectionEmby>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestConnectionEmbyMutationOptions(options), queryClient);
+    }
+
+export const listItemsEmby = (
+    params?: ListItemsEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyItemsRes>(
+      {url: `/api/emby/items`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getListItemsEmbyQueryKey = (params?: ListItemsEmbyParams,) => {
+    return [
+    `/api/emby/items`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListItemsEmbyQueryOptions = <TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListItemsEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listItemsEmby>>> = ({ signal }) => listItemsEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListItemsEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof listItemsEmby>>>
+export type ListItemsEmbyQueryError = ErrorType<unknown>
+
+
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListItemsEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listItemsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listItemsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listItemsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listItemsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListItemsEmby<TData = Awaited<ReturnType<typeof listItemsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListItemsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listItemsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListItemsEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getItemEmby = (
+    id: string,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyLibraryItem>(
+      {url: `/api/emby/items/${id}`, method: 'GET', signal
+    },
+      options);
+    }
+
+
+
+
+export const getGetItemEmbyQueryKey = (id: string,) => {
+    return [
+    `/api/emby/items/${id}`
+    ] as const;
+    }
+
+
+export const getGetItemEmbyQueryOptions = <TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetItemEmbyQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getItemEmby>>> = ({ signal }) => getItemEmby(id, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetItemEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof getItemEmby>>>
+export type GetItemEmbyQueryError = ErrorType<unknown>
+
+
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getItemEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getItemEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getItemEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getItemEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetItemEmby<TData = Awaited<ReturnType<typeof getItemEmby>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getItemEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetItemEmbyQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPlaybackInfoEmby = (
+    params: GetPlaybackInfoEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackInfo>(
+      {url: `/api/emby/playback-info`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getGetPlaybackInfoEmbyQueryKey = (params?: GetPlaybackInfoEmbyParams,) => {
+    return [
+    `/api/emby/playback-info`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPlaybackInfoEmbyQueryOptions = <TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPlaybackInfoEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPlaybackInfoEmby>>> = ({ signal }) => getPlaybackInfoEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPlaybackInfoEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof getPlaybackInfoEmby>>>
+export type GetPlaybackInfoEmbyQueryError = ErrorType<unknown>
+
+
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>,
+          TError,
+          Awaited<ReturnType<typeof getPlaybackInfoEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPlaybackInfoEmby<TData = Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError = ErrorType<unknown>>(
+ params: GetPlaybackInfoEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPlaybackInfoEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPlaybackInfoEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const progressPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/progress`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getProgressPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['progressPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof progressPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  progressPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProgressPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof progressPlaybackEmby>>>
+    export type ProgressPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type ProgressPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useProgressPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof progressPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof progressPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getProgressPlaybackEmbyMutationOptions(options), queryClient);
+    }
+
+export const startPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/start`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getStartPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['startPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof startPlaybackEmby>>>
+    export type StartPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type StartPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useStartPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof startPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getStartPlaybackEmbyMutationOptions(options), queryClient);
+    }
+
+export const stoppedPlaybackEmby = (
+    embyPlaybackProgressReq: BodyType<EmbyPlaybackProgressReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbyPlaybackSyncRes>(
+      {url: `/api/emby/playback/stopped`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embyPlaybackProgressReq, signal
+    },
+      options);
+    }
+
+
+
+export const getStoppedPlaybackEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext> => {
+
+const mutationKey = ['stoppedPlaybackEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, {data: BodyType<EmbyPlaybackProgressReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  stoppedPlaybackEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StoppedPlaybackEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof stoppedPlaybackEmby>>>
+    export type StoppedPlaybackEmbyMutationBody = BodyType<EmbyPlaybackProgressReq>
+    export type StoppedPlaybackEmbyMutationError = ErrorType<unknown>
+
+    export const useStoppedPlaybackEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stoppedPlaybackEmby>>, TError,{data: BodyType<EmbyPlaybackProgressReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof stoppedPlaybackEmby>>,
+        TError,
+        {data: BodyType<EmbyPlaybackProgressReq>},
+        TContext
+      > => {
+      return useMutation(getStoppedPlaybackEmbyMutationOptions(options), queryClient);
+    }
+
+export const listSectionsEmby = (
+    params?: ListSectionsEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbySectionsRes>(
+      {url: `/api/emby/sections`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getListSectionsEmbyQueryKey = (params?: ListSectionsEmbyParams,) => {
+    return [
+    `/api/emby/sections`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListSectionsEmbyQueryOptions = <TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSectionsEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSectionsEmby>>> = ({ signal }) => listSectionsEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListSectionsEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof listSectionsEmby>>>
+export type ListSectionsEmbyQueryError = ErrorType<unknown>
+
+
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListSectionsEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSectionsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listSectionsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listSectionsEmby>>,
+          TError,
+          Awaited<ReturnType<typeof listSectionsEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListSectionsEmby<TData = Awaited<ReturnType<typeof listSectionsEmby>>, TError = ErrorType<unknown>>(
+ params?: ListSectionsEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSectionsEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListSectionsEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const subtitleEmby = (
+    params: SubtitleEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<unknown>(
+      {url: `/api/emby/subtitle`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getSubtitleEmbyQueryKey = (params?: SubtitleEmbyParams,) => {
+    return [
+    `/api/emby/subtitle`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSubtitleEmbyQueryOptions = <TData = Awaited<ReturnType<typeof subtitleEmby>>, TError = ErrorType<unknown>>(params: SubtitleEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSubtitleEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof subtitleEmby>>> = ({ signal }) => subtitleEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SubtitleEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof subtitleEmby>>>
+export type SubtitleEmbyQueryError = ErrorType<unknown>
+
+
+export function useSubtitleEmby<TData = Awaited<ReturnType<typeof subtitleEmby>>, TError = ErrorType<unknown>>(
+ params: SubtitleEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof subtitleEmby>>,
+          TError,
+          Awaited<ReturnType<typeof subtitleEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSubtitleEmby<TData = Awaited<ReturnType<typeof subtitleEmby>>, TError = ErrorType<unknown>>(
+ params: SubtitleEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof subtitleEmby>>,
+          TError,
+          Awaited<ReturnType<typeof subtitleEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSubtitleEmby<TData = Awaited<ReturnType<typeof subtitleEmby>>, TError = ErrorType<unknown>>(
+ params: SubtitleEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useSubtitleEmby<TData = Awaited<ReturnType<typeof subtitleEmby>>, TError = ErrorType<unknown>>(
+ params: SubtitleEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof subtitleEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSubtitleEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const downloadSubtitleEmby = (
+    embySubtitleDownloadReq: BodyType<EmbySubtitleDownloadReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbySubtitleDownloadRes>(
+      {url: `/api/emby/subtitles/download`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: embySubtitleDownloadReq, signal
+    },
+      options);
+    }
+
+
+
+export const getDownloadSubtitleEmbyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof downloadSubtitleEmby>>, TError,{data: BodyType<EmbySubtitleDownloadReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof downloadSubtitleEmby>>, TError,{data: BodyType<EmbySubtitleDownloadReq>}, TContext> => {
+
+const mutationKey = ['downloadSubtitleEmby'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof downloadSubtitleEmby>>, {data: BodyType<EmbySubtitleDownloadReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  downloadSubtitleEmby(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DownloadSubtitleEmbyMutationResult = NonNullable<Awaited<ReturnType<typeof downloadSubtitleEmby>>>
+    export type DownloadSubtitleEmbyMutationBody = BodyType<EmbySubtitleDownloadReq>
+    export type DownloadSubtitleEmbyMutationError = ErrorType<unknown>
+
+    export const useDownloadSubtitleEmby = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof downloadSubtitleEmby>>, TError,{data: BodyType<EmbySubtitleDownloadReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof downloadSubtitleEmby>>,
+        TError,
+        {data: BodyType<EmbySubtitleDownloadReq>},
+        TContext
+      > => {
+      return useMutation(getDownloadSubtitleEmbyMutationOptions(options), queryClient);
+    }
+
+export const searchSubtitlesEmby = (
+    params: SearchSubtitlesEmbyParams,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<EmbySubtitleSearchRes>(
+      {url: `/api/emby/subtitles/search`, method: 'GET',
+        params, signal
+    },
+      options);
+    }
+
+
+
+
+export const getSearchSubtitlesEmbyQueryKey = (params?: SearchSubtitlesEmbyParams,) => {
+    return [
+    `/api/emby/subtitles/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchSubtitlesEmbyQueryOptions = <TData = Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError = ErrorType<unknown>>(params: SearchSubtitlesEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchSubtitlesEmbyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchSubtitlesEmby>>> = ({ signal }) => searchSubtitlesEmby(params, requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SearchSubtitlesEmbyQueryResult = NonNullable<Awaited<ReturnType<typeof searchSubtitlesEmby>>>
+export type SearchSubtitlesEmbyQueryError = ErrorType<unknown>
+
+
+export function useSearchSubtitlesEmby<TData = Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError = ErrorType<unknown>>(
+ params: SearchSubtitlesEmbyParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchSubtitlesEmby>>,
+          TError,
+          Awaited<ReturnType<typeof searchSubtitlesEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchSubtitlesEmby<TData = Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError = ErrorType<unknown>>(
+ params: SearchSubtitlesEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof searchSubtitlesEmby>>,
+          TError,
+          Awaited<ReturnType<typeof searchSubtitlesEmby>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSearchSubtitlesEmby<TData = Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError = ErrorType<unknown>>(
+ params: SearchSubtitlesEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useSearchSubtitlesEmby<TData = Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError = ErrorType<unknown>>(
+ params: SearchSubtitlesEmbyParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof searchSubtitlesEmby>>, TError, TData>>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSearchSubtitlesEmbyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
 
 
 
@@ -3483,6 +4696,64 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCompleteSceneMetadataStashMutationOptions(options), queryClient);
+    }
+
+export const generateMissingSubtitlesStash = (
+    stashSceneGenerateMissingSubtitlesReq: BodyType<StashSceneGenerateMissingSubtitlesReq>,
+ options?: SecondParameter<typeof axiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return axiosInstance<StashSceneGenerateMissingSubtitlesRes>(
+      {url: `/api/stash/scenes/subtitles/generate-missing`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: stashSceneGenerateMissingSubtitlesReq, signal
+    },
+      options);
+    }
+
+
+
+export const getGenerateMissingSubtitlesStashMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext> => {
+
+const mutationKey = ['generateMissingSubtitlesStash'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, {data: BodyType<StashSceneGenerateMissingSubtitlesReq>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateMissingSubtitlesStash(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateMissingSubtitlesStashMutationResult = NonNullable<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>>
+    export type GenerateMissingSubtitlesStashMutationBody = BodyType<StashSceneGenerateMissingSubtitlesReq>
+    export type GenerateMissingSubtitlesStashMutationError = ErrorType<unknown>
+
+    export const useGenerateMissingSubtitlesStash = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateMissingSubtitlesStash>>, TError,{data: BodyType<StashSceneGenerateMissingSubtitlesReq>}, TContext>, request?: SecondParameter<typeof axiosInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof generateMissingSubtitlesStash>>,
+        TError,
+        {data: BodyType<StashSceneGenerateMissingSubtitlesReq>},
+        TContext
+      > => {
+      return useMutation(getGenerateMissingSubtitlesStashMutationOptions(options), queryClient);
     }
 
 export const downloadSubtitleWeb = (

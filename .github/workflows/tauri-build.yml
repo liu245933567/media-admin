@@ -72,6 +72,14 @@ jobs:
 
       - name: 安装依赖 pnpm workspace
         run: pnpm install --frozen-lockfile
+      
+      - name: 安装 HeroUI Pro 授权
+        shell: bash
+        env:
+          HEROUI_PRO_TOKEN: ${{ secrets.HEROUI_PRO_TOKEN }}
+        run: |
+          test -n "$HEROUI_PRO_TOKEN"
+          pnpm dlx hpsetup@latest "$HEROUI_PRO_TOKEN"
 
       # Linux AppImage：linuxdeploy 对带 .relr.dyn 的库执行 strip 易失败（见 tauri-apps/tauri#14796）。
       # NO_STRIP 跳过该 strip；APPIMAGE_EXTRACT_AND_RUN 在无 FUSE 的 CI 上解压运行 linuxdeploy 等 AppImage。

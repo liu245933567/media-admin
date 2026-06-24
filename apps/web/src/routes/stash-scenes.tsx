@@ -6,7 +6,7 @@ import { Icon } from '@iconify/react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { completeSceneMetadataStash, getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
+import { completeSceneMetadataStash, generateMissingSubtitlesStash, getAppConfigSettings, getGetAppConfigSettingsQueryKey, listScenesStash } from '@/api'
 import { useAppToast } from '@/components/app-toast'
 import { BasePagination } from '@/components/base-pagination'
 import { useConfirmDialog } from '@/components/confirm-dialog'
@@ -137,13 +137,47 @@ function PageComponent() {
     onError: error => message.error(error.message ?? '元数据补全任务提交失败'),
   })
 
+  const generateMissingSubtitlesMutation = useMutation({
+    mutationFn: () => generateMissingSubtitlesStash({
+      config: undefined,
+      skip_if_exists: true,
+    }),
+    onSuccess: (res) => {
+      if (res.matched_videos === 0) {
+        message.info('没有找到已映射且无字幕的 Stash 视频')
+        return
+      }
+
+      const submitted = res.submitted?.length ?? 0
+      const skipped = res.skipped?.length ?? 0
+      const failed = res.failed ?? []
+      const parts = [
+        `已添加 ${submitted} 个字幕生成任务`,
+        skipped ? `跳过 ${skipped} 个（已在队列中）` : '',
+        failed.length ? `失败 ${failed.length} 个` : '',
+      ].filter(Boolean)
+
+      if (failed.length) {
+        message.warning(parts.join('，'))
+        console.error('[stash missing subtitle generate] failed:', failed)
+      }
+      else {
+        message.success(parts.join('，'))
+      }
+
+      clearSelection()
+      void scenesQuery.refetch()
+    },
+    onError: error => message.error(error.message ?? '字幕生成任务提交失败'),
+  })
+
   const confirmCompleteMissingTitleMetadata = useCallback(() => {
     confirm({
       title: '补全场景元数据',
       description: (
         <div className="space-y-2">
           <p className="m-0">
-            将查询 Stash 中所有已整理但标题为空的场景，并提交给 StashDB 与 ThePornDB 按顺序识别。
+            将查询 Stash 中所有已整理但缺标题或缺演员的场景，并提交给 StashDB 与 ThePornDB 按顺序识别。
           </p>
           <p className="m-0 text-muted">
             默认只补空字段并合并演员、标签、工作室；多个匹配结果会跳过。
@@ -154,6 +188,24 @@ function PageComponent() {
       onConfirm: () => completeMetadataMutation.mutateAsync(),
     })
   }, [completeMetadataMutation, confirm])
+
+  const confirmGenerateMissingSubtitles = useCallback(() => {
+    confirm({
+      title: '补全所有字幕',
+      description: (
+        <div className="space-y-2">
+          <p className="m-0">
+            将查询 Stash 中所有没有字幕且已映射到本地路径的视频，并添加到字幕生成任务队列。
+          </p>
+          <p className="m-0 text-muted">
+            已在队列中的同路径任务会自动跳过；任务使用当前全局默认识别与翻译配置。
+          </p>
+        </div>
+      ),
+      confirmText: '提交任务',
+      onConfirm: () => generateMissingSubtitlesMutation.mutateAsync(),
+    })
+  }, [confirm, generateMissingSubtitlesMutation])
 
   const handlePlay = useCallback((videoPath: string) => {
     void navigate({
@@ -302,6 +354,15 @@ function PageComponent() {
           >
             <Icon className="size-4" icon="lucide:wand-sparkles" />
             补全元数据
+          </Button>
+          <Button
+            isPending={generateMissingSubtitlesMutation.isPending}
+            size="sm"
+            variant="secondary"
+            onPress={confirmGenerateMissingSubtitles}
+          >
+            <Icon className="size-4" icon="lucide:captions" />
+            补全所有字幕
           </Button>
         </div>
       </div>
